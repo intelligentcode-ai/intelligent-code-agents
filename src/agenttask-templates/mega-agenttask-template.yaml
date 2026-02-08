@@ -49,7 +49,7 @@ complete_context:
     role_assignment: "PM + Specialist Architect determine when specialists should be created"
     system_specialists: "Create system-wide specialists for architectural changes"
     coordination_architects: "Create coordination architects for mega-scale implementations"
-    domain_examples: "@System-Architect, @Migration-Specialist, @Legacy-Integration-Engineer, @Performance-Architect"
+    domain_examples: "system-architect, migration-specialist, legacy-integration-engineer, performance-architect"
 
 # MANDATORY: Requirements Section
 requirements:

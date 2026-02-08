@@ -1,6 +1,6 @@
 ---
 name: developer
-description: Activate when user asks to code, build, implement, create, fix bugs, refactor, or write software. Activate when @Developer is mentioned. Provides implementation patterns and coding standards for hands-on development work.
+description: Activate when user asks to code, build, implement, create, fix bugs, refactor, or write software. Activate when the developer skill is requested. Provides implementation patterns and coding standards for hands-on development work.
 ---
 
 # Developer Role

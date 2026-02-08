@@ -123,7 +123,7 @@ validation:
 - Code pattern references with existing implementations
 - Pre-assigned SME reviewer through agent system
 - Complete context embedding with no runtime config lookups
-- Direct @Agent execution through Task tool subagent creation
+- Direct sub-agent execution through your Task/sub-agent mechanism
 
 **Structure includes:**
 - Full context with project settings
@@ -401,14 +401,14 @@ agenttask_configuration:
 Different roles can have different AgentTask structures:
 
 ```yaml
-# For @Security-Engineer
+# For security-engineer
 security_prb_overrides:
   always_include:
     - threat_model
     - vulnerability_assessment
     - compliance_check
     
-# For @AI-Engineer  
+# For ai-engineer
 ai_prb_overrides:
   always_include:
     - model_selection
@@ -502,12 +502,12 @@ agenttask_configuration:
 All AgentTask templates now integrate with the 14-role virtual team system:
 
 **Core Roles Available:**
-- @PM, @Architect, @Developer, @System-Engineer, @DevOps-Engineer
-- @Database-Engineer, @Security-Engineer, @AI-Engineer, @Web-Designer
-- @QA-Engineer, @Backend-Tester, @Requirements-Engineer, @User-Role
+- pm, architect, developer, system-engineer, devops-engineer
+- database-engineer, security-engineer, ai-engineer, web-designer
+- qa-engineer, backend-tester, requirements-engineer, user-tester
 
 **Dynamic Specialist Creation:**
-- **Unlimited Technology Coverage**: ANY domain (@React-Developer, @AWS-Engineer, @Kubernetes-DevOps-Engineer)
+- **Unlimited Technology Coverage**: ANY domain (react-developer, aws-engineer, kubernetes-devops-engineer)
 - **Technology-Driven Creation**: ALWAYS when technology expertise needed for optimal execution  
 - **PM + Architect Collaboration**: Dynamic specialists created through behavioral patterns
 - **Storage Location**: Specialists are created dynamically via AgentTask context (no separate files)
@@ -523,12 +523,12 @@ specialization_context:
   role_assignment: "PM + Specialist Architect determine when specialists should be created"
 ```
 
-### Execution Through @Agent Communication
+### Execution Through Role Skills
 
 **Natural Communication Pattern:**
-- User: "@Developer implement authentication API"
+- User: "developer implement authentication API"
 - System: Creates Medium AgentTask with embedded context
-- Task tool: Creates @Developer subagent with complete AgentTask context
+- Task tool: Creates a developer subagent with complete AgentTask context
 - Subagent: Executes 9-step process autonomously
 - Result: Complete implementation with learning capture
 

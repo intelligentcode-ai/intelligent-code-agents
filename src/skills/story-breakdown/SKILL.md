@@ -19,7 +19,7 @@ Break large stories into work items in `.agent/queue/`.
 1. **Analyze scope** - Identify distinct work units
 2. **Define items** - Create work item for each unit
 3. **Set dependencies** - Note which items block others
-4. **Assign roles** - Tag with @Role for execution
+4. **Assign roles** - Specify the role skill for execution (for example `developer`, `reviewer`)
 5. **Add to queue** - Create files in `.agent/queue/`
 
 ## Work Item Creation
@@ -31,7 +31,7 @@ For each item, create in `.agent/queue/`:
 
 **Status**: pending
 **Priority**: high | medium | low
-**Assignee**: @Developer | @Reviewer | etc.
+**Assignee**: developer | reviewer | etc.
 **Blocks**: 002, 003 (optional)
 **BlockedBy**: none | 001 (optional)
 

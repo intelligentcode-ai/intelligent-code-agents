@@ -89,14 +89,14 @@ Usage: `make release`
 Create `.claude/commands/release.md`:
 
 ```markdown
-You are @PM coordinating a release.
+You are pm coordinating a release.
 
 ## Task
 Execute the release workflow for the current PR.
 
 ## Steps
 1. Validate PR is approved and checks pass
-2. Create AgentTask for @DevOps-Engineer:
+2. Create AgentTask for devops-engineer:
    - Merge PR with squash strategy
    - Create and push annotated tag
    - Generate GitHub release from changelog
@@ -109,9 +109,9 @@ Usage: `/release` in Claude Code
 
 ### Option 4: Natural Language (Recommended)
 
-Just ask: `@PM merge and release`
+Just ask: `pm merge and release`
 
-PM creates AgentTask for @DevOps-Engineer who executes the workflow.
+PM creates AgentTask for devops-engineer who executes the workflow.
 
 ## Design Principles
 
@@ -120,8 +120,8 @@ Release workflows defined in configuration files, not hardcoded logic. Projects 
 
 ### 2. Explicit Trigger Required
 **NEVER automatic** - all releases require explicit trigger:
-- User command: `@PM merge and release`
-- Natural language: `@DevOps-Engineer execute release pipeline`
+- User command: `pm merge and release`
+- Natural language: `devops-engineer execute release pipeline`
 - Workflow command: `/ica-release`
 
 ### 3. Flexibility for Project Types
@@ -232,7 +232,7 @@ Create a project-specific release command:
 ```markdown
 # .claude/commands/release.md
 
-You are @PM coordinating a software release.
+You are pm coordinating a software release.
 
 ## Context
 - **Project**: {project_name}
@@ -245,28 +245,28 @@ Execute the complete release workflow for the current PR.
 ## Workflow Steps
 
 ### 1. Pre-Release Validation
-Create AgentTask for @QA-Engineer:
+Create AgentTask for qa-engineer:
 - Verify PR is approved
 - Confirm all CI checks passing
 - Validate version bumped correctly
 - Check CHANGELOG.md updated
 
 ### 2. Merge and Tag
-Create AgentTask for @DevOps-Engineer:
+Create AgentTask for devops-engineer:
 - Merge PR using squash strategy
 - Create annotated tag: v{version}
 - Push tag to remote repository
 - Delete feature branch
 
 ### 3. GitHub Release
-Create AgentTask for @DevOps-Engineer:
+Create AgentTask for devops-engineer:
 - Extract changelog section for version
 - Create GitHub release with changelog
 - Attach any release artifacts
 - Verify release published
 
 ### 4. Post-Release
-Create AgentTask for @PM:
+Create AgentTask for pm:
 - Update project documentation
 - Notify team of release
 - Close related issues
@@ -288,19 +288,19 @@ The most flexible approach uses natural language with the virtual team:
 
 ```bash
 # Simple release
-@PM merge and release
+pm merge and release
 
 # With specific PR
-@PM merge PR #42 and create release
+pm merge PR #42 and create release
 
 # Draft release for review
-@PM create draft release for current PR
+pm create draft release for current PR
 
 # Specific workflow steps
-@DevOps-Engineer merge PR, create tag, and publish release
+devops-engineer merge PR, create tag, and publish release
 ```
 
-PM analyzes the request, creates appropriate AgentTasks for @DevOps-Engineer, and orchestrates the complete workflow.
+PM analyzes the request, creates appropriate AgentTasks for devops-engineer, and orchestrates the complete workflow.
 
 ## Usage Examples
 
@@ -337,29 +337,29 @@ make help
 
 ```bash
 # Simple release trigger
-@PM merge and release
+pm merge and release
 
 # Specific PR
-@PM merge PR #42 and create release
+pm merge PR #42 and create release
 
 # Draft release for review
-@PM create draft release for current PR
+pm create draft release for current PR
 
 # Direct assignment
-@DevOps-Engineer execute release pipeline
+devops-engineer execute release pipeline
 ```
 
 ## How It Works
 
 ### AgentTask-Based Execution
 
-When you request a release, PM creates an AgentTask for @DevOps-Engineer:
+When you request a release, PM creates an AgentTask for devops-engineer:
 
 ```markdown
 ## AgentTask Context
 **Type**: Release Pipeline Execution
-**Agent**: @DevOps-Engineer
-**Trigger**: User request "@PM merge and release"
+**Agent**: devops-engineer
+**Trigger**: User request "pm merge and release"
 
 ## Pipeline Steps
 1. Validation (PR approved, checks passing)
@@ -373,7 +373,7 @@ The project provides release automation via:
 - Shell script: scripts/release.sh
 - Make target: make release
 - Custom command: /release
-- Or natural language: "@PM merge and release"
+- Or natural language: "pm merge and release"
 
 ## Success Criteria
 - PR merged to default branch
@@ -718,7 +718,7 @@ Every release pipeline execution logged with:
 ```json
 {
   "timestamp": "2025-10-12T14:30:00Z",
-  "trigger": "@PM merge and release",
+  "trigger": "pm merge and release",
   "pr_number": 42,
   "configuration": {
     "merge_strategy": "squash",
@@ -754,16 +754,16 @@ TAG_FORMAT="v{version}"
 **Execution:**
 ```bash
 # 1. User request
-@PM merge PR #45 and release patch
+pm merge PR #45 and release patch
 
-# 2. PM creates AgentTask for @DevOps-Engineer
+# 2. PM creates AgentTask for devops-engineer
 
-# 3. @DevOps-Engineer validates
+# 3. devops-engineer validates
 - PR #45 approved ✓
 - Checks passing ✓
 - Version bumped: 8.18.9 → 8.18.10 ✓
 
-# 4. @DevOps-Engineer executes scripts/release.sh
+# 4. devops-engineer executes scripts/release.sh
 - Merge: squash merge to main ✓
 - Tag: v8.18.10 created and pushed ✓
 - Release: GitHub release with changelog ✓
@@ -788,17 +788,17 @@ release:
 **Execution:**
 ```bash
 # 1. User request
-@PM merge and release feature/user-auth
+pm merge and release feature/user-auth
 
-# 2. PM creates AgentTask for @DevOps-Engineer
+# 2. PM creates AgentTask for devops-engineer
 
-# 3. @DevOps-Engineer validates
+# 3. devops-engineer validates
 - PR #42 approved ✓
 - All checks passing ✓
 - Version bumped: 8.18.10 → 8.19.0 ✓
 - CHANGELOG updated ✓
 
-# 4. @DevOps-Engineer runs: make release
+# 4. devops-engineer runs: make release
 - Merge: squash merge to main ✓
 - Tag: v8.19.0 created and pushed ✓
 - Release: Changelog notes extracted ✓
@@ -819,9 +819,9 @@ Documentation updates don't trigger releases.
 **Execution:**
 ```bash
 # 1. Direct commit to main
-@Developer update README with new installation steps
+developer update README with new installation steps
 
-# 2. @Developer commits directly
+# 2. developer commits directly
 git add README.md
 git commit -m "docs: update installation instructions"
 git push origin main
@@ -938,16 +938,16 @@ echo "🚀 Pre-release v${VERSION} deployed"
 Release automation integrates with the virtual team system:
 
 **Work Classification:**
-- **Simple Releases**: @DevOps-Engineer executes directly via scripts/release.sh
-- **Complex Releases**: @PM coordinates multi-step workflow
+- **Simple Releases**: devops-engineer executes directly via scripts/release.sh
+- **Complex Releases**: pm coordinates multi-step workflow
 - **Emergency Hotfixes**: Fast-track with minimal gates
 - **Major Releases**: Full coordination with breaking change assessment
 
 **Role Responsibilities:**
-- **@PM**: Orchestrates release process, validates readiness
-- **@DevOps-Engineer**: Executes release scripts, handles git operations
-- **@QA-Engineer**: Validates release readiness, confirms tests pass
-- **@Architect**: Reviews breaking changes for major releases
+- **pm**: Orchestrates release process, validates readiness
+- **devops-engineer**: Executes release scripts, handles git operations
+- **qa-engineer**: Validates release readiness, confirms tests pass
+- **architect**: Reviews breaking changes for major releases
 
 ### Git Privacy Integration
 
@@ -1055,7 +1055,7 @@ Comprehensive audit trail in releases.log
 Clear README section explaining release process
 
 ✅ **Use Natural Language**
-`@PM merge and release` is clearer than commands
+`pm merge and release` is clearer than commands
 
 ### DON'T
 

@@ -138,8 +138,8 @@ echo "User Authentication Requirements..." > drafts/new-feature/requirements.md
 ```
 
 The system will:
-1. @PM analyzes requirements
-2. @Architect designs approach
+1. pm analyzes requirements
+2. architect designs approach
 3. Generate appropriate AgentTasks with all project context
 4. Include best practices and standards
 5. Reference existing code patterns

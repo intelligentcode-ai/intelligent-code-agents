@@ -1,6 +1,6 @@
 ---
 name: security-engineer
-description: Activate when user needs security work - vulnerability assessment, security architecture, compliance audits, penetration testing. Activate when @Security-Engineer is mentioned or work requires security review.
+description: Activate when user needs security work - vulnerability assessment, security architecture, compliance audits, penetration testing. Activate when the security-engineer skill is requested or work requires security review.
 ---
 
 # Security Engineer Role

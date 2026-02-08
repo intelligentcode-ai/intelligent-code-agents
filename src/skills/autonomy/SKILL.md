@@ -49,7 +49,7 @@ After work completes:
 
 **Triggers queue addition:**
 - Action verbs: implement, fix, create, deploy, update, refactor
-- @Role patterns: "@Developer implement X"
+- Role skill patterns: "developer implement X"
 - Continuation: testing after implementation
 
 **Direct response (no queue):**

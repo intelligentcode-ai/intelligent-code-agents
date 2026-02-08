@@ -28,7 +28,7 @@ Retrieve configuration settings from the ICA configuration hierarchy.
 ```
 /ica-get-setting git.privacy
 /ica-get-setting autonomy.level L2
-/ica-get-setting team.default_reviewer @Architect
+/ica-get-setting team.default_reviewer architect
 /ica-get-setting paths.memory
 ```
 

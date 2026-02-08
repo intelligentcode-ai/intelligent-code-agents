@@ -5,16 +5,28 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -c
 
-.PHONY: install uninstall clean-install test help clean dev-setup dev-clean
+.PHONY: install uninstall clean-install test help clean dev-setup dev-clean \
+	discover-targets install-discovered uninstall-discovered install-project uninstall-project
 
 # Target agent runtime / IDE integration.
 # This controls the installed "agent home" directory name and enables optional
 # integration steps (for example Claude Code hooks).
 AGENT ?= claude
 AGENT_DIR_NAME ?=
+AGENT_DIR_NAME_INPUT := $(strip $(AGENT_DIR_NAME))
+
+# Convenience alias for project-only installs (same behavior as TARGET_PATH).
+# If you set PROJECT_PATH=/path/to/repo, ICA will install into:
+#   /path/to/repo/<agent_home_dir>  (for example /path/to/repo/.codex)
+PROJECT_PATH ?=
+ifeq ($(strip $(TARGET_PATH)),)
+  ifneq ($(strip $(PROJECT_PATH)),)
+    TARGET_PATH := $(PROJECT_PATH)
+  endif
+endif
 
 # Default agent home dir name mapping (override with AGENT_DIR_NAME=.custom)
-ifeq ($(strip $(AGENT_DIR_NAME)),)
+ifeq ($(strip $(AGENT_DIR_NAME_INPUT)),)
   ifeq ($(AGENT),claude)
     AGENT_DIR_NAME := .claude
   else ifeq ($(AGENT),codex)
@@ -28,6 +40,8 @@ ifeq ($(strip $(AGENT_DIR_NAME)),)
   else
     AGENT_DIR_NAME := .agent
   endif
+else
+  AGENT_DIR_NAME := $(AGENT_DIR_NAME_INPUT)
 endif
 
 # Resolve relative paths to absolute paths before passing to Ansible
@@ -58,6 +72,10 @@ help:
 	@echo "  make install   [AGENT=claude|codex|cursor|gemini|antigravity] [AGENT_DIR_NAME=.custom] [HOST=ip] [USER=user] [TARGET_PATH=/path] [CONFIG_FILE=sample-configs/ica.config.sub-agent.json] [MCP_CONFIG=/path/to/mcps.json] [ENV_FILE=/path/to/.env] [KEY=~/.ssh/id_rsa | PASS=password]"
 	@echo "  make uninstall [AGENT=...] [AGENT_DIR_NAME=...] [HOST=ip] [USER=user] [TARGET_PATH=/path] [KEY=~/.ssh/id_rsa | PASS=password] [FORCE=true]"
 	@echo "  make clean-install [AGENT=...] [AGENT_DIR_NAME=...] [HOST=ip] [USER=user] [TARGET_PATH=/path] [CONFIG_FILE=...] [MCP_CONFIG=...] [ENV_FILE=...] [KEY=... | PASS=...]"
+	@echo "  make install-project PROJECT_PATH=/path/to/project [AGENT=...]"
+	@echo "  make discover-targets"
+	@echo "  make install-discovered [AGENT_DIR_NAME=.custom] [TARGET_PATH=/path] [CONFIG_FILE=...] [MCP_CONFIG=...] [ENV_FILE=...]"
+	@echo "  make uninstall-discovered [AGENT_DIR_NAME=.custom] [TARGET_PATH=/path] [FORCE=true]"
 	@echo "  make test                        # Run installation tests (claude + codex)"
 	@echo "  make dev-setup [SKILLS=\"...\"]    # Symlink skills from src/ for development"
 	@echo "  make dev-clean [SKILLS=\"...\"]    # Remove development symlinks"
@@ -66,6 +84,7 @@ help:
 	@echo "  HOST - Remote host IP (omit for local installation)"
 	@echo "  USER - Remote username (required for remote installation)"
 	@echo "  TARGET_PATH - Target path (omit for user scope ~/<agent_home>/)"
+	@echo "  PROJECT_PATH - Alias for TARGET_PATH (project-only install)"
 	@echo "  AGENT - Target agent runtime/IDE integration (default: $(AGENT))"
 	@echo "  AGENT_DIR_NAME - Override the agent home dir name (default: $(AGENT_DIR_NAME))"
 	@echo "  CONFIG_FILE - Path to ica.config JSON to deploy (default ica.config.default.json)"
@@ -78,6 +97,7 @@ help:
 	@echo "Examples:"
 	@echo "  make install                     # Local user scope"
 	@echo "  make install TARGET_PATH=/project       # Local project"
+	@echo "  make install-project PROJECT_PATH=/project AGENT=codex  # Project-only install"
 	@echo "  make install MCP_CONFIG=./config/mcps.json  # Local with MCP servers"
 	@echo "  make install MCP_CONFIG=./config/mcps.json ENV_FILE=.env  # With environment file"
 	@echo "  make install HOST=192.168.1.110 USER=ubuntu  # Remote user scope (SSH key)"
@@ -91,6 +111,56 @@ help:
 	@echo "  make test                        # Test installation"
 	@echo ""
 	@echo "To enable verbose mode, remove the ANSIBLE_STDOUT_CALLBACK settings from Makefile"
+
+# Best-effort tool discovery (local)
+discover-targets:
+	@./scripts/discover-agent-targets.sh
+
+# Install into every discovered agent home (local).
+# Notes:
+# - Discovery is best-effort. Use ICA_DISCOVER_TARGETS=... to override.
+# - TARGET_PATH / PROJECT_PATH will install into that project only.
+install-discovered:
+	@targets="$$(./scripts/discover-agent-targets.sh)"; \
+	if [ -z "$$targets" ]; then \
+		echo "No supported tools discovered."; \
+		echo "Set ICA_DISCOVER_TARGETS=claude,codex (or ICA_DISCOVER_ALL=1) to override."; \
+		exit 1; \
+	fi; \
+	agent_dir_arg=""; \
+	if [ -n "$(AGENT_DIR_NAME_INPUT)" ]; then agent_dir_arg="AGENT_DIR_NAME=$(AGENT_DIR_NAME_INPUT)"; fi; \
+	for t in $$targets; do \
+		echo "=== Installing for AGENT=$$t ==="; \
+		$(MAKE) install AGENT="$$t" $$agent_dir_arg HOST="$(HOST)" USER="$(USER)" PASS="$(PASS)" KEY="$(KEY)" TARGET_PATH="$(TARGET_PATH)" CONFIG_FILE="$(CONFIG_FILE)" MCP_CONFIG="$(MCP_CONFIG)" ENV_FILE="$(ENV_FILE)"; \
+	done
+
+uninstall-discovered:
+	@targets="$$(./scripts/discover-agent-targets.sh)"; \
+	if [ -z "$$targets" ]; then \
+		echo "No supported tools discovered."; \
+		echo "Set ICA_DISCOVER_TARGETS=claude,codex (or ICA_DISCOVER_ALL=1) to override."; \
+		exit 1; \
+	fi; \
+	agent_dir_arg=""; \
+	if [ -n "$(AGENT_DIR_NAME_INPUT)" ]; then agent_dir_arg="AGENT_DIR_NAME=$(AGENT_DIR_NAME_INPUT)"; fi; \
+	for t in $$targets; do \
+		echo "=== Uninstalling for AGENT=$$t ==="; \
+		$(MAKE) uninstall AGENT="$$t" $$agent_dir_arg HOST="$(HOST)" USER="$(USER)" PASS="$(PASS)" KEY="$(KEY)" TARGET_PATH="$(TARGET_PATH)" FORCE="$(FORCE)"; \
+	done
+
+install-project:
+	@if [ -z "$(TARGET_PATH)" ]; then \
+		echo "ERROR: PROJECT_PATH (or TARGET_PATH) is required for project-only install."; \
+		exit 1; \
+	fi
+	@$(MAKE) install AGENT="$(AGENT)" AGENT_DIR_NAME="$(AGENT_DIR_NAME)" HOST="$(HOST)" USER="$(USER)" PASS="$(PASS)" KEY="$(KEY)" TARGET_PATH="$(TARGET_PATH)" CONFIG_FILE="$(CONFIG_FILE)" MCP_CONFIG="$(MCP_CONFIG)" ENV_FILE="$(ENV_FILE)"
+
+uninstall-project:
+	@if [ -z "$(TARGET_PATH)" ]; then \
+		echo "ERROR: PROJECT_PATH (or TARGET_PATH) is required for project-only uninstall."; \
+		exit 1; \
+	fi
+	@$(MAKE) uninstall AGENT="$(AGENT)" AGENT_DIR_NAME="$(AGENT_DIR_NAME)" HOST="$(HOST)" USER="$(USER)" PASS="$(PASS)" KEY="$(KEY)" TARGET_PATH="$(TARGET_PATH)" FORCE="$(FORCE)"
 
 # Auto-detect ansible-playbook in common locations
 ANSIBLE_PLAYBOOK := $(shell \

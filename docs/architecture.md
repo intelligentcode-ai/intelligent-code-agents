@@ -8,8 +8,8 @@ Intelligent Code Agents is a CC-native framework that adds role-based specialist
 ### Skills (34 total)
 Skills are the primary interface for specialized capabilities. They are:
 - Defined in `src/skills/*/SKILL.md`
-- Installed to `.claude/skills/`
-- Invoked via skill description matching or `@Role` patterns
+- Installed to your agent home `skills/` directory (for example `$ICA_HOME/skills/`)
+- Invoked via explicit skill names and/or description matching (tool-dependent)
 
 **Categories:**
 - **Role Skills (14):** pm, architect, developer, system-engineer, devops-engineer, database-engineer, security-engineer, ai-engineer, web-designer, qa-engineer, backend-tester, requirements-engineer, user-tester, reviewer

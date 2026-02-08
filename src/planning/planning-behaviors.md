@@ -4,7 +4,7 @@
 
 ## Planning Mode
 
-When user says "plan", "@PM plan", or similar:
+When user says "plan", "pm plan", or similar:
 - PM and Architect engage in dialogue with user
 - Create structured assignment files
 - Break down work into phases and tasks
@@ -22,10 +22,10 @@ phases:
   - name: Analysis
     deliverables:
       - name: requirements
-        tasks:
-          - id: TASK-001
-            name: Define requirements
-            role: @Requirements-Engineer
+            tasks:
+              - id: TASK-001
+                name: Define requirements
+                role: requirements-engineer
 ```
 
 ## Phase Flow
@@ -37,7 +37,7 @@ Each phase must complete before next begins.
 ## Task Creation
 
 - Every task needs unique ID (TASK-XXX)
-- Every task needs assigned @Role
+- Every task needs an assigned role skill
 - Track dependencies between tasks
 - Update status as work progresses
 

@@ -44,7 +44,7 @@ complete_context:
     unlimited_domains: "Support ANY technology domain through dynamic specialist creation"
     role_assignment: "PM + Specialist Architect determine when specialists should be created"
     coordination_specialists: "Create coordination specialists for complex multi-component features"
-    domain_examples: "@React-Developer, @AWS-Engineer, @Kubernetes-DevOps-Engineer, @API-Architect"
+    domain_examples: "react-developer, aws-engineer, kubernetes-devops-engineer, api-architect"
 
 # MANDATORY: Requirements Section
 requirements:

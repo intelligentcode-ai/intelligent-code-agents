@@ -574,7 +574,7 @@ Generate a test AgentTask to verify extensions work correctly:
 
 ```bash
 # Test with a medium complexity task
-@Developer implement a test feature
+developer implement a test feature
 ```
 
 ### Step 4: Remove Custom Templates

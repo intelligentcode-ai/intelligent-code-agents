@@ -94,7 +94,7 @@ If (and only if) Stage 3 is clean (no blocking findings) and the required checks
 
 **Rules:**
 - Stage 3 MUST run in an isolated context.
-  - Preferred: run Stage 3 as a dedicated reviewer subagent (for example `@Reviewer`) using the Task tool.
+  - Preferred: run Stage 3 as a dedicated reviewer subagent using your Task/sub-agent mechanism.
   - Fallback: use a fresh temp clone/checkout and treat it as the dedicated reviewer/subagent context.
 - The ICA-REVIEW comment MUST match the PR's current head SHA. If new commits are pushed after the comment,
   Stage 3 must be re-run and a new ICA-REVIEW comment posted.
@@ -121,7 +121,7 @@ gh pr comment "$PR" --body "$(cat <<EOF
 ICA-REVIEW
 ICA-REVIEW-RECEIPT
 Reviewer-Stage: 3 (temp checkout)
-Reviewer-Agent: @Reviewer (subagent)
+Reviewer-Agent: reviewer (subagent)
 PR: #$PR
 Base: $BASE_BRANCH
 Head-SHA: $HEAD_SHA

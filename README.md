@@ -17,6 +17,16 @@ ICA installs into a tool-specific "agent home" directory:
 - Codex: `~/.codex` (default)
 - Cursor / Gemini CLI / Antigravity: supported via `AGENT_DIR_NAME` mapping, plus `AGENTS.md` guidance (tool-specific wiring varies).
 
+Best-effort discovery (local):
+
+- macOS/Linux: `make discover-targets` and `make install-discovered`
+- Windows: `.\install.ps1 discover` and `.\install.ps1 install-discovered`
+
+Override discovery if needed:
+
+- `ICA_DISCOVER_TARGETS=claude,codex` (explicit list)
+- `ICA_DISCOVER_ALL=1` (all supported targets)
+
 Set `ICA_HOME` to your chosen agent home directory if you run ICA scripts/hooks outside Claude Code:
 
 ```bash
@@ -33,6 +43,9 @@ cd intelligent-code-agents
 
 make install AGENT=claude   # installs into ~/.claude
 make install AGENT=codex    # installs into ~/.codex
+
+# Project-only install (installs into /path/to/project/<agent_home_dir>)
+make install-project PROJECT_PATH=/path/to/project AGENT=codex
 ```
 
 Windows (PowerShell):
@@ -43,6 +56,13 @@ cd intelligent-code-agents
 
 .\install.ps1 install -Agent claude
 .\install.ps1 install -Agent codex
+
+# Best-effort discovery
+.\install.ps1 discover
+.\install.ps1 install-discovered
+
+# Project-only install
+.\install.ps1 install -ProjectPath C:\MyProject -Agent codex
 ```
 
 Override the agent home directory name (advanced):
@@ -53,20 +73,13 @@ make install AGENT=custom AGENT_DIR_NAME=.my-agent-home
 
 ## Using ICA
 
-If your client supports `@Role` mentions (for example Claude Code):
+Use skills by name and keep prompts explicit about the intent and output.
 
 ```text
-@PM break down the story
-@Architect review the design
-@Developer implement auth
-@Reviewer audit for regressions
-```
-
-If your client does not support role mentions, use the same intent in plain language:
-
-```text
-As PM: break down the story into work items in .agent/queue/
-As Reviewer: run a regression review and post an ICA-REVIEW-RECEIPT
+pm: break down the story into work items in .agent/queue/
+architect: review the approach and call out risks/tradeoffs
+developer: implement the change
+reviewer: audit for regressions and post an ICA-REVIEW-RECEIPT
 ```
 
 ## Workflow Gate (PRs)
@@ -101,4 +114,3 @@ Reference defaults are shipped as:
 ## License
 
 MIT (see `LICENSE`)
-

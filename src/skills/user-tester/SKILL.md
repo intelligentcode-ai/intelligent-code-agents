@@ -1,6 +1,6 @@
 ---
 name: user-tester
-description: Activate when user needs E2E or user journey testing - browser automation, Puppeteer/Playwright, cross-browser testing. Activate when @User-Tester is mentioned or work requires user flow validation or experience verification.
+description: Activate when user needs E2E or user journey testing - browser automation, Puppeteer/Playwright, cross-browser testing. Activate when the user-tester skill is requested or work requires user flow validation or experience verification.
 ---
 
 # User Tester Role

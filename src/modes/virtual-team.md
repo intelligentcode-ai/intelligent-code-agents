@@ -10,16 +10,16 @@ Skills-first architecture with 14 core roles + dynamic specialists.
 
 ## Core Principles
 
-**P1:** Skills loaded from `~/.claude/skills/` on demand
-**P2:** @Role mentions trigger role skills (pm, architect, developer, etc.)
-**P3:** /skill-name invokes specific skills directly
+**P1:** Skills are loaded from your agent home `skills/` directory on demand (for example `$ICA_HOME/skills/`)
+**P2:** Use role skills by name (pm, architect, developer, reviewer, etc.)
+**P3:** If your client supports it, `/skill-name` invokes specific skills directly
 **P4:** Hooks enforce file placement, git safety, infrastructure protection
 **P5:** AgentTask-driven execution for all significant work
 
 ## Role Activation
 
-**@Role → Skill**: @PM activates `/pm` skill, @Developer activates `/developer` skill
-**Dynamic Specialists**: Created as needed (@React-Developer, @AWS-Engineer)
+**Role skill → Skill**: `pm` activates `/pm`, `developer` activates `/developer`
+**Dynamic Specialists**: Created as needed (for example `react-developer`, `aws-engineer`)
 **Execution**: Via Task tool with embedded AgentTask context
 
 ## Operation
