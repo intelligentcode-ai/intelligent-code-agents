@@ -14,11 +14,11 @@ developer implement the change
 reviewer run a regression review
 ```
 
-Use the same intent in plain language if your client does not have explicit skill invocation syntax:
+If you prefer to avoid role-style prompts entirely, just name the skill explicitly:
 
 ```text
-As PM: break down the story into .agent/queue work items
-As Reviewer: run Stage 3 review and post an ICA-REVIEW-RECEIPT
+Use work-queue: break down the story into .agent/queue work items
+Use reviewer: run Stage 3 review and post an ICA-REVIEW-RECEIPT
 ```
 
 ## Work Tracking (Cross-Platform)

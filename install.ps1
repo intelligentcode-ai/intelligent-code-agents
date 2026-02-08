@@ -259,26 +259,60 @@ function Register-ProductionHooks {
             $Settings | Add-Member -MemberType NoteProperty -Name "hooks" -Value ([PSCustomObject]@{}) -Force
         }
 
-        # Define all production hooks (git-enforcement.js removed in v10.1)
-        $ProductionHooks = [PSCustomObject]@{
-            PreToolUse = @(
-                [PSCustomObject]@{
-                    matcher = "*"
-                    hooks = @(
-                        [PSCustomObject]@{ type = "command"; command = "node `"$HooksPath\agent-infrastructure-protection.js`""; timeout = 5000 }
-                        [PSCustomObject]@{ type = "command"; command = "node `"$HooksPath\summary-file-enforcement.js`""; timeout = 5000 }
-                    )
-                }
-            )
+        function Normalize-JsonArray {
+            param([Parameter(Mandatory=$false)]$Value)
+            if ($null -eq $Value) { return @() }
+            if ($Value -is [System.Array]) { return $Value }
+            return @($Value)
         }
 
-        # Remove obsolete hooks and replace production hooks
-        foreach ($HookType in @("PreToolUse", "Stop", "SubagentStop", "SessionStart", "UserPromptSubmit")) {
-            if ($Settings.hooks.PSObject.Properties.Name -contains $HookType) {
-                $Settings.hooks.PSObject.Properties.Remove($HookType)
+        # Claude Code hooks use matcher objects. We register narrowly-scoped matchers so we don't run
+        # unrelated hook code for every tool invocation.
+        $ProductionPreToolUse = @(
+            [PSCustomObject]@{
+                matcher = [PSCustomObject]@{ tools = @("BashTool", "Bash") }
+                hooks = @(
+                    [PSCustomObject]@{ type = "command"; command = "node `"$HooksPath\agent-infrastructure-protection.js`""; timeout = 5000 }
+                )
+            },
+            [PSCustomObject]@{
+                matcher = [PSCustomObject]@{ tools = @("FileWriteTool", "FileEditTool", "Write", "Edit") }
+                hooks = @(
+                    [PSCustomObject]@{ type = "command"; command = "node `"$HooksPath\summary-file-enforcement.js`""; timeout = 5000 }
+                )
             }
-            $Settings.hooks | Add-Member -MemberType NoteProperty -Name $HookType -Value $ProductionHooks.$HookType -Force
+        )
+
+        # Merge: preserve any user-defined PreToolUse entries, but remove previous ICA production hooks
+        # (idempotent, and avoids duplicating registrations).
+        $ExistingPreToolUse = Normalize-JsonArray -Value $Settings.hooks.PreToolUse
+        $FilteredPreToolUse = @()
+
+        foreach ($Entry in $ExistingPreToolUse) {
+            if ($null -eq $Entry) { continue }
+
+            $EntryHooks = Normalize-JsonArray -Value $Entry.hooks
+            $KeptHooks = @()
+            foreach ($Hook in $EntryHooks) {
+                if ($null -eq $Hook) { continue }
+                $Cmd = $Hook.command
+                if ([string]::IsNullOrWhiteSpace($Cmd)) { continue }
+                if ($Cmd -match "agent-infrastructure-protection\\.js" -or $Cmd -match "summary-file-enforcement\\.js") {
+                    continue
+                }
+                $KeptHooks += $Hook
+            }
+
+            # Keep entries that still have hooks. Drop empty entries (likely previous ICA registrations).
+            if ($KeptHooks.Count -gt 0) {
+                $FilteredPreToolUse += [PSCustomObject]@{
+                    matcher = $Entry.matcher
+                    hooks   = $KeptHooks
+                }
+            }
         }
+
+        $Settings.hooks | Add-Member -MemberType NoteProperty -Name "PreToolUse" -Value (@($FilteredPreToolUse + $ProductionPreToolUse)) -Force
 
         # Save settings with proper JSON formatting
         $JsonOutput = $Settings | ConvertTo-Json -Depth 10
@@ -546,11 +580,18 @@ function Install-McpConfiguration {
     )
     
     try {
-        # Validate JSON syntax
+        # Validate JSON syntax.
+        # Expected format (same as Ansible):
+        # { "mcpServers": { "name": { "command": "...", "args": [], "env": {} } } }
         $McpConfig = Get-Content $McpConfigPath -Raw | ConvertFrom-Json
-        
-        $SettingsPath = Join-Path $InstallPath "settings.json"
-        $BackupPath = "$SettingsPath.backup"
+
+        # Claude Code MCP servers live in a *global* file (not the agent home directory):
+        #   ~/.claude.json
+        # This is distinct from ICA's Claude hook registration file:
+        #   ~/.claude/settings.json
+        $SettingsPath = Join-Path $HOME ".claude.json"
+        $Epoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        $BackupPath = "$SettingsPath.backup.$Epoch"
         
         # Backup existing settings if they exist
         if (Test-Path $SettingsPath) {
@@ -558,7 +599,7 @@ function Install-McpConfiguration {
             Write-Host "  Backed up existing settings to: $BackupPath" -ForegroundColor Gray
         }
         
-        # Create or update settings.json
+        # Create or update ~/.claude.json
         $Settings = if (Test-Path $SettingsPath) {
             Get-Content $SettingsPath -Raw | ConvertFrom-Json
         } else {
@@ -569,10 +610,18 @@ function Install-McpConfiguration {
         if (-not $Settings.mcpServers) {
             $Settings | Add-Member -MemberType NoteProperty -Name "mcpServers" -Value @{}
         }
-        
-        # Merge MCP configuration
-        foreach ($ServerName in $McpConfig.PSObject.Properties.Name) {
-            $Settings.mcpServers | Add-Member -MemberType NoteProperty -Name $ServerName -Value $McpConfig.$ServerName -Force
+
+        $ServersToMerge = $null
+        if ($McpConfig.mcpServers) {
+            $ServersToMerge = $McpConfig.mcpServers
+        } else {
+            # Backward-compatible fallback: treat the entire object as the map.
+            Write-Warning "MCP config is missing top-level 'mcpServers'. Treating the entire JSON as the server map."
+            $ServersToMerge = $McpConfig
+        }
+
+        foreach ($ServerName in $ServersToMerge.PSObject.Properties.Name) {
+            $Settings.mcpServers | Add-Member -MemberType NoteProperty -Name $ServerName -Value $ServersToMerge.$ServerName -Force
         }
         
         # Save updated settings
@@ -822,8 +871,19 @@ function Test-Installation {
             }
 
             $PreToolUseHooks = if ($TestSettings.hooks.PreToolUse -is [array]) { $TestSettings.hooks.PreToolUse } else { @($TestSettings.hooks.PreToolUse) }
+            if ($PreToolUseHooks.Count -lt 2) {
+                throw "FAIL: Expected at least 2 PreToolUse matcher entries in settings.json"
+            }
+
             $Commands = @()
             foreach ($Matcher in $PreToolUseHooks) {
+                if ($null -eq $Matcher.matcher -or $Matcher.matcher -is [string]) {
+                    throw "FAIL: Expected matcher object with tool matchers (new Claude Code hook format)"
+                }
+                if (-not $Matcher.matcher.tools -or ($Matcher.matcher.tools -isnot [array])) {
+                    throw "FAIL: Expected matcher.tools to be an array (new Claude Code hook format)"
+                }
+
                 if ($Matcher.hooks) {
                     foreach ($Hook in $Matcher.hooks) {
                         if ($Hook.command) { $Commands += $Hook.command }

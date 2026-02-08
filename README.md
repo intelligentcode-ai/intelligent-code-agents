@@ -7,7 +7,7 @@ Portable, skills-first agent workflow (roles, reviewer gates, work queue, and in
 - Skills-first architecture (`SKILL.md`) for roles like PM/Architect/Developer/Reviewer, plus workflow/enforcement companions.
 - A reproducible PR gate: **post-PR Stage 3 review receipt** (`ICA-REVIEW-RECEIPT`) for the current head SHA.
 - Cross-tool work tracking via `.agent/queue/` (created/managed by the `work-queue` skill).
-- Optional Claude Code integration: minimal PreToolUse hooks (infra protection + summary/file hygiene).
+- Optional Claude Code integration: minimal PreToolUse hooks (infra protection + summary/file hygiene), plus optional MCP server wiring.
 
 ## Supported Targets
 
@@ -82,10 +82,10 @@ make install AGENT=custom AGENT_DIR_NAME=.my-agent-home
 Use skills by name and keep prompts explicit about the intent and output.
 
 ```text
-pm: break down the story into work items in .agent/queue/
-architect: review the approach and call out risks/tradeoffs
-developer: implement the change
-reviewer: audit for regressions and post an ICA-REVIEW-RECEIPT
+pm break down the story into work items in .agent/queue/
+architect review the approach and call out risks/tradeoffs
+developer implement the change
+reviewer audit for regressions and post an ICA-REVIEW-RECEIPT
 ```
 
 ## Workflow Gate (PRs)
@@ -112,10 +112,15 @@ Reference defaults are shipped as:
 - `ica.config.default.json`
 - `ica.workflow.default.json`
 
+Preferred project-local locations:
+
+- `./.ica/config.json`
+- `./.ica/workflow.json`
+
 ## Docs
 
 - `AGENTS.md` (how to consume ICA from different tools)
-- `docs/index.md`
+- `docs/index.md` (start here)
 
 ## License
 

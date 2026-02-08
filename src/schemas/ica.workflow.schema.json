@@ -69,6 +69,10 @@
           "type": "boolean",
           "description": "Whether to automatically merge PRs"
         },
+        "require_github_approval": {
+          "type": "boolean",
+          "description": "Whether to require a GitHub-native APPROVED review before merging"
+        },
         "coordination_required": {
           "type": "boolean",
           "description": "Whether coordination with other team members is required"

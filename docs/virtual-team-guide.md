@@ -17,11 +17,11 @@ developer implement the change
 reviewer check for regressions
 ```
 
-Use plain language if your client does not have explicit skill invocation syntax:
+If you prefer to avoid role-style prompts, name the skill explicitly:
 
 ```text
-As PM: break this story into .agent/queue work items
-As Reviewer: do a post-PR Stage 3 review and post an ICA-REVIEW-RECEIPT
+Use work-queue: break this story into .agent/queue work items
+Use reviewer: do a post-PR Stage 3 review and post an ICA-REVIEW-RECEIPT
 ```
 
 ## The 14 Core Roles

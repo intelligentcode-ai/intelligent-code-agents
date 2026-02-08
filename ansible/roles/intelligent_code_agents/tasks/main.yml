@@ -342,11 +342,15 @@
       ansible.builtin.set_fact:
         intelligent_code_agents_production_hooks:
           PreToolUse:
-            - matcher: "*"
+            - matcher:
+                tools: ["BashTool", "Bash"]
               hooks:
                 - type: command
                   command: "node {{ agent_install_path }}/hooks/agent-infrastructure-protection.js"
                   timeout: 5000
+            - matcher:
+                tools: ["FileWriteTool", "FileEditTool", "Write", "Edit"]
+              hooks:
                 - type: command
                   command: "node {{ agent_install_path }}/hooks/summary-file-enforcement.js"
                   timeout: 5000
@@ -430,7 +434,7 @@
     msg:
       - "✅ Installation complete!"
       - "📍 Location: {{ agent_install_path }}"
-      - "🎯 Skills: 35 cross-platform skills (roles, commands, workflows, memory)"
+      - "🎯 Skills: cross-platform skills (roles, commands, workflows, memory)"
       - "🤖 Virtual Team: 14 core roles + unlimited specialists"
       - "🔒 Behavioral Hooks: PreToolUse (infra protection, summaries)"
       - "🚀 Use role skills by name (pm, architect, developer, reviewer, etc.) or /skill-name (if supported) to activate capabilities"
