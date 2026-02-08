@@ -1,0 +1,290 @@
+# Medium AgentTask Template - Standard Features (6-15 points)
+# For multi-file features and moderate complexity implementations
+
+git_privacy: [GIT_PRIVACY_SETTING]
+id: "[PARENT_ID]-AGENTTASK-[NEXT_NUMBER]-[TITLE]-[CURRENT_DATE]"
+type: medium-agenttask
+complexity: standard
+priority: "[PRIORITY_LEVEL]"
+title: "[ROLE] [DESCRIPTION]"
+
+# MANDATORY: Complete Context Section
+complete_context:
+  project_root: "[PROJECT_ROOT]"
+  system_nature: "[SYSTEM_NATURE]"
+  project_overview: "[PROJECT_OVERVIEW]"
+  work_location: "[WORK_LOCATION]"
+  key_context: "[KEY_CONTEXT]"
+  system_features: "[SYSTEM_FEATURES]"
+  configuration:
+    git_privacy: "[FROM_CONFIG]"
+    branch_protection: "[FROM_CONFIG]"
+    default_branch: "[FROM_CONFIG]"
+    branch_strategy: "[FROM_CONFIG]"
+  critical_files:
+    - path: "[PRIMARY_FILE]"
+      purpose: "[FILE_PURPOSE]"
+      sample: "[FILE_SAMPLE]"
+    - path: "[SECONDARY_FILE]"
+      purpose: "[FILE_PURPOSE_2]"
+      sample: "[FILE_SAMPLE_2]"
+  user_requirements:
+    original_request: "[USER_REQUEST]"
+    success_criteria: "[SUCCESS_CRITERIA]"
+    feature_scope: "[FEATURE_BOUNDARY]"
+
+  specialization_context:
+    technology_domains: "[TECHNOLOGY_DOMAINS]"
+    specialist_creation: "ALWAYS create specialists when technology expertise is needed"
+    unlimited_domains: "Support ANY technology domain through dynamic specialist creation"
+    role_assignment: "PM + Specialist Architect determine when specialists should be created"
+    domain_examples: "@React-Developer, @AWS-Engineer, @Kubernetes-DevOps-Engineer, @Vue-Frontend-Developer"
+
+# MANDATORY: Requirements Section
+requirements:
+  functional:
+    - "[MAIN_FEATURE_REQUIREMENT]"
+    - "[SUPPORTING_REQUIREMENT_1]"
+    - "[SUPPORTING_REQUIREMENT_2]"
+  processual:
+    - "Apply git_privacy setting for all commits"
+    - "Follow branch protection strategy"
+    - "Create feature branch for development"
+    - "Generate pull request for review"
+  technical:
+    - "Multi-file coordination"
+    - "Feature-level implementation"
+
+# ========================================
+# EXECUTION PROCESS: 9 CLEAR STEPS
+# ========================================
+
+execution_notes: |
+  CRITICAL: MANDATORY git_privacy validation BEFORE ALL git operations:
+  1. Load git_privacy setting from configuration (NEVER assume)
+  2. When git_privacy=true, strip ALL AI mentions from:
+     - Commit messages (remove "AI", "Claude", "agent", "Generated with Claude Code", etc.)
+     - PR descriptions and titles
+     - Release notes and changelogs
+     - Any git-visible text including co-author attributions
+  3. Use clean, professional language in all git operations
+  4. Block git operations if privacy setting not validated
+
+## STEP 1: GIT BRANCH
+branch_creation:
+  branch_name: "[FROM_CONFIG_PREFIX]/[ID]-[DESCRIPTION]"
+  actions:
+    - "Create feature branch from default branch"
+    - "Switch to feature branch"
+
+## STEP 2: KNOWLEDGE
+knowledge_search:
+  memory_search: "Search memory/[topic]/ for feature patterns"
+  best_practices: "Review best-practices/[domain]/ for guidance"
+  patterns: "[TOP_RELEVANT_PATTERNS]"
+
+## STEP 3: IMPLEMENTATION
+implementation:
+  files_to_modify:
+    - path: "[FILE_1]"
+      changes: "[CHANGES_DESCRIPTION_1]"
+    - path: "[FILE_2]"
+      changes: "[CHANGES_DESCRIPTION_2]"
+  validation: "[TESTING_STRATEGY]"
+
+## STEP 4: REVIEW
+review_checklist:
+  - "Multi-file coordination"
+  - "Feature completeness"
+  - "Code quality and patterns"
+  - "Configuration compliance"
+
+## STEP 5: VERSION
+version_bump:
+  type: "patch/minor"
+  action: "Bump version number appropriately"
+
+## STEP 6: DOCUMENTATION
+documentation:
+  changelog:
+    entry: "### Added\n- [FEATURE_DESCRIPTION]"
+    required: true
+  readme_updates: "Update README/API docs/guides as needed"
+  comments: "Document complex logic and integrations"
+
+## STEP 7: GIT COMMIT
+git_commit:
+  commit_message: "[ID]: [DESCRIPTION]"
+  privacy_filter: "[FROM_CONFIG]"
+  action: "Commit all changes with clean message (no AI mentions)"
+
+## STEP 8: GIT PUSH
+git_push:
+  action: "Push feature branch to remote"
+
+## STEP 9: GIT PR
+pull_request:
+  title: "[ID]: [FEATURE_DESCRIPTION]"
+  description: |
+    ## Summary
+    [FEATURE_OVERVIEW]
+
+    ## Changes Made
+    - [CHANGE_1]
+    - [CHANGE_2]
+
+    ## Testing
+    [TESTING_PERFORMED]
+  reviewer: "[PRE_ASSIGNED_SME]"
+
+# MANDATORY: Validation Enforcement Section
+validation_enforcement:
+  mandatory_requirements:
+    git_operations:
+      requirements:
+        - "Feature branch creation with proper naming convention"
+        - "Git commit with detailed message following [ID]: [DESCRIPTION] format"
+        - "Git push to feature branch (never directly to main/default)"
+        - "Pull request creation with comprehensive description"
+        - "Privacy filter applied to all git operations"
+      blocked_patterns:
+        - "No git operations needed"
+        - "Skip git workflow"
+        - "Direct push to main"
+        - "No branching required"
+        - "No PR needed"
+        - "Simple merge"
+        - "Direct commit acceptable"
+      error_message: "❌ BLOCKED: Full git workflow with branch protection is mandatory for medium AgentTasks."
+
+    sme_review:
+      requirements:
+        - "Complete technical review checklist with all items verified"
+        - "Multi-file coordination validation"
+        - "Feature completeness assessment"
+        - "Code quality and pattern compliance verification"
+        - "Configuration compliance check"
+        - "Integration testing validation"
+      blocked_patterns:
+        - "No review needed"
+        - "Skip validation steps"
+        - "Obvious implementation"
+        - "Self-evident changes"
+        - "Internal change only"
+        - "Too straightforward for review"
+        - "Developer discretion"
+      error_message: "❌ BLOCKED: Comprehensive SME review is mandatory for all medium complexity AgentTasks."
+
+    documentation:
+      requirements:
+        - "CHANGELOG entry with detailed feature description required"
+        - "README/API documentation updates for user-facing changes"
+        - "Architecture documentation updates if system design affected"
+        - "Inline code documentation for complex logic"
+        - "Integration guides updated if new dependencies introduced"
+      blocked_patterns:
+        - "No documentation needed"
+        - "Self-documenting code"
+        - "Skip CHANGELOG"
+        - "Internal change, no docs"
+        - "Documentation not affected"
+        - "Too technical for user docs"
+        - "Code speaks for itself"
+      error_message: "❌ BLOCKED: Comprehensive documentation updates are mandatory for medium AgentTasks."
+
+    pull_request_review:
+      requirements:
+        - "Assigned SME reviewer must be specified (not generic)"
+        - "Pull request description must include summary, changes, and testing"
+        - "All PR template sections must be completed"
+        - "Integration testing results must be documented"
+      blocked_patterns:
+        - "No reviewer assignment needed"
+        - "Any developer can review"
+        - "Self-review sufficient"
+        - "Skip PR template"
+        - "Minimal description acceptable"
+      error_message: "❌ BLOCKED: Proper SME reviewer assignment and comprehensive PR documentation required."
+
+    version_management:
+      requirements:
+        - "Appropriate version bump (patch/minor) based on change scope"
+        - "Version consistency maintained across all affected components"
+        - "Breaking change assessment completed"
+      blocked_patterns:
+        - "No version change needed"
+        - "Skip versioning"
+        - "Version not applicable"
+        - "Internal change, no version impact"
+      error_message: "❌ BLOCKED: Version management is mandatory for all feature-level changes."
+
+  workflow:
+    version_bump: "[WORKFLOW_VERSION_BUMP]"
+    version_type: "[WORKFLOW_VERSION_TYPE]"
+    changelog_required: "[WORKFLOW_CHANGELOG_REQUIRED]"
+    pr_required: "[WORKFLOW_PR_REQUIRED]"
+    merge_strategy: "[WORKFLOW_MERGE_STRATEGY]"
+    release_automation: "[WORKFLOW_RELEASE_AUTOMATION]"
+    auto_merge: "[WORKFLOW_AUTO_MERGE]"
+    coordination_required: "[WORKFLOW_COORDINATION_REQUIRED]"
+    breaking_change_assessment: "[WORKFLOW_BREAKING_CHANGE_ASSESSMENT]"
+
+  enforcement_rules:
+    - "ALL 9 execution steps must be completed in sequential order"
+    - "NO bypass language, skip patterns, or discretionary exceptions allowed"
+    - "MANDATORY full git workflow with feature branch and PR process"
+    - "REQUIRED comprehensive SME review with assigned domain expert"
+    - "MANDATORY documentation updates for all user-impacting changes"
+    - "ENFORCED pull request process with proper reviewer assignment"
+
+# MCP Operations Extension Points
+mcp_operations:
+  memory:
+    condition: "[MCP_MEMORY_ENABLED]"
+    provider: "[MCP_MEMORY_PROVIDER]"
+    operations:
+      - action: store_learning
+        topic: "[LEARNING_TOPIC]"
+        content: "[LEARNING_CONTENT]"
+    fallback: "file-based"
+
+  issue_tracking:
+    condition: "[MCP_ISSUE_ENABLED]"
+    provider: "[MCP_ISSUE_PROVIDER]"
+    operations:
+      - action: create_issue
+        type: "[ISSUE_TYPE]"
+        title: "[ISSUE_TITLE]"
+        description: "[ISSUE_DESCRIPTION]"
+    fallback: "file-based"
+
+  documentation:
+    condition: "[MCP_DOCS_ENABLED]"
+    provider: "[MCP_DOCS_PROVIDER]"
+    operations:
+      - action: generate_docs
+        path: "[DOC_PATH]"
+        content: "[DOC_CONTENT]"
+    fallback: "file-based"
+
+# MCP Placeholder Resolution Notes
+# During AgentTask generation, resolve these placeholders:
+# [MCP_MEMORY_ENABLED] → Check mcp_integrations.memory.enabled
+# [MCP_MEMORY_PROVIDER] → Get mcp_integrations.memory.provider
+# [MCP_ISSUE_ENABLED] → Check mcp_integrations.issue_tracking.enabled
+# [MCP_ISSUE_PROVIDER] → Get mcp_integrations.issue_tracking.provider
+# [MCP_DOCS_ENABLED] → Check mcp_integrations.documentation.enabled
+# [MCP_DOCS_PROVIDER] → Get mcp_integrations.documentation.provider
+# If not configured, set to false/"file-based"
+
+# EXECUTION CHECKLIST
+execution_checklist: |
+  ☐ Step 1 - Git Branch: Feature branch created and checked out
+  ☐ Step 2 - Knowledge: Memory and best practices searched
+  ☐ Step 3 - Implementation: All target files updated
+  ☐ Step 4 - Review: Technical review checklist completed
+  ☐ Step 5 - Version: Version bumped appropriately
+  ☐ Step 6 - Documentation: CHANGELOG updated (minimum) + README/API docs/guides as needed
+  ☐ Step 7 - Git Commit: Changes committed with privacy filter
+  ☐ Step 8 - Git Push: Feature branch pushed to remote
+  ☐ Step 9 - Git PR: Pull request created with description
