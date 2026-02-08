@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Pre-commit hook to prevent memory files from being committed
-# This provides the first line of defense for memory privacy
+# Pre-commit hook to prevent LOCAL memory runtime files from being committed.
+# Shareable memory exports (markdown) are allowed under memory/exports/.
 
 echo "🔍 Checking for memory files before commit..."
 
 # Check if any memory-related files are staged
-MEMORY_FILES=$(git diff --cached --name-only | grep -E '^memory/|\.memory$|\.learning$' || true)
+MEMORY_FILES=$(git diff --cached --name-only | grep -E '^\.agent/memory/|\.memory$|\.learning$' || true)
 
 if [ ! -z "$MEMORY_FILES" ]; then
     echo ""
@@ -15,14 +15,14 @@ if [ ! -z "$MEMORY_FILES" ]; then
     echo "📋 Files that must not be committed:"
     echo "$MEMORY_FILES" | sed 's/^/  - /'
     echo ""
-    echo "🔒 Memory files contain private learning data and must remain local-only."
+    echo "🔒 These files contain private/local runtime state and must remain local-only."
     echo ""
     echo "🛠️  To fix this issue:"
-    echo "   git reset HEAD memory/        # Unstage memory directory"
+    echo "   git reset HEAD .agent/memory/  # Unstage local memory runtime directory"
     echo "   git reset HEAD *.memory       # Unstage memory files"
     echo "   git reset HEAD *.learning     # Unstage learning files"
     echo ""
-    echo "ℹ️  Memory files are automatically ignored by .gitignore"
+    echo "ℹ️  Local memory runtime files are automatically ignored by .gitignore"
     echo "   but this hook prevents accidental commits if they get staged."
     echo ""
     exit 1

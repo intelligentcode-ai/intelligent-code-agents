@@ -6,7 +6,7 @@
 - **Summaries/Reports** → `summaries/`
 - **Stories/Epics** → `stories/`
 - **Bugs** → `bugs/`
-- **Memory** → `memory/`
+- **Memory (shareable exports)** → `memory/exports/`
 - **Docs** → `docs/`
 
 ## Rules

@@ -31,9 +31,13 @@ project-root/
 │   └── api/                   # API pattern examples
 ├── drafts/                    # Draft specifications (user's choice)
 │   └── feature-x/             # Working drafts for new features
-├── memory/                    # Learning storage (version-controlled)
-│   └── [topic]/               # Organized by topic
-│       └── [subtopic].md      # Learnings and patterns
+├── memory/                    # Shareable memories (git-trackable Markdown)
+│   ├── exports/               # Active exports (reviewable, committed)
+│   │   ├── architecture/      # Design + system decisions
+│   │   ├── implementation/    # How-to / code-level notes
+│   │   ├── issues/            # Bugs + fixes
+│   │   └── patterns/          # Reusable patterns
+│   └── archive/               # Archived exports (still shareable)
 └── prbs/                      # Generated AgentTasks (version-controlled)
     ├── ready/                 # Ready to execute
     └── completed/             # Executed AgentTasks

@@ -55,7 +55,7 @@ execution_notes: |
   4. Block git operations if privacy setting not validated
 
 execution_steps:
-  - "Check memory/[TOPIC]/ for similar patterns"
+  - "Check memory/exports/[CATEGORY]/ for similar patterns"
   - "Make the specified change to target file"
   - "Validate change works as expected"
   - "Commit with format: [ID]: [DESCRIPTION]"

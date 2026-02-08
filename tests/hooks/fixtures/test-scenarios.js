@@ -55,7 +55,7 @@ const directoryScenarios = [
   { file: 'STORY-001-test.md', expectedDir: 'stories/' },
   { file: 'BUG-001-test.md', expectedDir: 'stories/' },
   { file: 'EPIC-001-test.md', expectedDir: 'stories/' },
-  { file: 'memory/debugging/pattern.md', expectedDir: 'memory/' },
+  { file: 'memory/exports/patterns/pattern.md', expectedDir: 'memory/exports/' },
   { file: 'docs/architecture.md', expectedDir: 'docs/' },
   { file: 'VERSION', expectedDir: 'root' },
   { file: 'CLAUDE.md', expectedDir: 'root' },

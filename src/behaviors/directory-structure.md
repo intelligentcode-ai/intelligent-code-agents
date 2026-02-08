@@ -13,3 +13,7 @@
 
 ## Notes
 Paths are configurable via `ica.config.json`.
+
+Memory is split by intent:
+- Shareable exports (commit): `memory/exports/**` and `memory/archive/**`
+- Local runtime state (ignore): `.agent/memory/`

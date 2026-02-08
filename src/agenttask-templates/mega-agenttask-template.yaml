@@ -130,7 +130,7 @@ system_coordination:
 knowledge_management:
   capture_patterns: "Store system-wide change patterns"
   capture_insights: "Document architectural transformation approach"
-  location: "memory/[topic]/system-changes.md"
+  location: "memory/exports/architecture/system-changes.md"
 
 # MANDATORY: Git Operations
 git_operations:

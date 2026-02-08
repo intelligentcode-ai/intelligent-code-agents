@@ -2,34 +2,32 @@
 
 ## Overview
 
-The Intelligent Code Agents system implements **multi-layer memory protection** to ensure that private learning data never leaves the local development environment. Memory files contain AI learning patterns and private project context that must remain local-only.
+The Intelligent Code Agents system implements **multi-layer memory protection** to keep **local runtime state** private while still allowing **shareable knowledge** to be committed as Markdown.
+
+This repo uses a split storage model:
+- Local runtime state (private, machine-local): `.agent/memory/`
+- Shareable memories (git-trackable Markdown): `memory/exports/**` and `memory/archive/**`
 
 ## Why Memory Protection Matters
 
-**Privacy**: Memory files contain:
-- Project-specific learning patterns
-- AI behavior adaptations  
-- Private development context
-- Team coordination patterns
+**Privacy**: Local runtime state can contain:
+- SQLite DB data
+- Access history (access counts, timestamps)
+- Local caches / embedding artifacts (depending on installation)
 
-**Security**: Committing memory files could expose:
-- Internal development practices
-- Project architecture details
-- Learning algorithms and patterns
-- Private organizational information
+**Collaboration**: Shareable Markdown exports are meant to be reviewed and committed (they represent durable, team-relevant knowledge).
 
 ## Multi-Layer Protection System
 
 Our defense-in-depth approach provides three independent protection layers:
 
 ### Layer 1: .gitignore Prevention
-**Purpose**: Prevents accidental staging of memory files
+**Purpose**: Prevents accidental staging of local-only runtime state
 
 **Files Protected**:
 ```gitignore
-# CRITICAL: Memory must NEVER be committed - local learning only!
-memory/
-memory/**/*
+# Local memory runtime state is private and must NEVER be committed
+.agent/memory/
 *.memory
 *.learning
 ```
@@ -37,7 +35,7 @@ memory/**/*
 **Status**: ✅ Always active (built into repository)
 
 ### Layer 2: Pre-commit Hook (Local Protection)
-**Purpose**: Blocks commits locally if memory files get staged despite .gitignore
+**Purpose**: Blocks commits locally if local-only files get staged despite `.gitignore`
 
 **Location**: `.githooks/pre-commit`
 
@@ -57,10 +55,10 @@ memory/**/*
 **Location**: `.github/workflows/memory-check.yml`
 
 **Features**:
-- Runs on all branches (not just main)
-- Scans entire repository for tracked memory files
-- Checks PR diffs specifically for memory content
-- Verifies .gitignore patterns are present
+- Runs on all branches
+- Scans tracked files for local-only runtime state
+- Blocks accidental tracking of `*.memory` / `*.learning`
+- Verifies `.gitignore` contains `.agent/memory/`
 - Provides comprehensive remediation instructions
 
 **Status**: ✅ Always active (runs automatically)
@@ -107,7 +105,7 @@ memory/**/*
 
 ```bash
 # Verify .gitignore patterns
-grep -E "memory|\.memory|\.learning" .gitignore
+grep -E "\\.agent/memory|\\.memory|\\.learning" .gitignore
 
 # Check git hooks configuration  
 git config core.hooksPath
@@ -123,8 +121,9 @@ ls -la .github/workflows/memory-check.yml
 
 | Scenario | Layer 1 (.gitignore) | Layer 2 (Pre-commit) | Layer 3 (GitHub) |
 |----------|----------------------|----------------------|------------------|
-| `git add memory/file.md` | ✅ Prevents staging | ⚠️ Backup protection | ⚠️ Final safety net |
-| `git add -f memory/file.md` | ❌ Force bypassed | ✅ Blocks commit | ⚠️ Final safety net |  
+| `git add .agent/memory/memory.db` | ✅ Prevents staging | ⚠️ Backup protection | ⚠️ Final safety net |
+| `git add -f .agent/memory/memory.db` | ❌ Force bypassed | ✅ Blocks commit | ⚠️ Final safety net |
+| `git add memory/exports/patterns/mem-001.md` | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | Hook not configured | ✅ Still protects | ❌ Not active | ✅ Catches violation |
 | All protections bypassed | ❌ Bypassed | ❌ Bypassed | ✅ **BLOCKS PR/PUSH** |
 
@@ -144,9 +143,9 @@ chmod +x .githooks/pre-commit
 ```bash
 # Problem: Memory files are tracked in repository
 # Solution: Remove from git tracking (not filesystem)
-git rm -r --cached memory/
+git rm -r --cached .agent/memory/
 git rm --cached *.memory *.learning
-git commit -m "Remove memory files from tracking"
+git commit -m "chore: stop tracking local-only memory files"
 git push
 ```
 
@@ -163,10 +162,13 @@ git config core.hooksPath .githooks
 ## Memory File Patterns
 
 ### Protected Patterns
-- `memory/` - Main memory directory
-- `memory/**/*` - All subdirectories and files
+- `.agent/memory/` - Local memory runtime state (SQLite DB, caches)
 - `*.memory` - Individual memory files
 - `*.learning` - Learning pattern files
+
+### Shareable Patterns (Allowed)
+- `memory/exports/**` - Team-relevant, reviewable Markdown exports
+- `memory/archive/**` - Archived Markdown exports (still shareable)
 
 ### Safe Patterns (Not Protected)
 - `src/memory-utils.js` - Source code about memory (allowed)
@@ -177,9 +179,10 @@ git config core.hooksPath .githooks
 
 ### Normal Development Flow
 1. Work on features as usual
-2. Memory system automatically stores learnings locally
-3. Commit your code changes normally
-4. Memory protection automatically prevents privacy leaks
+2. Memory system stores runtime state locally under `.agent/memory/`
+3. Shareable knowledge is exported as Markdown under `memory/exports/**`
+4. Commit your code changes and any relevant `memory/exports/**` updates
+5. Protection automatically prevents leaking `.agent/memory/**`
 
 ### When Memory Files Are Detected
 1. **Don't panic** - protection worked as designed
@@ -225,12 +228,13 @@ TRACKED_PRIVATE=$(git ls-files | grep -E "^private/|\.secret$" || true)
 ✅ **DO**:
 - Run `git config core.hooksPath .githooks` once per repository
 - Pay attention to pre-commit hook messages
-- Keep memory files local for privacy
+- Keep `.agent/memory/` local for privacy
+- Commit shareable memories under `memory/exports/**` when they are broadly useful
 
 ❌ **DON'T**:
-- Use `git add -f` to force-add memory files
+- Use `git add -f` to force-add `.agent/memory/**`
 - Bypass protection mechanisms
-- Commit memory content manually
+- Commit the SQLite database or runtime caches
 
 ### For Repository Maintainers
 ✅ **DO**:
@@ -272,8 +276,8 @@ TRACKED_PRIVATE=$(git ls-files | grep -E "^private/|\.secret$" || true)
 make test-memory-protection  # If available
 
 # Quarterly: Review memory patterns
-git ls-files | grep -E "memory|\.memory|\.learning"
-# Should return empty (no tracked memory files)
+git ls-files | grep -E "^\\.agent/memory/|\\.memory$|\\.learning$"
+# Should return empty (no tracked local-only files)
 ```
 
 ### Updates and Patches

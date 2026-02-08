@@ -79,7 +79,7 @@ branch_creation:
 
 ## STEP 2: KNOWLEDGE
 knowledge_search:
-  memory_search: "Search memory/[topic]/ for feature patterns"
+  memory_search: "Search memory/exports/[category]/ for feature patterns"
   best_practices: "Review best-practices/[domain]/ for guidance"
   patterns: "[TOP_RELEVANT_PATTERNS]"
 

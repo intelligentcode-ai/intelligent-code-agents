@@ -139,8 +139,8 @@ assert(
 );
 
 assert(
-  !isSummaryFile('memory/debugging/status-investigation.md', PROJECT_ROOT),
-  'status-investigation.md in memory/ NOT classified as summary (subdirectory)'
+  !isSummaryFile('memory/exports/issues/status-investigation.md', PROJECT_ROOT),
+  'status-investigation.md in memory/exports/ NOT classified as summary (subdirectory)'
 );
 
 // ============================================================================
