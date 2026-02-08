@@ -363,13 +363,14 @@ grep -A 20 "complete_context:" your-prb-file.prb.yaml
 **Solution:**
 1. Check memory directory structure:
 ```bash
-ls -la ./memory/
-ls -la ./memory/*/
+ls -la ./memory/ ./memory/exports/ ./memory/archive/ 2>/dev/null || true
+ls -la ./.agent/memory/ 2>/dev/null || true
 ```
 
 2. Initialize memory system:
 ```bash
-mkdir -p ./memory/{system-design,behavioral-patterns,implementation}
+# Seed local runtime state (SQLite) from committed Markdown exports
+node src/skills/memory/cli.js init
 ```
 
 3. Verify memory configuration:
@@ -401,16 +402,20 @@ Store location patterns, not actual values:
 
 **Error Message:**
 ```
-Permission denied: memory/topic/file.md
+Permission denied: memory/exports/patterns/some-file.md
 ```
 
 **Cause:** File permission issues in memory directory.
 
 **Solution:**
 ```bash
-# Fix memory directory permissions
-find ./memory -type d -exec chmod 755 {} \;
-find ./memory -type f -exec chmod 644 {} \;
+# Fix shareable memory exports permissions
+find ./memory/exports -type d -exec chmod 755 {} \;
+find ./memory/exports -type f -exec chmod 644 {} \;
+
+# Fix local runtime memory permissions (SQLite DB)
+find ./.agent/memory -type d -exec chmod 755 {} \;
+find ./.agent/memory -type f -exec chmod 644 {} \;
 ```
 
 ## Configuration Issues
@@ -645,10 +650,11 @@ grep -i error mcp-install.log
 1. **Large Memory Directory:**
 ```bash
 # Check memory size
-du -sh ./memory/
+du -sh ./.agent/memory/ memory/exports/ 2>/dev/null || true
 
 # Archive old entries if >100MB
-find ./memory -name "*.md" -mtime +90 -exec mv {} ./memory/archive/ \;
+mkdir -p memory/archive
+find memory/exports -name "*.md" -mtime +90 -exec mv {} memory/archive/ \\;
 ```
 
 2. **Complex Project Analysis:**
@@ -671,8 +677,8 @@ make install TARGET_PATH=./local-claude
 1. **Organize Memory Topics:**
 ```bash
 # Group related memories
-mkdir -p ./memory/{performance,security,implementation}
-# Move specific memories to appropriate topics
+mkdir -p memory/exports/{architecture,implementation,issues,patterns}
+# Keep entries in the category that best fits the content
 ```
 
 2. **Clean Up Memory Files:**
@@ -746,7 +752,7 @@ ls -la ./
 
 ```bash
 # Check memory structure
-find ./memory -type f -name "*.md" | head -10
+find memory/exports memory/archive -type f -name "*.md" 2>/dev/null | head -10
 
 # Test memory search
 /ica-search-memory "test query"

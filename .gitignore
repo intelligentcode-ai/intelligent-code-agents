@@ -82,8 +82,8 @@ NOTES.md
 .claude/*
 !.claude/skills/
 
-# Old memory location (deprecated, kept for backwards compatibility)
-memory/
+# Shareable memory exports are committed under memory/exports/.
+# Local runtime state lives under .agent/memory/ and is ignored below.
 
 # Memory skill source code is tracked
 !src/skills/memory/
@@ -95,9 +95,8 @@ src/skills/memory/package-lock.json
 # AgentTasks should remain local
 agenttasks/
 
-# Agent directory - most is local, but memory and queue are tracked
+# Agent directory - most is local, but queue is tracked
 .agent/*
-!.agent/memory/
 !.agent/queue/
 
 # Credentials
@@ -107,3 +106,6 @@ credentials/
 secrets/memory/
 stories/
 bugs/
+
+# Memory runtime state (SQLite + caches) is local-only
+.agent/memory/

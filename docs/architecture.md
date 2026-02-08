@@ -49,5 +49,5 @@ Cross-platform work tracking in `.agent/queue/`:
 - **Skills-first** → Skills loaded on demand based on context
 - **CC-native subagents** → No marker files, no custom role enforcement
 - **Cross-platform queues** → `.agent/queue/` works across all agents
-- **File placement correctness** → Summaries in `summaries/`, memory in `memory/`
+- **File placement correctness** → Summaries in `summaries/`, shareable memory exports in `memory/exports/`
 - **Git privacy by default** → Strip AI attribution when privacy enabled

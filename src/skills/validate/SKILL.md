@@ -29,12 +29,12 @@ Validate AgentTask completion against success criteria and project standards.
 | Summaries/Reports | `summaries/` |
 | Stories/Epics | `stories/` |
 | Bugs | `bugs/` |
-| Memory | `memory/` |
+| Memory (exports) | `memory/exports/` |
 | Documentation | `docs/` |
 
 **NEVER place:**
 - Summaries in `docs/` or project root
-- Memory entries outside `memory/`
+- Memory entries outside `memory/exports/`
 - Reports anywhere except `summaries/`
 
 ## ALL-CAPS Allowlist

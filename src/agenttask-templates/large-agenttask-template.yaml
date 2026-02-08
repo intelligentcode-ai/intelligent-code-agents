@@ -108,7 +108,7 @@ coordination:
 knowledge_management:
   capture_patterns: "Store complex feature coordination patterns"
   capture_insights: "Document multi-component integration approach"
-  location: "memory/[topic]/complex-features.md"
+  location: "memory/exports/architecture/complex-features.md"
 
 # MANDATORY: Git Operations
 git_operations:

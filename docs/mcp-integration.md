@@ -75,7 +75,9 @@ mcp_integrations:
 - `mcp__memory__get_relations` - Find related concepts
 - `mcp__memory__update_observation` - Update learning entries
 
-**Fallback Behavior**: If MCP provider unavailable, automatically uses `memory/` directory structure with topic-based organization.
+**Fallback Behavior**: If MCP provider unavailable, automatically uses the local memory skill storage:
+- Shareable Markdown exports: `memory/exports/**`
+- Local runtime state (SQLite): `.agent/memory/`
 
 ### Issue Tracking Providers
 
@@ -283,8 +285,8 @@ The framework guarantees robust operation through comprehensive fallback mechani
 
 | Operation | MCP Provider | Fallback Behavior |
 |-----------|-------------|-------------------|
-| **Memory Storage** | `mcp__memory__create_entities` | Create `memory/[topic]/[subtopic].md` files |
-| **Memory Search** | `mcp__memory__search_nodes` | Search local `memory/` directory structure |
+| **Memory Storage** | `mcp__memory__create_entities` | Create Markdown exports under `memory/exports/<category>/` |
+| **Memory Search** | `mcp__memory__search_nodes` | Search local `memory/exports/**` (and optionally archived exports) |
 | **Issue Creation** | `mcp__github__create_issue` | Create `stories/` or `bugs/` local files |
 | **Issue Updates** | `mcp__github__update_issue` | Update local files with status changes |
 | **Documentation** | `mcp__confluence__create_page` | Create `docs/` markdown files |

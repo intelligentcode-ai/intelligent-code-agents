@@ -19,7 +19,7 @@ File placement is **enforced by hooks** - violations will be blocked. This skill
 | Reports | `summaries/` | analysis-report.md, audit-report.md |
 | Stories | `stories/` | STORY-001-feature.md |
 | Bugs | `bugs/` | BUG-001-issue.md |
-| Memory | `memory/` | memory/auth/oauth2.md |
+| Memory (exports) | `memory/exports/` | memory/exports/patterns/oauth2.md |
 | Documentation | `docs/` | api-docs.md, architecture.md |
 
 ## Forbidden Placements
@@ -27,7 +27,7 @@ File placement is **enforced by hooks** - violations will be blocked. This skill
 **NEVER place these in the wrong location:**
 - Summaries in `docs/` or project root
 - Reports in `docs/` or project root
-- Memory entries outside `memory/`
+- Memory entries outside `memory/exports/`
 - Output files in source directories
 
 ## Filename Rules
@@ -55,7 +55,7 @@ The `summary-file-enforcement.js` hook will:
 
 Ask yourself:
 1. Is this a summary or report? → Put in `summaries/`
-2. Is this a memory entry? → Put in `memory/<topic>/`
+2. Is this a memory entry? → Put in `memory/exports/<category>/` (category: architecture, implementation, issues, patterns)
 3. Is my filename lowercase-kebab? → If not, fix it
 4. Am I using ALL-CAPS? → Only if in allowlist
 

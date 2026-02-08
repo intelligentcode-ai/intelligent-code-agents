@@ -8,10 +8,13 @@ Users work in their NATURAL project structure. The system adapts to YOUR project
 ```
 project-root/
 ├── CLAUDE.md                  # Project configuration (MUST be uppercase)
-├── memory/                    # Version-controlled learnings (shared with team)
-│   ├── Learning/             # Error patterns and solutions
-│   ├── Pattern/              # Reusable patterns
-│   └── Knowledge/            # Domain knowledge
+├── memory/                    # Shareable memories (git-trackable Markdown)
+│   ├── exports/               # Active exports (reviewable, committed)
+│   │   ├── architecture/      # Design + system decisions
+│   │   ├── implementation/    # How-to / code-level notes
+│   │   ├── issues/            # Bugs + fixes
+│   │   └── patterns/          # Reusable patterns
+│   └── archive/               # Archived exports (still shareable)
 └── .claude/                   # System internals ONLY
     └── prbs/                 # Generated AgentTasks (auto-managed)
 ```
@@ -24,7 +27,7 @@ That's it! Everything else is YOUR choice.
 ```
 project-root/
 ├── CLAUDE.md
-├── memory/                  # Team-shared learnings
+├── memory/                  # Team-shared memories (exports + archive)
 ├── docs/
 │   ├── architecture/        # Your architecture docs
 │   ├── best-practices/      # Your best practices
@@ -37,7 +40,7 @@ project-root/
 ```
 project-root/
 ├── CLAUDE.md
-├── memory/                  # Team-shared learnings
+├── memory/                  # Team-shared memories (exports + archive)
 ├── best-practices/          # Your practices at root
 │   ├── security.md
 │   └── performance.md
@@ -50,7 +53,7 @@ project-root/
 ```
 project-root/
 ├── CLAUDE.md
-├── memory/                  # Shared across all packages
+├── memory/                  # Shared across all packages (exports + archive)
 ├── packages/
 │   ├── frontend/
 │   └── backend/
@@ -85,7 +88,7 @@ agenttask_configuration:
 ## What the System Auto-Creates
 
 The system stores everything in YOUR project (version-controlled):
-- `memory/` - Learning storage (version-controlled)
+- `memory/exports/` - Shareable memory exports (version-controlled)
 - `prbs/` - Generated AgentTasks (version-controlled)
 - `config.md` - Project settings (default location, not .claude/)
 

@@ -118,7 +118,7 @@ validation:
 - Complex bug fixes
 
 **Key features:**
-- Embedded learnings from memory/ (2-3 entries max)
+- Embedded learnings from `memory/exports/**` (2-3 entries max)
 - Best practices inclusion from best-practices/
 - Code pattern references with existing implementations
 - Pre-assigned SME reviewer through agent system
@@ -380,7 +380,7 @@ security_review:
 ### 2. Dynamic Content Injection
 
 AgentTasks automatically inject:
-- Recent learnings from `memory/`
+- Recent learnings from `memory/exports/**`
 - Existing code patterns
 - Project best practices
 - External documentation
@@ -485,7 +485,7 @@ agenttask_configuration:
 
 ### "Missing context"
 - Check best_practices_paths
-- Ensure memory/ is populated
+- Ensure `memory/exports/**` is populated (shareable) or run `memory init` to seed local runtime state
 - Verify code_pattern_search paths
 
 ### "Wrong template selected"

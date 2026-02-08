@@ -53,7 +53,7 @@ AgentTask includes everything from your project:
 - Existing code examples
 - External documentation
 - Project standards
-- **Embedded learnings from memory/** - Past solutions and patterns
+- **Embedded learnings from `memory/exports/**`** - Past solutions and patterns
 
 ### 4a. Best-Practices Auto-Discovery
 The system automatically discovers and injects relevant methodological approaches:
@@ -71,7 +71,7 @@ AgentTasks execute through the 14-role virtual team system:
 - **Dynamic Specialist Creation**: Unlimited specialists created when technology expertise needed
 - **Self-Contained Execution**: No workflow steps, complete blueprint for implementation
 - **Built-in Validation**: Evidence-based completion verification
-- **Automatic Learning Capture**: Successful patterns stored in memory/
+- **Automatic Learning Capture**: Successful patterns stored as Markdown exports under `memory/exports/**` (runtime state stays local in `.agent/memory/`)
 
 ## AgentTask Structure
 
@@ -101,9 +101,9 @@ context:
   reference_docs: |
     [Documentation HERE]
   embedded_learnings: |
-    # From memory/authentication/oauth2-patterns.md
+    # From memory/exports/patterns/oauth2-patterns.md
     [Complete pattern content embedded]
-    # From memory/errors/api-failures.md
+    # From memory/exports/issues/api-failures.md
     [Complete learning content embedded]
 
 # IMPLEMENTATION - Blueprint
@@ -120,10 +120,11 @@ validation:
 # COMPLETION - Definition of done
 completion:
   deliverables: "What gets created"
-  learning_capture: 
-    - "New patterns → memory/Pattern/"
-    - "Error solutions → memory/Learning/"
-    - "Domain knowledge → memory/Knowledge/"
+  learning_capture:
+    - "New patterns → memory/exports/patterns/"
+    - "Error solutions → memory/exports/issues/"
+    - "Domain knowledge (design/architecture) → memory/exports/architecture/"
+    - "Implementation notes (how-to) → memory/exports/implementation/"
 ```
 
 ## Configuration
