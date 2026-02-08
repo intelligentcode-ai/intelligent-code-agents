@@ -14,7 +14,7 @@ const {
   ensureLogDir,
   createLogger,
   initializeHook
-} = require('../../../src/hooks/lib/logging.js');
+} = require('../../../src/targets/claude/hooks/lib/logging.js');
 
 const originalHookInputEnv = process.env.HOOK_INPUT;
 const originalClaudeToolInputEnv = process.env.CLAUDE_TOOL_INPUT;

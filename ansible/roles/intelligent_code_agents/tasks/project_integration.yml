@@ -11,7 +11,9 @@
   ansible.builtin.stat:
     path: "{{ agent_project_path }}/CLAUDE.md"
   register: intelligent_code_agents_project_claude_md
-  when: agent_name == 'claude'
+  when:
+    - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
 - name: Backup project CLAUDE.md if exists
   ansible.builtin.copy:
     src: "{{ agent_project_path }}/CLAUDE.md"
@@ -20,6 +22,7 @@
     mode: '0644'
   when:
     - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
     - intelligent_code_agents_project_claude_md.stat.exists
 - name: Create project CLAUDE.md with import
   ansible.builtin.copy:
@@ -31,10 +34,12 @@
     mode: '0644'
   when:
     - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
     - not intelligent_code_agents_project_claude_md.stat.exists
 - name: Integrate with existing project CLAUDE.md
   when:
     - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
     - intelligent_code_agents_project_claude_md.stat.exists
   block:
     - name: Check if import already present in project CLAUDE.md

@@ -11,7 +11,7 @@
  */
 
 const path = require('path');
-const { isSummaryFile } = require('../../../src/hooks/lib/summary-validation');
+const { isSummaryFile } = require('../../../src/targets/claude/hooks/lib/summary-validation');
 
 const PROJECT_ROOT = '/test/project';
 

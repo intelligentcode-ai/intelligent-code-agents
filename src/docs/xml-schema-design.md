@@ -309,7 +309,7 @@ This document defines the XML schema structure for critical enforcement rules in
 <!-- Example: PM attempting to modify src/ file -->
 <validation_check>
   <constraint_id>PM-TECH-BLOCK</constraint_id>
-  <operation>Write to src/hooks/pretooluse.js</operation>
+  <operation>Write to src/targets/claude/hooks/pretooluse.js</operation>
   <result>BLOCKED</result>
   <reason>PM cannot modify technical files in src/ directory</reason>
   <guidance>Create AgentTask for ai-engineer to handle technical modifications</guidance>

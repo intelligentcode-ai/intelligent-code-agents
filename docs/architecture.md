@@ -32,7 +32,7 @@ Hooks provide enforcement that CC doesn't handle natively:
 - `agent-infrastructure-protection.js` - Block imperative infra changes
 - `summary-file-enforcement.js` - Route summaries/reports, block ALL-CAPS filenames
 
-Located in `src/hooks/` and registered in `.claude/settings.json`.
+Located in `src/targets/claude/hooks/` and registered in `.claude/settings.json` (Claude integration only).
 
 ### Work Queue System
 Cross-platform work tracking in `.agent/queue/`:

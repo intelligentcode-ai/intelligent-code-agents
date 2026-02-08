@@ -12,7 +12,10 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const HOOK_PATH = path.join(__dirname, '../../../src/hooks/summary-file-enforcement.js');
+const HOOK_PATH = path.join(
+  __dirname,
+  '../../../src/targets/claude/hooks/summary-file-enforcement.js',
+);
 const PROJECT_ROOT = path.join(__dirname, '../../..');
 
 let testsPassed = 0;

@@ -10,6 +10,7 @@ param(
     [string]$ProjectPath = "",
     [string]$McpConfig = "",
     [string]$ConfigFile = "",
+    [bool]$InstallClaudeIntegration = $true,
     [switch]$Force = $false
 )
 
@@ -25,7 +26,7 @@ function Show-Help {
     Write-Host "Intelligent Code Agents - Windows Installation" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Usage:" -ForegroundColor Yellow
-    Write-Host "  .\install.ps1 install [-Agent <claude|codex|...>] [-AgentDirName <.dir>] [-TargetPath <path>] [-McpConfig <path>] [-ConfigFile <path>]" 
+    Write-Host "  .\install.ps1 install [-Agent <claude|codex|...>] [-AgentDirName <.dir>] [-TargetPath <path>] [-McpConfig <path>] [-ConfigFile <path>] [-InstallClaudeIntegration <$true|$false>]" 
     Write-Host "  .\install.ps1 install -ProjectPath <path> [-Agent <...>] [-AgentDirName <.dir>] [-McpConfig <path>] [-ConfigFile <path>]"
     Write-Host "  .\install.ps1 discover"
     Write-Host "  .\install.ps1 install-discovered [-TargetPath <path> | -ProjectPath <path>] [-AgentDirName <.dir>] [-McpConfig <path>] [-ConfigFile <path>]"
@@ -42,6 +43,7 @@ function Show-Help {
     Write-Host "  -ProjectPath - Alias for -TargetPath (project-only install)" 
     Write-Host "  -McpConfig   - Path to MCP servers configuration JSON file" 
     Write-Host "  -ConfigFile  - Path to ica.config JSON to install (fallback: ica.config.default.json)" 
+    Write-Host "  -InstallClaudeIntegration - Enable Claude Code-only integration (hooks/modes/settings/CLAUDE.md). Default: True"
     Write-Host "  -Force       - Force complete removal including user data (uninstall only)"
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Green
@@ -314,8 +316,8 @@ function Install-HookSystem {
             }
         }
 
-        # Copy all hook files from src/hooks/ to the agent home hooks/ directory (Claude Code only)
-        $SourceHooksPath = Join-Path $SourceDir "hooks"
+        # Copy all hook files from src/targets/claude/hooks/ to the agent home hooks/ directory (Claude Code only)
+        $SourceHooksPath = Join-Path $SourceDir "targets/claude/hooks"
 
         if (Test-Path $SourceHooksPath) {
             Write-Host "  Copying hook files recursively..." -ForegroundColor Gray
@@ -424,10 +426,6 @@ function Install-IntelligentCodeAgents {
 
     # Portable assets for all targets (tools decide how/if they interpret them).
     $DirectoriesToCopy = @("skills", "behaviors", "agenttask-templates", "roles")
-    if ($Paths.Agent -eq "claude") {
-        # Claude Code integration uses Modes.
-        $DirectoriesToCopy += @("modes")
-    }
 
     foreach ($Dir in $DirectoriesToCopy) {
         $SourcePath = Join-Path $SourceDir $Dir
@@ -441,13 +439,22 @@ function Install-IntelligentCodeAgents {
         }
     }
 
-    # Claude Code-only: deploy hooks + register settings.json PreToolUse hooks
-    if ($Paths.Agent -eq "claude") {
+    # Claude Code-only: install modes + hooks + settings.json registration
+    if ($Paths.Agent -eq "claude" -and $InstallClaudeIntegration) {
+        $ClaudeModesSource = Join-Path $SourceDir "targets/claude/modes"
+        $ClaudeModesDest = Join-Path $Paths.InstallPath "modes"
+        if (Test-Path $ClaudeModesSource) {
+            Write-Host "  Copying modes..." -ForegroundColor Gray
+            Copy-DirectoryRecursive -Source $ClaudeModesSource -Destination $ClaudeModesDest
+        } else {
+            Write-Warning "Source directory not found: $ClaudeModesSource"
+        }
+
         Install-HookSystem -InstallPath $Paths.InstallPath -SourceDir $SourceDir
     }
     
     # Claude Code-only: ensure project/user CLAUDE.md imports the virtual team mode.
-    if ($Paths.Agent -eq "claude") {
+    if ($Paths.Agent -eq "claude" -and $InstallClaudeIntegration) {
         $ClaudemdPath = if ($Paths.Scope -eq "project") {
             Join-Path $Paths.ProjectPath "CLAUDE.md"
         } else {
@@ -501,7 +508,7 @@ function Install-IntelligentCodeAgents {
     
     # Install MCP configuration if provided
     if ($McpConfig -and (Test-Path $McpConfig)) {
-        if ($Paths.Agent -eq "claude") {
+        if ($Paths.Agent -eq "claude" -and $InstallClaudeIntegration) {
             Write-Host "Installing MCP configuration..." -ForegroundColor Yellow
             Install-McpConfiguration -McpConfigPath $McpConfig -InstallPath $Paths.InstallPath
         } else {

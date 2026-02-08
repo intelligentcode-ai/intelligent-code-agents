@@ -19,5 +19,5 @@ Role skills like `pm` or `reviewer` are skills with well-defined responsibilitie
 ## Related Files
 
 - Behaviors (always-on structural guidance): `src/behaviors/`
-- Hooks (Claude Code safety + file hygiene): `src/hooks/`
+- Hooks (Claude Code safety + file hygiene): `src/targets/claude/hooks/`
 - Work queue (cross-platform persistence): `.agent/queue/`

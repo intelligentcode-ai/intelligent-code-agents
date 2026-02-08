@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const assert = require('assert');
-const { isAggressiveAllCaps } = require('../../../src/hooks/lib/allcaps-detection');
+const { isAggressiveAllCaps } = require('../../../src/targets/claude/hooks/lib/allcaps-detection');
 
 const cases = [
   ['README', true],

@@ -9,7 +9,7 @@ const { runTestSuite } = require('../fixtures/test-helpers');
 const {
   isSummaryFile,
   validateSummaryFilePlacement
-} = require('../../../src/hooks/lib/summary-validation.js');
+} = require('../../../src/targets/claude/hooks/lib/summary-validation.js');
 
 const tests = {
   'isSummaryFile: detects summary pattern': () => {

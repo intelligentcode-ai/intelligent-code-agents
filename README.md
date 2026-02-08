@@ -44,6 +44,9 @@ cd intelligent-code-agents
 make install AGENT=claude   # installs into ~/.claude
 make install AGENT=codex    # installs into ~/.codex
 
+# Keep ICA strictly platform-agnostic (no Claude Code modes/hooks/settings/CLAUDE.md changes)
+make install AGENT=claude INSTALL_CLAUDE_INTEGRATION=false
+
 # Project-only install (installs into /path/to/project/<agent_home_dir>)
 make install-project PROJECT_PATH=/path/to/project AGENT=codex
 ```
@@ -56,6 +59,9 @@ cd intelligent-code-agents
 
 .\install.ps1 install -Agent claude
 .\install.ps1 install -Agent codex
+
+# Keep ICA strictly platform-agnostic (no Claude Code modes/hooks/settings/CLAUDE.md changes)
+.\install.ps1 install -Agent claude -InstallClaudeIntegration $false
 
 # Best-effort discovery
 .\install.ps1 discover

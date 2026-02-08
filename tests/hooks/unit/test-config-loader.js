@@ -10,7 +10,7 @@ const {
   loadConfig,
   getSetting,
   clearCache
-} = require('../../../src/hooks/lib/config-loader.js');
+} = require('../../../src/targets/claude/hooks/lib/config-loader.js');
 
 const tests = {
   'loadConfig: returns configuration object': () => {
