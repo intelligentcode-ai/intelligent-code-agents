@@ -48,10 +48,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          if ! grep -qE '^\\.agent/memory/?$' .gitignore; then
+          # Be robust to CRLF checkouts (Windows-style line endings).
+          if ! tr -d '\r' < .gitignore | grep -qE '^\\.agent/memory/?$'; then
             echo "ERROR: .gitignore must ignore .agent/memory/ (local-only runtime state)."
             echo "Add a line:"
             echo "  .agent/memory/"
             exit 1
           fi
-
