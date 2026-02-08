@@ -263,16 +263,16 @@ This document defines the XML schema structure for critical enforcement rules in
     <description>Dynamic specialist creation for technology domains</description>
     <rules>
       <rule>Always create specialist architects for domain expertise</rule>
-      <rule>Examples: @React-Architect, @Database-Architect, @Security-Architect, @AI-Architect</rule>
-      <rule>Never use generic @Architect - precision required</rule>
+      <rule>Examples: react-architect, database-architect, security-architect, ai-architect</rule>
+      <rule>Never use generic architect - precision required</rule>
       <rule>Unlimited specialist creation based on technology expertise needs</rule>
     </rules>
     <naming_pattern>@[Domain]-[RoleType]</naming_pattern>
     <examples>
-      <example>@React-Developer</example>
-      <example>@AWS-Engineer</example>
-      <example>@ML-Specialist</example>
-      <example>@Kubernetes-DevOps-Engineer</example>
+      <example>react-developer</example>
+      <example>aws-engineer</example>
+      <example>ml-specialist</example>
+      <example>kubernetes-devops-engineer</example>
     </examples>
   </specialist_creation>
 </role_assignment>
@@ -312,7 +312,7 @@ This document defines the XML schema structure for critical enforcement rules in
   <operation>Write to src/hooks/pretooluse.js</operation>
   <result>BLOCKED</result>
   <reason>PM cannot modify technical files in src/ directory</reason>
-  <guidance>Create AgentTask for @AI-Engineer to handle technical modifications</guidance>
+  <guidance>Create AgentTask for ai-engineer to handle technical modifications</guidance>
 </validation_check>
 ```
 

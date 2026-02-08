@@ -247,20 +247,20 @@ This registry documents all constraint IDs used in the intelligent-code-agents v
 
 **Rules**:
 - Always create specialist architects for domain expertise
-- Never use generic @Architect - precision required
+- Never use generic architect - precision required
 - Unlimited specialist creation based on technology expertise needs
 
 **Naming Pattern**: `@[Domain]-[RoleType]`
 
 **Examples**:
-- @React-Architect
-- @Database-Architect
-- @Security-Architect
-- @AI-Architect
-- @React-Developer
-- @AWS-Engineer
-- @ML-Specialist
-- @Kubernetes-DevOps-Engineer
+- react-architect
+- database-architect
+- security-architect
+- ai-architect
+- react-developer
+- aws-engineer
+- ml-specialist
+- kubernetes-devops-engineer
 
 ## Meta Rules
 

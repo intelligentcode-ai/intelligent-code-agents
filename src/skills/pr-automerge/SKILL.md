@@ -33,7 +33,7 @@ Review via subagent -> ICA-REVIEW receipt -> merge when NO FINDINGS -> otherwise
    - base branch, head SHA, head branch
    - checks status
 2. Run Stage 3 review via a dedicated reviewer subagent:
-   - Use Task tool to create `@Reviewer` and run Reviewer Stage 3 in a temp checkout.
+   - Use your Task/sub-agent mechanism to run Reviewer Stage 3 in a temp checkout.
    - Reviewer must fix findings by pushing commits to the PR branch.
    - Reviewer must re-run Stage 3 until findings are zero and checks are green.
    - Reviewer must post `ICA-REVIEW-RECEIPT` NO FINDINGS comment for the current head SHA.

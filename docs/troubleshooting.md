@@ -117,7 +117,7 @@ make install TARGET_PATH=./test-install 2>&1 | tee install.log
 
 ### Virtual Team System Not Responding
 
-**Symptoms:** No response to @Role commands
+**Symptoms:** No response to role skill commands
 
 **Cause:** System not properly initialized after installation.
 
@@ -135,7 +135,7 @@ grep "@~/.claude/modes/virtual-team.md" CLAUDE.md
 
 ### Role Commands Not Working
 
-**Symptoms:** @PM, @Developer commands ignored
+**Symptoms:** pm, developer commands ignored
 
 **Diagnosis:**
 1. Check if virtual team mode is loaded:
@@ -205,14 +205,14 @@ python -c "import yaml; yaml.safe_load(open('config.md').read())"
 grep -A 5 "system_nature:" CLAUDE.md
 
 # For AI-AGENTIC systems, use:
-@AI-Engineer    # For behavioral patterns, memory, AgentTasks
-@PM             # For story breakdown
-@Architect      # For system design
+ai-engineer    # For behavioral patterns, memory, AgentTasks
+pm             # For story breakdown
+architect      # For system design
 
 # For CODE-BASED systems, use:
-@Developer      # For implementation
-@Backend-Tester # For testing
-@DevOps-Engineer # For deployment
+developer      # For implementation
+backend-tester # For testing
+devops-engineer # For deployment
 ```
 
 ### Dynamic Specialist Creation Failed
@@ -228,20 +228,20 @@ grep -A 5 "system_nature:" CLAUDE.md
 1. Use valid domain patterns:
 ```bash
 # Valid patterns
-@React-Developer
-@AWS-Engineer
-@Database-Architect
-@Security-Specialist
+react-developer
+aws-engineer
+database-architect
+security-specialist
 
 # Invalid patterns (too generic)
-@Developer-Person
-@Generic-Specialist
+developer-Person
+generic-specialist
 ```
 
 2. Let PM + Architect create specialists:
 ```bash
-@PM Create specialist for React development
-# System will create @React-Developer automatically
+pm Create specialist for React development
+# System will create react-developer automatically
 ```
 
 ### Role Assignment Matrix Conflicts
@@ -256,7 +256,7 @@ grep -A 5 "system_nature:" CLAUDE.md
 **Solution:**
 Use PM + Architect collaboration:
 ```bash
-@PM analyze work type and assign appropriate specialist
+pm analyze work type and assign appropriate specialist
 # System will:
 # 1. Analyze project scope (AI-AGENTIC vs CODE-BASED)
 # 2. Analyze work type (implementation, security, etc.)
@@ -306,7 +306,7 @@ make clean-install
 ```bash
 # Wrong - subagent cannot resolve placeholders
 # Right - use main agent
-@PM Create AgentTask for this work request
+pm Create AgentTask for this work request
 ```
 
 2. Check configuration hierarchy:
@@ -326,7 +326,7 @@ make clean-install
 
 **Solution:**
 ```bash
-@PM break down this large story into multiple AgentTasks
+pm break down this large story into multiple AgentTasks
 # Each AgentTask will be <15 points
 # Sequential: STORY-001-AgentTask-001, STORY-001-AgentTask-002, etc.
 ```
@@ -696,7 +696,7 @@ max_concurrent_subagents: 2  # Reduce from default 5
 2. **Optimize Complex AgentTasks:**
 ```bash
 # Break down large AgentTasks (<15 complexity points)
-@PM break down this complex work into smaller AgentTasks
+pm break down this complex work into smaller AgentTasks
 ```
 
 ## Debug Techniques
@@ -881,7 +881,7 @@ When encountering issues:
 - [ ] Verify installation: `ls -la ~/.claude/`
 - [ ] Validate configuration: `/ica-load-config`
 - [ ] Check memory system: `/ica-memory-status`
-- [ ] Test basic commands: `@PM help`
+- [ ] Test basic commands: `pm help`
 - [ ] Review recent changes: `git log -5 --oneline`
 - [ ] Check file permissions: `ls -la`
 - [ ] Verify network connectivity (for remote operations)

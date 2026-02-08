@@ -10,16 +10,14 @@ ICA turns a single agent session into a **role-based virtual team** via Skills.
 
 ## How To Involve Roles
 
-If your client supports it (Claude Code), use role mentions:
-
 ```text
-@PM break down this story into work items
-@Architect review the design
-@Developer implement the change
-@Reviewer check for regressions
+pm break down this story into work items
+architect review the design
+developer implement the change
+reviewer check for regressions
 ```
 
-If your client does not support `@Role`, use plain language:
+Use plain language if your client does not have explicit skill invocation syntax:
 
 ```text
 As PM: break this story into .agent/queue work items
@@ -29,34 +27,33 @@ As Reviewer: do a post-PR Stage 3 review and post an ICA-REVIEW-RECEIPT
 ## The 14 Core Roles
 
 Leadership and planning:
-- `@PM`: breakdown, sequencing, dependency management (does not implement)
-- `@Architect`: design, tradeoffs, consistency checks
+- `pm`: breakdown, sequencing, dependency management (does not implement)
+- `architect`: design, tradeoffs, consistency checks
 
 Implementation and operations:
-- `@Developer`, `@System-Engineer`, `@DevOps-Engineer`, `@Database-Engineer`
+- `developer`, `system-engineer`, `devops-engineer`, `database-engineer`
 
 Quality and risk:
-- `@QA-Engineer`, `@Backend-Tester`, `@User-Role`, `@Security-Engineer`, `@Reviewer`
+- `qa-engineer`, `backend-tester`, `user-tester`, `security-engineer`, `reviewer`
 
 Product and UX:
-- `@Requirements-Engineer`, `@Web-Designer`, `@AI-Engineer`
+- `requirements-engineer`, `web-designer`, `ai-engineer`
 
 ## Dynamic Specialists
 
 When a specific domain is needed, you can request it directly:
 
 ```text
-@React-Developer implement the UI
-@Kubernetes-Engineer review the deployment approach
-@Postgres-Engineer tune this query plan
+react-developer implement the UI
+kubernetes-engineer review the deployment approach
+postgres-engineer tune this query plan
 ```
 
 ## Recommended Workflow
 
-1. Start with `@PM` to break work into `.agent/queue/` items (especially for medium+ tasks).
+1. Start with `pm` to break work into `.agent/queue/` items (especially for medium+ tasks).
 2. Implement with the appropriate role.
-3. Run `@Reviewer` (or the `reviewer` skill) before committing / opening a PR.
+3. Run `reviewer` before committing / opening a PR.
 4. For PRs, require an `ICA-REVIEW-RECEIPT` (Stage 3, temp checkout) as the review gate.
 
 See `docs/workflow-guide.md` for details.
-

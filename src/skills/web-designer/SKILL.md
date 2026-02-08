@@ -1,6 +1,6 @@
 ---
 name: web-designer
-description: Activate when user needs UI/UX design work - interface design, user research, design systems, accessibility. Activate when @Web-Designer is mentioned or work requires visual design or user experience expertise.
+description: Activate when user needs UI/UX design work - interface design, user research, design systems, accessibility. Activate when the web-designer skill is requested or work requires visual design or user experience expertise.
 ---
 
 # Web Designer Role

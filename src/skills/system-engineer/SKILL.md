@@ -1,6 +1,6 @@
 ---
 name: system-engineer
-description: Activate when user needs infrastructure or system operations work - system reliability, monitoring, capacity planning. Activate when @System-Engineer is mentioned or work involves configuration management or operational excellence.
+description: Activate when user needs infrastructure or system operations work - system reliability, monitoring, capacity planning. Activate when the system-engineer skill is requested or work involves configuration management or operational excellence.
 ---
 
 # System Engineer Role

@@ -1,7 +1,7 @@
 # Nano AgentTask Template - Trivial Changes (0-2 points)
 # For simple one-line fixes, typos, and minimal adjustments
 
-# === TEMPLATE METADATA (@PM COORDINATES, SYSTEM FILLS) ===
+# === TEMPLATE METADATA (PM COORDINATES, SYSTEM FILLS) ===
 git_privacy: [GIT_PRIVACY_SETTING]
 id: "[PARENT_ID]-AGENTTASK-[NEXT_NUMBER]-[TITLE]-[CURRENT_DATE]"
 title: "[ROLE] [DESCRIPTION]"
@@ -36,7 +36,7 @@ complete_context:
     unlimited_domains: "Support ANY technology domain through dynamic specialist creation"
     role_assignment: "PM + Specialist Architect determine when specialists should be created"
 
-# === WORK SPECIFICATION (@PM COORDINATES, ASSIGNED ROLE ANALYZES) ===
+# === WORK SPECIFICATION (PM COORDINATES, ASSIGNED ROLE ANALYZES) ===
 user_request: "[USER_REQUEST]"
 success_criteria: "[SUCCESS_CRITERIA]"
 target_file: "[TARGET_FILE]"

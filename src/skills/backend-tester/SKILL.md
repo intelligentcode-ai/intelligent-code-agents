@@ -1,6 +1,6 @@
 ---
 name: backend-tester
-description: Activate when user needs API or backend testing - REST/GraphQL validation, integration tests, database verification. Activate when @Backend-Tester is mentioned or work requires backend quality assurance.
+description: Activate when user needs API or backend testing - REST/GraphQL validation, integration tests, database verification. Activate when the backend-tester skill is requested or work requires backend quality assurance.
 ---
 
 # Backend Tester Role

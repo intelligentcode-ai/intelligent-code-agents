@@ -196,7 +196,7 @@ IF clean: Continue
 ```
 
 **Required behavior (closed-loop):**
-- Stage 3 MUST be executed by a dedicated reviewer subagent (preferred: `@Reviewer` via Task tool).
+- Stage 3 MUST be executed by a dedicated reviewer subagent (recommended: a reviewer-only subagent via your Task/sub-agent mechanism).
 - Reviewer Stage 3 MUST loop until the PR is clean:
   - If findings exist: fix + push commits to the PR branch, then restart Stage 3 in a fresh temp checkout.
   - When clean: post `ICA-REVIEW-RECEIPT` with `Findings: 0` and `NO FINDINGS` for the current head SHA.

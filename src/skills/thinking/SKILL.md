@@ -26,12 +26,12 @@ Structured problem-solving through explicit step-by-step analysis.
 
 ### Work Triggers (require planning)
 - Action verbs: implement, fix, create, deploy
-- @Role work: "@Developer implement X"
+- Role skill work: "developer implement X"
 - Continuation: testing after implementation
 
 ### Information Patterns (direct response)
 - Questions: what, how, why, status
-- @Role consultation: "@PM what story next?"
+- Role skill consultation: "pm what story next?"
 
 ### Context Evaluation
 - **Simple**: Single question, surface-level → direct response

@@ -46,7 +46,7 @@ Each work item is a simple markdown file:
 
 **Status**: pending | in_progress | completed | blocked
 **Priority**: high | medium | low
-**Assignee**: @Developer | @Reviewer | etc.
+**Assignee**: developer | reviewer | etc.
 
 ## Description
 What needs to be done.

@@ -1,6 +1,6 @@
 ---
 name: requirements-engineer
-description: Activate when user needs requirements gathering - business analysis, specification development, user stories. Activate when @Requirements-Engineer is mentioned or work requires bridging business and technical understanding.
+description: Activate when user needs requirements gathering - business analysis, specification development, user stories. Activate when the requirements-engineer skill is requested or work requires bridging business and technical understanding.
 ---
 
 # Requirements Engineer Role

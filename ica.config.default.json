@@ -41,7 +41,7 @@
   },
 
   "team": {
-    "default_reviewer": "@Architect",
+    "default_reviewer": "architect",
     "specialist_creation": true,
     "role_validation": true
   },
@@ -204,7 +204,7 @@
   ],
   "auto_commit_review": {
     "enabled": false,
-    "command": "@codex review"
+    "command": "codex review"
   },
   "infrastructure_protection": {
       "enabled": true,

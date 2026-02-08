@@ -47,6 +47,33 @@ Recommended approach:
 export ICA_HOME="$HOME/.ica"
 ```
 
+## Discovery And Multi-Target Install (Local)
+
+Best-effort detection will look for common agent home directories and/or binaries.
+
+- macOS/Linux:
+  - `make discover-targets`
+  - `make install-discovered` (installs into every discovered target)
+- Windows:
+  - `.\install.ps1 discover`
+  - `.\install.ps1 install-discovered`
+
+Override discovery if needed:
+
+- `ICA_DISCOVER_TARGETS=claude,codex` (explicit list)
+- `ICA_DISCOVER_ALL=1` (all supported targets)
+
+## Project-Only Install
+
+To install ICA into a single repository (and not into your user agent home), use a project path:
+
+- macOS/Linux:
+  - `make install-project PROJECT_PATH=/path/to/project AGENT=codex`
+  - You can combine with discovery: `make install-discovered PROJECT_PATH=/path/to/project`
+- Windows:
+  - `.\install.ps1 install -ProjectPath C:\MyProject -Agent codex`
+  - `.\install.ps1 install-discovered -ProjectPath C:\MyProject`
+
 ## Where Files Live
 
 Installed files (within the agent home):
@@ -60,4 +87,3 @@ Project files (inside repositories using ICA):
 
 - `.agent/queue/` (created/managed by `work-queue`)
 - `summaries/`, `memory/`, `stories/`, `bugs/` (used by skills for file placement conventions)
-

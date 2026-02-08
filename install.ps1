@@ -7,6 +7,7 @@ param(
     [string]$Agent = "claude",
     [string]$AgentDirName = "",
     [string]$TargetPath = "",
+    [string]$ProjectPath = "",
     [string]$McpConfig = "",
     [string]$ConfigFile = "",
     [switch]$Force = $false
@@ -16,11 +17,19 @@ param(
 $ErrorActionPreference = "Stop"
 $SourceDir = Join-Path $PSScriptRoot "src"
 
+if (-not $TargetPath -and $ProjectPath) {
+    $TargetPath = $ProjectPath
+}
+
 function Show-Help {
     Write-Host "Intelligent Code Agents - Windows Installation" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Usage:" -ForegroundColor Yellow
     Write-Host "  .\install.ps1 install [-Agent <claude|codex|...>] [-AgentDirName <.dir>] [-TargetPath <path>] [-McpConfig <path>] [-ConfigFile <path>]" 
+    Write-Host "  .\install.ps1 install -ProjectPath <path> [-Agent <...>] [-AgentDirName <.dir>] [-McpConfig <path>] [-ConfigFile <path>]"
+    Write-Host "  .\install.ps1 discover"
+    Write-Host "  .\install.ps1 install-discovered [-TargetPath <path> | -ProjectPath <path>] [-AgentDirName <.dir>] [-McpConfig <path>] [-ConfigFile <path>]"
+    Write-Host "  .\install.ps1 uninstall-discovered [-TargetPath <path> | -ProjectPath <path>] [-AgentDirName <.dir>] [-Force]"
     Write-Host "  .\install.ps1 uninstall [-TargetPath <path>] [-Force]"
     Write-Host "  .\install.ps1 test"
     Write-Host "  .\install.ps1 clean"
@@ -30,6 +39,7 @@ function Show-Help {
     Write-Host "  -Agent       - Target agent runtime/IDE integration (default: claude)"
     Write-Host "  -AgentDirName - Override the agent home dir name (default: based on -Agent)" 
     Write-Host "  -TargetPath  - Target path (omit for user scope in your agent home dir)" 
+    Write-Host "  -ProjectPath - Alias for -TargetPath (project-only install)" 
     Write-Host "  -McpConfig   - Path to MCP servers configuration JSON file" 
     Write-Host "  -ConfigFile  - Path to ica.config JSON to install (fallback: ica.config.default.json)" 
     Write-Host "  -Force       - Force complete removal including user data (uninstall only)"
@@ -38,10 +48,61 @@ function Show-Help {
     Write-Host "  .\install.ps1 install                                    # Local user scope (Claude Code)"
     Write-Host "  .\install.ps1 install -Agent codex                      # Install into ~/.codex-style home"
     Write-Host "  .\install.ps1 install -TargetPath C:\MyProject          # Local project"
+    Write-Host "  .\install.ps1 install -ProjectPath C:\MyProject -Agent codex  # Project-only (Codex)"
     Write-Host "  .\install.ps1 install -McpConfig .\config\mcps.json     # Claude Code MCP servers"
+    Write-Host "  .\install.ps1 discover                                  # Best-effort tool discovery"
+    Write-Host "  $env:ICA_DISCOVER_ALL=1; .\\install.ps1 install-discovered    # Install into all supported targets"
     Write-Host "  .\install.ps1 uninstall                                 # Conservative uninstall"
     Write-Host "  .\install.ps1 uninstall -Force                          # Force uninstall (remove all)"
     Write-Host "  .\install.ps1 test                                      # Test installation"
+}
+
+function Get-DiscoveredAgents {
+    # Overrides via environment variables for parity with Makefile script.
+    if ($env:ICA_DISCOVER_TARGETS) {
+        return ($env:ICA_DISCOVER_TARGETS -split '[,\\s]+' | Where-Object { $_ } | ForEach-Object { $_.ToLower() } | Sort-Object -Unique)
+    }
+
+    if ($env:ICA_DISCOVER_ALL -eq "1") {
+        return @("claude", "codex", "cursor", "gemini", "antigravity")
+    }
+
+    $targets = @()
+
+    $home = $HOME
+    $osIsWindows = $true
+
+    $hasCmd = {
+        param([string]$name)
+        return [bool](Get-Command $name -ErrorAction SilentlyContinue)
+    }
+
+    # Claude Code
+    if ((Test-Path (Join-Path $home ".claude")) -or (& $hasCmd "claude")) {
+        $targets += "claude"
+    }
+
+    # Codex
+    if ((Test-Path (Join-Path $home ".codex")) -or (& $hasCmd "codex")) {
+        $targets += "codex"
+    }
+
+    # Cursor (best-effort)
+    if ((Test-Path (Join-Path $home ".cursor")) -or (Test-Path (Join-Path $env:APPDATA "Cursor")) -or (& $hasCmd "cursor")) {
+        $targets += "cursor"
+    }
+
+    # Gemini CLI (best-effort)
+    if ((Test-Path (Join-Path $home ".gemini")) -or (& $hasCmd "gemini")) {
+        $targets += "gemini"
+    }
+
+    # Antigravity (best-effort)
+    if ((Test-Path (Join-Path $home ".antigravity")) -or (& $hasCmd "antigravity")) {
+        $targets += "antigravity"
+    }
+
+    return ($targets | Sort-Object -Unique)
 }
 
 function Test-Prerequisites {
@@ -873,11 +934,64 @@ function Clean-TestFiles {
 # Main execution logic
 try {
     switch ($Action.ToLower()) {
+        "discover" {
+            $Targets = Get-DiscoveredAgents
+            if (-not $Targets -or $Targets.Count -eq 0) {
+                Write-Host "No supported tools discovered." -ForegroundColor Yellow
+                Write-Host "Set ICA_DISCOVER_TARGETS=claude,codex (or ICA_DISCOVER_ALL=1) to override." -ForegroundColor Gray
+                exit 1
+            }
+            $Targets | ForEach-Object { Write-Output $_ }
+        }
         "install" {
             Install-IntelligentCodeAgents -TargetPath $TargetPath -McpConfig $McpConfig
         }
+        "install-discovered" {
+            $Targets = Get-DiscoveredAgents
+            if (-not $Targets -or $Targets.Count -eq 0) {
+                Write-Host "No supported tools discovered." -ForegroundColor Yellow
+                Write-Host "Set ICA_DISCOVER_TARGETS=claude,codex (or ICA_DISCOVER_ALL=1) to override." -ForegroundColor Gray
+                exit 1
+            }
+
+            $OriginalAgent = $Agent
+            $OriginalAgentDirName = $AgentDirName
+            try {
+                foreach ($t in $Targets) {
+                    Write-Host "=== Installing for Agent: $t ===" -ForegroundColor Cyan
+                    $script:Agent = $t
+                    $script:AgentDirName = $OriginalAgentDirName
+                    Install-IntelligentCodeAgents -TargetPath $TargetPath -McpConfig $McpConfig
+                }
+            } finally {
+                $script:Agent = $OriginalAgent
+                $script:AgentDirName = $OriginalAgentDirName
+            }
+        }
         "uninstall" {
             Uninstall-IntelligentCodeAgents -TargetPath $TargetPath -Force:$Force
+        }
+        "uninstall-discovered" {
+            $Targets = Get-DiscoveredAgents
+            if (-not $Targets -or $Targets.Count -eq 0) {
+                Write-Host "No supported tools discovered." -ForegroundColor Yellow
+                Write-Host "Set ICA_DISCOVER_TARGETS=claude,codex (or ICA_DISCOVER_ALL=1) to override." -ForegroundColor Gray
+                exit 1
+            }
+
+            $OriginalAgent = $Agent
+            $OriginalAgentDirName = $AgentDirName
+            try {
+                foreach ($t in $Targets) {
+                    Write-Host "=== Uninstalling for Agent: $t ===" -ForegroundColor Cyan
+                    $script:Agent = $t
+                    $script:AgentDirName = $OriginalAgentDirName
+                    Uninstall-IntelligentCodeAgents -TargetPath $TargetPath -Force:$Force
+                }
+            } finally {
+                $script:Agent = $OriginalAgent
+                $script:AgentDirName = $OriginalAgentDirName
+            }
         }
         "test" {
             Test-Installation

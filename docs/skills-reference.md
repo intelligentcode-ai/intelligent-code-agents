@@ -3,20 +3,18 @@
 ICA is **skills-first**: the system loads `SKILL.md` instructions on demand based on:
 - explicit skill names (e.g. “use `reviewer`”)
 - description matching (you ask for a review, it pulls `reviewer`)
-- role mentions (when supported)
+- role skills (pm, architect, developer, reviewer, etc.)
 
-## Role Invocation (Still The Recommended Path)
-
-If your client supports role mentions (Claude Code), this is the primary interaction style:
+## Skill Invocation (Recommended)
 
 ```text
-@PM break down the story into work items
-@Architect review the approach
-@Developer implement the change
-@Reviewer run a regression review
+pm break down the story into work items
+architect review the approach
+developer implement the change
+reviewer run a regression review
 ```
 
-If your client does not support `@Role`, use the same intent in plain language:
+Use the same intent in plain language if your client does not have explicit skill invocation syntax:
 
 ```text
 As PM: break down the story into .agent/queue work items
@@ -60,4 +58,3 @@ file-placement, branch-protection, infrastructure-protection
 - `ica.workflow.json`: workflow automation controls (auto-merge standing approval, optional GitHub approvals gate, release automation)
 
 See `docs/configuration-guide.md` for the full hierarchy.
-

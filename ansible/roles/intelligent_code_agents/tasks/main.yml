@@ -406,4 +406,4 @@
       - "🎯 Skills: 35 cross-platform skills (roles, commands, workflows, memory)"
       - "🤖 Virtual Team: 14 core roles + unlimited specialists"
       - "🔒 Behavioral Hooks: PreToolUse (infra protection, summaries)"
-      - "🚀 Use @Role or /skill-name to activate capabilities"
+      - "🚀 Use role skills by name (pm, architect, developer, reviewer, etc.) or /skill-name (if supported) to activate capabilities"

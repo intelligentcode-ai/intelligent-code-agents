@@ -38,7 +38,7 @@ complete_context:
     specialist_creation: "ALWAYS create specialists when technology expertise is needed"
     unlimited_domains: "Support ANY technology domain through dynamic specialist creation"
     role_assignment: "PM + Specialist Architect determine when specialists should be created"
-    domain_examples: "@React-Developer, @AWS-Engineer, @Kubernetes-DevOps-Engineer, @Vue-Frontend-Developer"
+    domain_examples: "react-developer, aws-engineer, kubernetes-devops-engineer, vue-frontend-developer"
 
 # MANDATORY: Requirements Section
 requirements:

@@ -23,7 +23,7 @@
     "output_best_practices": true,
     "auto_commit_review": {
       "enabled": true,
-      "command": "@codex review"
+      "command": "codex review"
     },
     "heredoc_allowed_commands": ["git", "gh", "glab", "hub"],
     "pm_allowed_bash_commands": ["gh pr list", "gh pr view", "gh pr status"],

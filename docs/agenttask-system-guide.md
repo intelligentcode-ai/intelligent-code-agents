@@ -21,11 +21,11 @@ The **AgentTask** system replaces complex multi-step workflows with self-contain
 ## How It Works
 
 ### 1. Work Request
-User requests work through natural language or @Role mention:
+User requests work through natural language or by explicitly selecting a role skill:
 ```
 "Build user authentication"
 # OR
-"@Developer implement OAuth2 login"
+"developer implement OAuth2 login"
 ```
 
 ### 2. Complexity Analysis
@@ -65,7 +65,7 @@ The system automatically discovers and injects relevant methodological approache
 
 ### 5. Agent System Execution
 AgentTasks execute through the 14-role virtual team system:
-- **Direct @Agent Communication**: Natural @Role mentions trigger Task tool subagent creation
+- **Role skill execution**: Explicit role skill selection can trigger sub-agent execution (tool-dependent)
 - **Context Preservation**: Complete AgentTask context passed to executing subagent
 - **Behavioral Patterns**: Embedded behavioral patterns guide specialist execution
 - **Dynamic Specialist Creation**: Unlimited specialists created when technology expertise needed
@@ -157,13 +157,13 @@ agenttask_configuration:
 
 ## Essential Skills
 
-Note: The system provides 3 essential skills for system operations. Most interaction is through @Role communication:
+Note: The system provides 3 essential skills for system operations. Most interaction is through role skills:
 
 - **ica-init-system** - Initialize virtual team system
 - **ica-get-setting** - Get configuration values
 - **ica-search-memory** - Search learning patterns
 
-Primary interaction: @Role communication (@PM, @Developer, @AI-Engineer, etc.)
+Primary interaction: role skills (pm, developer, ai-engineer, etc.)
 
 ## Example
 
@@ -177,7 +177,7 @@ Primary interaction: @Role communication (@PM, @Developer, @AI-Engineer, etc.)
 - Existing middleware patterns
 - Rate limiting best practices
 - Executable tests
-- Everything @Developer needs
+- Everything the developer role needs
 
 # Specialist executes autonomously
 # Work completes in single pass

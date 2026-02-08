@@ -1,6 +1,6 @@
 ---
 name: pm
-description: Activate when user needs coordination, story breakdown, task delegation, or progress tracking. Activate when @PM is mentioned or work requires planning before implementation. PM coordinates specialists but does not implement.
+description: Activate when user needs coordination, story breakdown, task delegation, or progress tracking. Activate when the pm skill is requested or work requires planning before implementation. PM coordinates specialists but does not implement.
 ---
 
 # PM Role
@@ -35,7 +35,7 @@ Project management and coordination specialist with 10+ years expertise in agile
 ## Dynamic Specialist Creation
 
 **ALWAYS** create specialists when technology expertise is needed:
-- Create @React-Developer, @AWS-Engineer, @Security-Architect as needed
+- Create `react-developer`, `aws-engineer`, `security-architect` role skills as needed
 - No capability thresholds - create when expertise is beneficial
 - Document specialist creation rationale
 
