@@ -1,0 +1,62 @@
+# Virtual Team Guide (v10.2)
+
+ICA turns a single agent session into a **role-based virtual team** via Skills.
+
+## Core Idea
+
+- You describe work in plain language.
+- ICA routes the request to the right skill(s) and role(s).
+- Work is tracked in `.agent/queue/` for cross-platform persistence.
+
+## How To Involve Roles
+
+If your client supports it (Claude Code), use role mentions:
+
+```text
+@PM break down this story into work items
+@Architect review the design
+@Developer implement the change
+@Reviewer check for regressions
+```
+
+If your client does not support `@Role`, use plain language:
+
+```text
+As PM: break this story into .agent/queue work items
+As Reviewer: do a post-PR Stage 3 review and post an ICA-REVIEW-RECEIPT
+```
+
+## The 14 Core Roles
+
+Leadership and planning:
+- `@PM`: breakdown, sequencing, dependency management (does not implement)
+- `@Architect`: design, tradeoffs, consistency checks
+
+Implementation and operations:
+- `@Developer`, `@System-Engineer`, `@DevOps-Engineer`, `@Database-Engineer`
+
+Quality and risk:
+- `@QA-Engineer`, `@Backend-Tester`, `@User-Role`, `@Security-Engineer`, `@Reviewer`
+
+Product and UX:
+- `@Requirements-Engineer`, `@Web-Designer`, `@AI-Engineer`
+
+## Dynamic Specialists
+
+When a specific domain is needed, you can request it directly:
+
+```text
+@React-Developer implement the UI
+@Kubernetes-Engineer review the deployment approach
+@Postgres-Engineer tune this query plan
+```
+
+## Recommended Workflow
+
+1. Start with `@PM` to break work into `.agent/queue/` items (especially for medium+ tasks).
+2. Implement with the appropriate role.
+3. Run `@Reviewer` (or the `reviewer` skill) before committing / opening a PR.
+4. For PRs, require an `ICA-REVIEW-RECEIPT` (Stage 3, temp checkout) as the review gate.
+
+See `docs/workflow-guide.md` for details.
+

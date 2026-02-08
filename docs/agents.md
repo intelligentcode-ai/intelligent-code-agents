@@ -1,0 +1,24 @@
+# Roles, Agents, and Subagents (v10.2)
+
+Terminology can be confusing because different tools use different words.
+
+## What ICA Ships
+
+ICA primarily ships **Skills**:
+- source of truth: `src/skills/*/SKILL.md`
+- installed to: `~/.claude/skills/` (and optionally project `.claude/skills/`)
+
+Role names like `@PM` or `@Reviewer` are **role skills** with well-defined responsibilities.
+
+## How “Agents” Happen
+
+- In **Claude Code**, the UI/runtime can run specialized subagents. ICA’s role skills are designed to be invoked with
+  role mentions like `@PM ...` or `@Reviewer ...`.
+- In other tools, you can still use the same intent in plain language (skills are loaded by description matching).
+
+## Related Files
+
+- Behaviors (always-on structural guidance): `src/behaviors/`
+- Hooks (Claude Code safety + file hygiene): `src/hooks/`
+- Work queue (cross-platform persistence): `.agent/queue/`
+

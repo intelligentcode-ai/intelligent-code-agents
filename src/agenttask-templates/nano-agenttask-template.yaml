@@ -1,0 +1,164 @@
+# Nano AgentTask Template - Trivial Changes (0-2 points)
+# For simple one-line fixes, typos, and minimal adjustments
+
+# === TEMPLATE METADATA (@PM COORDINATES, SYSTEM FILLS) ===
+git_privacy: [GIT_PRIVACY_SETTING]
+id: "[PARENT_ID]-AGENTTASK-[NEXT_NUMBER]-[TITLE]-[CURRENT_DATE]"
+title: "[ROLE] [DESCRIPTION]"
+type: nano-agenttask
+complexity: trivial
+priority: normal
+
+# MANDATORY: Complete Context Section
+complete_context:
+  project_root: "[PROJECT_ROOT]"
+  system_nature: "[SYSTEM_NATURE]"
+  project_overview: "[PROJECT_OVERVIEW]"
+  work_location: "[WORK_LOCATION]"
+  key_context: "[KEY_CONTEXT]"
+  system_features: "[SYSTEM_FEATURES]"
+  configuration:
+    git_privacy: "[FROM_CONFIG]"
+    branch_protection: "[FROM_CONFIG]"
+    default_branch: "[FROM_CONFIG]"
+    branch_strategy: "[FROM_CONFIG]"
+  critical_files:
+    - path: "[TARGET_FILE]"
+      purpose: "[FILE_PURPOSE]"
+      sample: "[FILE_SAMPLE]"
+  user_requirements:
+    original_request: "[USER_REQUEST]"
+    success_criteria: "[SUCCESS_CRITERIA]"
+
+  specialization_context:
+    technology_domains: "[TECHNOLOGY_DOMAINS]"
+    specialist_creation: "ALWAYS create specialists when technology expertise is needed"
+    unlimited_domains: "Support ANY technology domain through dynamic specialist creation"
+    role_assignment: "PM + Specialist Architect determine when specialists should be created"
+
+# === WORK SPECIFICATION (@PM COORDINATES, ASSIGNED ROLE ANALYZES) ===
+user_request: "[USER_REQUEST]"
+success_criteria: "[SUCCESS_CRITERIA]"
+target_file: "[TARGET_FILE]"
+change_needed: "[WHAT_TO_CHANGE]"
+
+# === EXECUTION PATTERN (KEEP AS-IS) ===
+execution_notes: |
+  CRITICAL: MANDATORY git_privacy validation BEFORE ALL git operations:
+  1. Load git_privacy setting from configuration (NEVER assume)
+  2. When git_privacy=true, strip ALL AI mentions from:
+     - Commit messages (remove "AI", "Claude", "agent", "Generated with Claude Code", etc.)
+     - PR descriptions and titles
+     - Release notes and changelogs
+     - Any git-visible text including co-author attributions
+  3. Use clean, professional language in all git operations
+  4. Block git operations if privacy setting not validated
+
+execution_steps:
+  - "Check memory/[TOPIC]/ for similar patterns"
+  - "Make the specified change to target file"
+  - "Validate change works as expected"
+  - "Commit with format: [ID]: [DESCRIPTION]"
+  - "Push to default branch"
+
+validation_checklist:
+  - "Change implemented correctly"
+  - "No unintended side effects"
+  - "Git privacy settings applied"
+  - "Change pushed to remote"
+
+# MANDATORY: Validation Enforcement Section
+validation_enforcement:
+  mandatory_requirements:
+    git_operations:
+      requirements:
+        - "Git branch creation (if required by branch_protection)"
+        - "Git commit with proper message format"
+        - "Git push to remote repository"
+      blocked_patterns:
+        - "No git operations needed"
+        - "Skip git workflow"
+        - "Direct push to main"
+        - "No commit required"
+      error_message: "❌ BLOCKED: Git operations are mandatory for all AgentTasks. No bypass patterns allowed."
+
+    sme_review:
+      requirements:
+        - "Self-review checklist completion"
+        - "Code quality validation"
+        - "Requirements verification"
+      blocked_patterns:
+        - "No review needed"
+        - "Skip validation"
+        - "Self-evident changes"
+        - "Too simple for review"
+      error_message: "❌ BLOCKED: SME review processes are mandatory. All changes require validation."
+
+    documentation:
+      requirements:
+        - "Inline comments for complex logic"
+        - "Update relevant documentation"
+        - "Maintain code clarity"
+      blocked_patterns:
+        - "No documentation needed"
+        - "Self-documenting code"
+        - "Skip comments"
+        - "Obvious implementation"
+      error_message: "❌ BLOCKED: Documentation updates are mandatory for all changes."
+
+  workflow:
+    version_bump: "[WORKFLOW_VERSION_BUMP]"
+    version_type: "[WORKFLOW_VERSION_TYPE]"
+    changelog_required: "[WORKFLOW_CHANGELOG_REQUIRED]"
+    pr_required: "[WORKFLOW_PR_REQUIRED]"
+    merge_strategy: "[WORKFLOW_MERGE_STRATEGY]"
+    release_automation: "[WORKFLOW_RELEASE_AUTOMATION]"
+    auto_merge: "[WORKFLOW_AUTO_MERGE]"
+    coordination_required: "[WORKFLOW_COORDINATION_REQUIRED]"
+    breaking_change_assessment: "[WORKFLOW_BREAKING_CHANGE_ASSESSMENT]"
+
+  enforcement_rules:
+    - "ALL validation steps must be explicitly completed"
+    - "NO bypass language or patterns allowed in execution"
+    - "MANDATORY git workflow compliance per configuration"
+    - "REQUIRED self-review completion before marking complete"
+
+# MCP Operations Extension Points
+mcp_operations:
+  memory:
+    condition: "[MCP_MEMORY_ENABLED]"
+    provider: "[MCP_MEMORY_PROVIDER]"
+    operations:
+      - action: store_learning
+        topic: "[LEARNING_TOPIC]"
+        content: "[LEARNING_CONTENT]"
+    fallback: "file-based"
+
+  issue_tracking:
+    condition: "[MCP_ISSUE_ENABLED]"
+    provider: "[MCP_ISSUE_PROVIDER]"
+    operations:
+      - action: create_issue
+        type: "[ISSUE_TYPE]"
+        title: "[ISSUE_TITLE]"
+        description: "[ISSUE_DESCRIPTION]"
+    fallback: "file-based"
+
+  documentation:
+    condition: "[MCP_DOCS_ENABLED]"
+    provider: "[MCP_DOCS_PROVIDER]"
+    operations:
+      - action: generate_docs
+        path: "[DOC_PATH]"
+        content: "[DOC_CONTENT]"
+    fallback: "file-based"
+
+# MCP Placeholder Resolution Notes
+# During AgentTask generation, resolve these placeholders:
+# [MCP_MEMORY_ENABLED] → Check mcp_integrations.memory.enabled
+# [MCP_MEMORY_PROVIDER] → Get mcp_integrations.memory.provider
+# [MCP_ISSUE_ENABLED] → Check mcp_integrations.issue_tracking.enabled
+# [MCP_ISSUE_PROVIDER] → Get mcp_integrations.issue_tracking.provider
+# [MCP_DOCS_ENABLED] → Check mcp_integrations.documentation.enabled
+# [MCP_DOCS_PROVIDER] → Get mcp_integrations.documentation.provider
+# If not configured, set to false/"file-based"
