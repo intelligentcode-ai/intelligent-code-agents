@@ -53,7 +53,25 @@ Structured problem-solving through explicit step-by-step analysis.
 ### Before Analysis
 ```bash
 # Search for similar problems solved before
-node /skills/memory/cli.js search "relevant problem keywords"
+# Portable: resolve memory CLI location (prefers ICA_HOME when set)
+MEMORY_CLI=""
+for d in "${ICA_HOME:-}" "$HOME/.codex" "$HOME/.claude"; do
+  if [ -n "$d" ] && [ -f "$d/skills/memory/cli.js" ]; then
+    MEMORY_CLI="$d/skills/memory/cli.js"
+    break
+  fi
+done
+
+if [ -n "$MEMORY_CLI" ]; then
+  node "$MEMORY_CLI" search "relevant problem keywords"
+elif [ -d "memory/exports" ]; then
+  # Fallback: search shareable markdown exports (git-trackable)
+  if command -v rg >/dev/null 2>&1; then
+    rg -n "relevant problem keywords" memory/exports
+  else
+    grep -R "relevant problem keywords" memory/exports
+  fi
+fi
 
 IF similar analysis found:
   - Review the approach
@@ -64,12 +82,42 @@ IF similar analysis found:
 ### After Significant Analysis
 ```bash
 # Store valuable analysis patterns
-node /skills/memory/cli.js write \
-  --title "Analysis: <problem type>" \
-  --summary "<approach that worked, key tradeoffs>" \
-  --tags "analysis,<domain>" \
-  --category "patterns" \
-  --importance "medium"
+# Portable: resolve memory CLI location (prefers ICA_HOME when set)
+MEMORY_CLI=""
+for d in "${ICA_HOME:-}" "$HOME/.codex" "$HOME/.claude"; do
+  if [ -n "$d" ] && [ -f "$d/skills/memory/cli.js" ]; then
+    MEMORY_CLI="$d/skills/memory/cli.js"
+    break
+  fi
+done
+
+if [ -n "$MEMORY_CLI" ]; then
+  node "$MEMORY_CLI" write \
+    --title "Analysis: <problem type>" \
+    --summary "<approach that worked, key tradeoffs>" \
+    --tags "analysis,<domain>" \
+    --category "patterns" \
+    --importance "medium"
+else
+  # Fallback: write a shareable export (no SQLite/embeddings).
+  TS="$(date -u +%Y%m%d%H%M%S)"
+  mkdir -p "memory/exports/patterns"
+  cat > "memory/exports/patterns/mem-$TS-analysis-<problem-type>.md" << 'EOF'
+---
+id: mem-YYYYMMDDHHMMSS-analysis-problem-type
+title: "Analysis: <problem type>"
+tags: [analysis]
+category: patterns
+importance: medium
+created: YYYY-MM-DDTHH:MM:SSZ
+---
+
+# Analysis: <problem type>
+
+## Summary
+<approach that worked, key tradeoffs>
+EOF
+fi
 ```
 
 This is **SILENT** - builds knowledge for future analysis without user notification.

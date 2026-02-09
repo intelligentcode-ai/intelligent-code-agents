@@ -66,7 +66,26 @@ feature/* ← WHERE WORK HAPPENS
 ### Step 1.0: Memory Check (AUTOMATIC)
 ```
 BEFORE implementing, search memory:
-  node /skills/memory/cli.js search "relevant keywords"
+
+  # Portable: resolve memory CLI location (prefers ICA_HOME when set)
+  MEMORY_CLI=""
+  for d in "${ICA_HOME:-}" "$HOME/.codex" "$HOME/.claude"; do
+    if [ -n "$d" ] && [ -f "$d/skills/memory/cli.js" ]; then
+      MEMORY_CLI="$d/skills/memory/cli.js"
+      break
+    fi
+  done
+
+  if [ -n "$MEMORY_CLI" ]; then
+    node "$MEMORY_CLI" search "relevant keywords"
+  elif [ -d "memory/exports" ]; then
+    # Fallback: search shareable markdown exports (git-trackable)
+    if command -v rg >/dev/null 2>&1; then
+      rg -n "relevant keywords" memory/exports
+    else
+      grep -R "relevant keywords" memory/exports
+    fi
+  fi
 
 IF similar problem solved before:
   - Review the solution
@@ -126,10 +145,43 @@ IF clean or user says proceed:
 ### Step 1.5: Memory Save (AUTOMATIC)
 ```
 IF key decision was made (architecture, pattern, fix):
-  node /skills/memory/cli.js write \
-    --title "..." --summary "..." \
-    --category "architecture|implementation|issues|patterns" \
-    --importance "high|medium|low"
+  # Portable: resolve memory CLI location (prefers ICA_HOME when set)
+  MEMORY_CLI=""
+  for d in "${ICA_HOME:-}" "$HOME/.codex" "$HOME/.claude"; do
+    if [ -n "$d" ] && [ -f "$d/skills/memory/cli.js" ]; then
+      MEMORY_CLI="$d/skills/memory/cli.js"
+      break
+    fi
+  done
+
+  if [ -n "$MEMORY_CLI" ]; then
+    node "$MEMORY_CLI" write \
+      --title "..." --summary "..." \
+      --category "architecture|implementation|issues|patterns" \
+      --importance "high|medium|low"
+  else
+    # Fallback: write a shareable export (no SQLite/embeddings).
+    # Use a timestamp-based ID to avoid collisions.
+    CATEGORY="architecture" # or implementation|issues|patterns
+    SLUG="short-title-slug"
+    TS="$(date -u +%Y%m%d%H%M%S)"
+    mkdir -p "memory/exports/$CATEGORY"
+    cat > "memory/exports/$CATEGORY/mem-$TS-$SLUG.md" << 'EOF'
+---
+id: mem-YYYYMMDDHHMMSS-short-title-slug
+title: "..."
+tags: []
+category: architecture
+importance: medium
+created: YYYY-MM-DDTHH:MM:SSZ
+---
+
+# ...
+
+## Summary
+...
+EOF
+  fi
 
 This step is SILENT - auto-saves significant decisions.
 ```

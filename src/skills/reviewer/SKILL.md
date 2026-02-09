@@ -262,12 +262,42 @@ After fixing recurring issues, auto-save to memory:
 
 ```bash
 # When a pattern emerges (same fix multiple times):
-node /skills/memory/cli.js write \
-  --title "Recurring: <issue type>" \
-  --summary "<what to check for and how to fix>" \
-  --tags "recurring,security|quality|patterns" \
-  --category "issues" \
-  --importance "medium"
+# Portable: resolve memory CLI location (prefers ICA_HOME when set)
+MEMORY_CLI=""
+for d in "${ICA_HOME:-}" "$HOME/.codex" "$HOME/.claude"; do
+  if [ -n "$d" ] && [ -f "$d/skills/memory/cli.js" ]; then
+    MEMORY_CLI="$d/skills/memory/cli.js"
+    break
+  fi
+done
+
+if [ -n "$MEMORY_CLI" ]; then
+  node "$MEMORY_CLI" write \
+    --title "Recurring: <issue type>" \
+    --summary "<what to check for and how to fix>" \
+    --tags "recurring,security|quality|patterns" \
+    --category "issues" \
+    --importance "medium"
+else
+  # Fallback: write a shareable export (no SQLite/embeddings).
+  TS="$(date -u +%Y%m%d%H%M%S)"
+  mkdir -p "memory/exports/issues"
+  cat > "memory/exports/issues/mem-$TS-recurring-<issue-type>.md" << 'EOF'
+---
+id: mem-YYYYMMDDHHMMSS-recurring-issue-type
+title: "Recurring: <issue type>"
+tags: [recurring]
+category: issues
+importance: medium
+created: YYYY-MM-DDTHH:MM:SSZ
+---
+
+# Recurring: <issue type>
+
+## Summary
+<what to check for and how to fix>
+EOF
+fi
 ```
 
 This is **SILENT** - no user notification. Builds knowledge for future reviews.
