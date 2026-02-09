@@ -252,6 +252,7 @@ If the memory skill's dependencies are installed:
 
 ```bash
 # Path to CLI (adjust for your installation)
+<<<<<<< HEAD
 #
 # Portable (Linux/macOS):
 # - Prefer ICA_HOME if set (works for custom installs like ~/.ica)
@@ -275,6 +276,16 @@ node "$MEMORY_CLI" --help
 
 # Write a memory
 node "$MEMORY_CLI" write \
+=======
+MEMORY_CLI="$HOME/.claude/skills/memory/cli.js"  # Linux/macOS
+# $env:USERPROFILE\.claude\skills\memory\cli.js   # Windows
+
+# Check if CLI is available
+node $MEMORY_CLI --help
+
+# Write a memory
+node $MEMORY_CLI write \
+>>>>>>> origin/dev
   --title "JWT Authentication" \
   --summary "Use 15-min access tokens with refresh tokens" \
   --tags "auth,jwt,security" \
@@ -282,6 +293,7 @@ node "$MEMORY_CLI" write \
   --importance "high"
 
 # Search (hybrid: keyword + semantic)
+<<<<<<< HEAD
 node "$MEMORY_CLI" search "authentication tokens"
 
 # Quick search (keyword only, faster)
@@ -295,6 +307,21 @@ node "$MEMORY_CLI" get mem-001
 
 # Statistics
 node "$MEMORY_CLI" stats
+=======
+node $MEMORY_CLI search "authentication tokens"
+
+# Quick search (keyword only, faster)
+node $MEMORY_CLI quick "jwt"
+
+# List memories
+node $MEMORY_CLI list --category architecture
+
+# Get specific memory
+node $MEMORY_CLI get mem-001
+
+# Statistics
+node $MEMORY_CLI stats
+>>>>>>> origin/dev
 ```
 
 ### Method 2: Manual Markdown (Fallback)
