@@ -54,12 +54,16 @@
   loop:
     - "{{ agent_install_path }}/modes"
     - "{{ agent_install_path }}/hooks"
-  when: agent_name == 'claude'
+  when:
+    - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
 - name: Check if CLAUDE.md exists
   ansible.builtin.stat:
     path: "{{ agent_install_path }}/CLAUDE.md"
   register: intelligent_code_agents_claude_md_exists
-  when: agent_name == 'claude'
+  when:
+    - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
 - name: Backup existing CLAUDE.md if present
   ansible.builtin.copy:
     src: "{{ agent_install_path }}/CLAUDE.md"
@@ -68,11 +72,13 @@
     mode: '0644'
   when:
     - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
     - intelligent_code_agents_claude_md_exists.stat.exists
 - name: Handle graceful integration for existing CLAUDE.md
   ansible.builtin.import_tasks: graceful_integration.yml
   when:
     - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
     - intelligent_code_agents_claude_md_exists.stat.exists
 - name: Create new CLAUDE.md for fresh installation
   ansible.builtin.template:
@@ -81,20 +87,24 @@
     mode: '0644'
   when:
     - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
     - not intelligent_code_agents_claude_md_exists.stat.exists
 - name: Copy virtual team mode files
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../src/modes/"
+    src: "{{ playbook_dir }}/../src/targets/claude/modes/"
     dest: "{{ agent_install_path }}/modes/"
     mode: '0644'
     force: true
   register: intelligent_code_agents_modes_copy_result
-  when: agent_name == 'claude'
+  when:
+    - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
 - name: Display modes preservation notice
   ansible.builtin.debug:
     msg: "Mode files preserved: {{ agent_install_path }}/modes/ already exists - keeping user modifications"
   when:
     - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
     - intelligent_code_agents_modes_copy_result is defined
     - intelligent_code_agents_modes_copy_result.failed
     - ansible_verbosity >= 1
@@ -149,22 +159,28 @@
   when: intelligent_code_agents_agenttask_templates_copy_result.failed and ansible_verbosity >= 1
 - name: Copy hooks directory (excluding node_modules)
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../src/hooks/"
+    src: "{{ playbook_dir }}/../src/targets/claude/hooks/"
     dest: "{{ agent_install_path }}/hooks/"
     mode: preserve
     force: true
+    # Ensure Ansible doesn't treat this as a recursive "directory as file" copy.
+    remote_src: false
   register: intelligent_code_agents_hooks_copy_result
-  when: agent_name == 'claude'
+  when:
+    - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
 - name: Ensure hooks subdirectories are copied
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../src/hooks/{{ item }}/"
+    src: "{{ playbook_dir }}/../src/targets/claude/hooks/{{ item }}/"
     dest: "{{ agent_install_path }}/hooks/{{ item }}/"
     mode: preserve
     force: true
   loop:
     - lib
   failed_when: false
-  when: agent_name == 'claude'
+  when:
+    - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
 - name: Display hooks preservation notice
   ansible.builtin.debug:
     msg: >-
@@ -172,6 +188,7 @@
       already exists - keeping user modifications
   when:
     - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
     - intelligent_code_agents_hooks_copy_result is defined
     - intelligent_code_agents_hooks_copy_result.failed
     - ansible_verbosity >= 1
@@ -184,7 +201,9 @@
     - agent-infrastructure-protection.js
     - summary-file-enforcement.js
   failed_when: false
-  when: agent_name == 'claude'
+  when:
+    - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
 - name: Copy VERSION file
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../src/VERSION"
@@ -207,7 +226,9 @@
     path: "{{ agent_install_path }}/hooks/lib"
     state: directory
     mode: '0755'
-  when: agent_name == 'claude'
+  when:
+    - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
 - name: Create config.md from template (ONLY if not exists)
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../src/config.md"
@@ -282,7 +303,9 @@
   ansible.builtin.stat:
     path: "{{ agent_install_path }}/settings.json"
   register: intelligent_code_agents_settings_json_exists
-  when: agent_name == 'claude'
+  when:
+    - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
 - name: Create settings.json with hook registration (ONLY if not exists)
   ansible.builtin.template:
     src: settings.json.j2
@@ -290,10 +313,12 @@
     mode: '0644'
   when:
     - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
     - not intelligent_code_agents_settings_json_exists.stat.exists
 - name: Merge hooks into existing settings.json
   when:
     - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
     - intelligent_code_agents_settings_json_exists.stat.exists
   block:
     - name: Read existing settings.json
@@ -317,11 +342,15 @@
       ansible.builtin.set_fact:
         intelligent_code_agents_production_hooks:
           PreToolUse:
-            - matcher: "*"
+            - matcher:
+                tools: ["BashTool", "Bash"]
               hooks:
                 - type: command
                   command: "node {{ agent_install_path }}/hooks/agent-infrastructure-protection.js"
                   timeout: 5000
+            - matcher:
+                tools: ["FileWriteTool", "FileEditTool", "Write", "Edit"]
+              hooks:
                 - type: command
                   command: "node {{ agent_install_path }}/hooks/summary-file-enforcement.js"
                   timeout: 5000
@@ -349,6 +378,7 @@
       protection, summaries)
   when:
     - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
     - not intelligent_code_agents_settings_json_exists.stat.exists
     - ansible_verbosity >= 1
 # badges.md file removed - scoring system simplified to clean progress reporting
@@ -358,6 +388,7 @@
   when:
     - agent_scope == "project"
     - agent_name == 'claude'
+    - install_claude_integration | default(true) | bool
 # Memory skill npm dependencies - OPT-IN due to supply-chain risk
 # (better-sqlite3 compiles native code, @xenova/transformers downloads large models)
 # Set install_memory_deps=true to enable, or run manually: npm install in skills/memory/
@@ -403,7 +434,7 @@
     msg:
       - "✅ Installation complete!"
       - "📍 Location: {{ agent_install_path }}"
-      - "🎯 Skills: 35 cross-platform skills (roles, commands, workflows, memory)"
+      - "🎯 Skills: cross-platform skills (roles, commands, workflows, memory)"
       - "🤖 Virtual Team: 14 core roles + unlimited specialists"
       - "🔒 Behavioral Hooks: PreToolUse (infra protection, summaries)"
       - "🚀 Use role skills by name (pm, architect, developer, reviewer, etc.) or /skill-name (if supported) to activate capabilities"

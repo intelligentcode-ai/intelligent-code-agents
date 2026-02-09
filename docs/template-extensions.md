@@ -1,4 +1,11 @@
-# AgentTask Template Extensions Guide
+# AgentTask Template Extensions Guide (Legacy)
+
+This document is kept for historical context. ICA still ships AgentTask templates, but the `prb-extensions.yaml`
+mechanism described here is not part of the core, cross-tool workflow and may not be supported in all runtimes.
+
+If you're starting fresh, prefer:
+- `.agent/queue/` (work queue) for day-to-day work planning
+- `./.ica/config.json` + `./.ica/workflow.json` for project configuration
 
 ## Overview
 
@@ -635,4 +642,4 @@ The AgentTask Template Extensions system provides a powerful, maintainable way t
 
 **Start simple** with universal requirements in the `all:` section, then add size-specific customizations as needed. The extension system grows with your project needs while keeping base templates up to date automatically.
 
-For questions or advanced use cases, refer to the [AgentTask System Guide](prb-system-guide.md) or [Configuration Guide](configuration-guide.md).
+For questions or advanced use cases, refer to the [AgentTask System Guide](agenttask-system-guide.md) or [Configuration Guide](configuration-guide.md).

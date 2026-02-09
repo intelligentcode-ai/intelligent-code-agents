@@ -1,8 +1,14 @@
-# Installation Guide (v10.1)
+# Installation Guide (v10.2)
 
 ## Install (macOS/Linux)
 ```bash
 make install
+```
+
+Claude Code-only integration is optional:
+
+```bash
+make install AGENT=claude INSTALL_CLAUDE_INTEGRATION=false
 ```
 
 ## Clean Install (macOS/Linux)
@@ -15,15 +21,25 @@ make clean-install
 .\install.ps1 install
 ```
 
+Claude Code-only integration is optional:
+
+```powershell
+.\install.ps1 install -Agent claude -InstallClaudeIntegration $false
+```
+
 ## Scope
-- User scope: installs to `~/.claude/`
-- Project scope: installs to `<project>/.claude/`
+ICA installs into a tool-specific "agent home" directory:
+
+- User scope: `~/.claude/`, `~/.codex/`, `~/.cursor/`, ...
+- Project scope: `<project>/.claude/`, `<project>/.codex/`, ...
 
 ## What gets installed
-- **Skills** → `.claude/skills/` (35 skills)
-- **Behaviors** → `.claude/behaviors/` (4 foundational behaviors)
-- **Hooks** → `.claude/hooks/` (2 enforcement hooks)
-- **Mode** → `.claude/modes/virtual-team.md`
+- **Skills** → `<agent-home>/skills/` (portable role/process/enforcement skills)
+- **Behaviors** → `<agent-home>/behaviors/` (4 foundational behaviors)
+- **Roles** → `<agent-home>/roles/`
+- **AgentTask templates** → `<agent-home>/agenttask-templates/`
+- **Hooks** → `<agent-home>/hooks/` (Claude integration only)
+- **Modes** → `<agent-home>/modes/` (Claude integration only)
 
 ## Hooks (minimal)
 Registered hooks:

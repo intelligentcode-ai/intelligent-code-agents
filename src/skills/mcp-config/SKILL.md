@@ -87,7 +87,7 @@ When MCP tools are unavailable:
 
 ## Configuration Location
 
-MCP servers configured in `~/.claude/settings.json`:
+MCP servers are configured for Claude Code in `~/.claude.json`:
 ```json
 {
   "mcpServers": {
@@ -101,7 +101,7 @@ MCP servers configured in `~/.claude/settings.json`:
 
 ## Troubleshooting
 
-- **Server not found**: Check settings.json mcpServers
+- **Server not found**: Check `~/.claude.json` `mcpServers`
 - **Connection failed**: Verify server is running
 - **Auth error**: Check credentials/tokens
 - **Timeout**: Increase timeout or check network

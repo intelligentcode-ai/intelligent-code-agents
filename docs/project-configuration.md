@@ -1,165 +1,60 @@
-# Project Configuration Guide
+# Project Configuration (Using ICA In Your Repo)
 
-The intelligent-code-agents system supports extensive project-level configuration to enforce coding standards, architecture patterns, and best practices.
+This guide is about configuring **your project** when you use ICA.
 
-## Related Documentation
-- [Virtual Team Guide](virtual-team-guide.md) - Understanding the 14 roles
-- [Commands Reference](commands-reference.md) - All available commands
-- [AgentTask System Guide](prb-system-guide.md) - How AgentTasks work
-- [Directory Structure](directory-structure.md) - File organization
+If you're looking for how to install ICA itself, start with `docs/installation-guide.md`.
 
-## Directory Structure
+## Recommended Project Files
 
-```
+```text
 project-root/
-├── claude.md                  # Project context and configuration (root OR .claude/)
-├── docs/                      # Project documentation (user's natural location)
-│   ├── best-practices/        # Domain-specific best practices
-│   │   ├── terraform.md       # IaC best practices
-│   │   ├── react.md          # React patterns and standards
-│   │   └── security.md       # Security guidelines
-│   ├── architecture/          # Architecture documentation
-│   │   ├── overview.md        # System architecture
-│   │   ├── patterns.md        # Design patterns to follow
-│   │   └── constraints.md     # Architecture constraints
-│   └── standards/             # Coding standards
-│       ├── style-guide.md     # Code formatting rules
-│       ├── naming.md          # Naming conventions
-│       └── testing.md         # Testing requirements
-├── examples/                  # Code examples (or wherever user keeps them)
-│   ├── auth/                  # Authentication examples
-│   └── api/                   # API pattern examples
-├── drafts/                    # Draft specifications (user's choice)
-│   └── feature-x/             # Working drafts for new features
-├── memory/                    # Shareable memories (git-trackable Markdown)
-│   ├── exports/               # Active exports (reviewable, committed)
-│   │   ├── architecture/      # Design + system decisions
-│   │   ├── implementation/    # How-to / code-level notes
-│   │   ├── issues/            # Bugs + fixes
-│   │   └── patterns/          # Reusable patterns
-│   └── archive/               # Archived exports (still shareable)
-└── prbs/                      # Generated AgentTasks (version-controlled)
-    ├── ready/                 # Ready to execute
-    └── completed/             # Executed AgentTasks
+├── .ica/
+│   ├── config.json           # ICA behavior/enforcement config (preferred)
+│   └── workflow.json         # ICA workflow defaults by tier (preferred)
+├── best-practices/           # Optional: your org/team conventions
+├── memory/exports/           # Optional: shareable "memory" exports
+└── .agent/queue/             # Optional: cross-tool work queue
 ```
 
-## Configuration in CLAUDE.md
+None of these are strictly required, but they enable the workflows ICA is built around.
 
-```yaml
-# Project Configuration
-project:
-  name: "My Awesome Project"
-  type: "web-application"
-  
-# AgentTask Configuration
-agenttask_configuration:
-  # Include project best practices in all AgentTasks
-  include_best_practices: true
-  best_practices_paths:
-    - "docs/best-practices/"     # User's documentation
-    - "docs/standards/"          # User's standards
-    - "best-practices/"          # Alternative location
-    - "standards/"               # Alternative location
-  
-  # Search for code patterns
-  code_pattern_search:
-    enabled: true
-    paths: ["src/", "lib/"]
-    exclude: ["node_modules/", "dist/"]
-  
-  # External documentation
-  external_docs:
-    - name: "React Docs"
-      context7_id: "/facebook/react"
-    - name: "AWS Best Practices"
-      url: "https://aws.amazon.com/architecture/well-architected/"
-  
-  # Behavioral customization
-  behavioral_overrides:
-    error_handling: "defensive"  # defensive, fail-fast, resilient
-    testing_approach: "tdd"      # tdd, bdd, integration-first
-    review_style: "thorough"     # quick, balanced, thorough
-    
-# Coding Standards
-coding_standards:
-  style: "airbnb"              # or google, standard, custom
-  linting: true
-  formatting: "prettier"
-  
-# Architecture Enforcement
-architecture:
-  pattern: "microservices"     # monolith, microservices, serverless
-  constraints:
-    - "All APIs must be RESTful"
-    - "Use dependency injection"
-    - "Follow SOLID principles"
-```
+## Configuration Files
 
-## Using Project Configuration
+### `./.ica/config.json`
 
-### 1. Best Practices Inclusion
-When AgentTasks are generated, they automatically include:
-- Relevant best practices from your project
-- Architecture patterns and constraints
-- Coding standards and style guides
+This file is the preferred project-local location for `ica.config.json`.
 
-### 2. Code Pattern Search
-The system searches your codebase for:
-- Similar implementations
-- Existing patterns to follow
-- Examples to reference
+It controls things like:
+- git privacy defaults
+- branch protection expectations
+- canonical directories (stories, bugs, docs, memory, summaries)
 
-### 3. External Documentation
-AgentTasks can reference:
-- Real-time library documentation via Context7
-- Project-specific documentation URLs
-- Architecture decision records (ADRs)
+Start from the repo default:
+- `ica.config.default.json`
 
-### 4. Behavioral Customization
-Each project can override default behaviors:
-- How errors are handled
-- Testing methodology
-- Code review depth
-- Validation criteria
+### `./.ica/workflow.json`
 
-## Draft-Based AgentTask Generation
+This file is the preferred project-local location for `ica.workflow.json`.
 
-Place draft specifications wherever natural in your project:
+It controls defaults per AgentTask tier (nano/tiny/medium/large/mega), like:
+- whether PRs are required
+- whether version bumps and changelog entries are required
+- whether standing approval (`auto_merge`) is enabled
+- whether GitHub-native approval is required (`require_github_approval`)
+
+Start from the repo default:
+- `ica.workflow.default.json`
+
+## Claude Code Integration (Optional)
+
+If you install ICA for Claude Code with integration enabled, ICA may also manage:
+
+- Hooks: `~/.claude/hooks/` registered in `~/.claude/settings.json`
+- MCP servers: `~/.claude.json` (via the installer when `MCP_CONFIG` is provided)
+
+To keep installs strictly platform-agnostic:
 
 ```bash
-# Create draft directory in your preferred location
-mkdir -p drafts/new-feature/
-# OR
-mkdir -p docs/drafts/new-feature/
-# OR
-mkdir -p specs/new-feature/
-
-# Add specifications
-echo "User Authentication Requirements..." > drafts/new-feature/requirements.md
-
-# Generate AgentTasks from drafts
-/ica-generate-prb-from-draft drafts/new-feature/
+make install AGENT=claude INSTALL_CLAUDE_INTEGRATION=false
 ```
 
-The system will:
-1. pm analyzes requirements
-2. architect designs approach
-3. Generate appropriate AgentTasks with all project context
-4. Include best practices and standards
-5. Reference existing code patterns
-
-## Dynamic Configuration
-
-AgentTasks adapt to your project:
-- **React Project**: Includes React best practices, component patterns
-- **Terraform Project**: Includes IaC standards, module patterns  
-- **API Project**: Includes RESTful patterns, OpenAPI specs
-- **Microservices**: Includes service boundaries, communication patterns
-
-## Benefits
-
-1. **Consistency**: All work follows project standards
-2. **Knowledge Reuse**: Leverages existing patterns
-3. **Quality**: Enforces best practices automatically
-4. **Flexibility**: Fully configurable per project
-5. **Autonomy**: AgentTasks contain everything needed for execution

@@ -6,7 +6,7 @@ Terminology can be confusing because different tools use different words.
 
 ICA primarily ships **Skills**:
 - source of truth: `src/skills/*/SKILL.md`
-- installed to: your agent home `skills/` directory (for example `$ICA_HOME/skills/`)
+- installed to: your agent home `skills/` directory (for example `~/.claude/skills/`)
 
 Role skills like `pm` or `reviewer` are skills with well-defined responsibilities.
 
@@ -19,5 +19,5 @@ Role skills like `pm` or `reviewer` are skills with well-defined responsibilitie
 ## Related Files
 
 - Behaviors (always-on structural guidance): `src/behaviors/`
-- Hooks (Claude Code safety + file hygiene): `src/hooks/`
+- Hooks (Claude Code safety + file hygiene): `src/targets/claude/hooks/`
 - Work queue (cross-platform persistence): `.agent/queue/`

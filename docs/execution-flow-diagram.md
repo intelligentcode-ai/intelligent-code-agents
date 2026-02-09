@@ -28,7 +28,7 @@ QUALITY GATES
 PR PHASE (dev-first)
   - PR targets dev (default)
   - Stage 3 reviewer run in temp checkout posts ICA-REVIEW-RECEIPT
-  - merge only after receipt + approval (explicit or workflow.auto_merge)
+  - merge only after receipt + approval (explicit, or `auto_merge=true` for the task tier / AgentTask)
   |
   v
 RELEASE PHASE (only when requested)

@@ -63,4 +63,5 @@
         settings_json_path: "{{ settings_json_path | default(ansible_env.HOME + '/.claude.json') }}"
       when:
         - agent_name == 'claude'
+        - install_claude_integration | default(true) | bool
         - (mcp_config_file | default('')) != ''

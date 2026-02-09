@@ -52,7 +52,8 @@
       1. Manual rollback: cp {{ settings_backup_file }} {{ settings_json_path }}
       2. Fix configuration and re-run integration
       3. Review logs for specific error details
-    dest: "{{ ansible_env.HOME }}/.config/claude/mcp-integration-error.log"
+    # Keep the error log near the file we were editing (default: ~/.claude.json).
+    dest: "{{ settings_json_path }}.mcp-integration-error.log"
     mode: "0600"
   failed_when: false
 
@@ -60,7 +61,7 @@
   ansible.builtin.fail:
     msg: |
       MCP integration failed: {{ mcp_integration_error }}
-      Error log created: ~/.config/claude/mcp-integration-error.log
+      Error log created: {{ settings_json_path }}.mcp-integration-error.log
       {% if settings_backup_file is defined and backup_exists.stat.exists %}
       Original settings can be restored with: cp {{ settings_backup_file }} {{ settings_json_path }}
       {% endif %}

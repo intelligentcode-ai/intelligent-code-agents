@@ -30,8 +30,10 @@ If any new commits are pushed after the receipt, Stage 3 must be re-run and a ne
 
 Default: the agent **waits for explicit user approval** before merging.
 
-Optional: standing approval via workflow config:
-- `workflow.auto_merge=true` lets the agent merge PRs targeting `dev` once gates pass.
+Optional: standing approval ("auto-merge") once gates pass:
+
+- **Tier default** (recommended): set `auto_merge=true` in `ica.workflow.json` for the task tiers you want.
+- **Per-AgentTask override**: set `workflow.auto_merge: true` inside the AgentTask YAML.
 
 ## Optional GitHub-Style Approvals
 
@@ -40,7 +42,9 @@ By default, this repo uses **self-review-and-merge**:
 - ICA Stage 3 receipt is the required review gate.
 
 If you want to also require a GitHub-native approval gate, set:
-- `workflow.require_github_approval=true`
+
+- Tier default: `require_github_approval=true` in `ica.workflow.json`
+- Per-AgentTask override: `workflow.require_github_approval: true`
 
 Note: GitHub forbids approving your own PR. If you require GitHub approvals for self-authored PRs, you need a second
 GitHub identity/bot.
@@ -88,4 +92,3 @@ Common examples:
 - `commit-pr`: commit + PR conventions and merge gates
 - `pr-automerge`: closed-loop review/fix/re-review/receipt/merge (for PRs to `dev`)
 - `release`: version bump, changelog, tag, GitHub release
-

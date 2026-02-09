@@ -56,8 +56,10 @@ function main() {
       return allowOperation(log, true);
     }
 
-    // CRITICAL: Only enforce on Write/Edit operations, NOT Read operations
-    if (tool !== 'Write' && tool !== 'Edit') {
+    // CRITICAL: Only enforce on Write/Edit operations, NOT Read operations.
+    // Claude Code has used both "Write"/"Edit" and "FileWriteTool"/"FileEditTool"
+    // depending on version; accept either to stay forward/backward compatible.
+    if (!['Write', 'Edit', 'FileWriteTool', 'FileEditTool'].includes(tool)) {
       return allowOperation(log, true);
     }
 

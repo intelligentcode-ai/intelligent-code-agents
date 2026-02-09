@@ -8,7 +8,9 @@
     "changelog_required": false,
     "pr_required": false,
     "merge_strategy": "direct_commit",
-    "release_automation": false
+    "release_automation": false,
+    "auto_merge": false,
+    "require_github_approval": false
   },
 
   "tiny": {
@@ -17,7 +19,9 @@
     "changelog_required": true,
     "pr_required": false,
     "merge_strategy": "direct_commit",
-    "release_automation": false
+    "release_automation": false,
+    "auto_merge": false,
+    "require_github_approval": false
   },
 
   "medium": {
@@ -27,7 +31,8 @@
     "pr_required": true,
     "merge_strategy": "feature_branch",
     "release_automation": true,
-    "auto_merge": false
+    "auto_merge": false,
+    "require_github_approval": false
   },
 
   "large": {
@@ -38,6 +43,7 @@
     "merge_strategy": "feature_branch",
     "release_automation": true,
     "auto_merge": false,
+    "require_github_approval": false,
     "coordination_required": true
   },
 
@@ -49,6 +55,7 @@
     "merge_strategy": "feature_branch",
     "release_automation": true,
     "auto_merge": false,
+    "require_github_approval": false,
     "coordination_required": true,
     "breaking_change_assessment": true
   }

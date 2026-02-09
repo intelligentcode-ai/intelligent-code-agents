@@ -1,120 +1,50 @@
-# Directory Structure for Projects Using intelligent-code-agents
+# Directory Structure (For Projects Using ICA)
 
-## Core Principle
-Users work in their NATURAL project structure. The system adapts to YOUR project, not the other way around.
+ICA is designed to **adapt to your repo**, not force a new structure.
 
-## Minimal Required Structure
+What ICA *does* introduce are a few well-scoped directories for cross-tool persistence and shareable knowledge.
 
-```
+## Recommended (Minimal) Additions To Your Repo
+
+```text
 project-root/
-├── CLAUDE.md                  # Project configuration (MUST be uppercase)
-├── memory/                    # Shareable memories (git-trackable Markdown)
-│   ├── exports/               # Active exports (reviewable, committed)
-│   │   ├── architecture/      # Design + system decisions
-│   │   ├── implementation/    # How-to / code-level notes
-│   │   ├── issues/            # Bugs + fixes
-│   │   └── patterns/          # Reusable patterns
-│   └── archive/               # Archived exports (still shareable)
-└── .claude/                   # System internals ONLY
-    └── prbs/                 # Generated AgentTasks (auto-managed)
+├── .agent/queue/            # Cross-tool work queue (git tracked)
+├── memory/exports/          # Shareable "memory" exports (git tracked)
+└── .ica/                    # Project config (optional, git tracked)
+    ├── config.json          # Preferred project config location
+    └── workflow.json        # Preferred project workflow location
 ```
 
-That's it! Everything else is YOUR choice.
+Notes:
+- `.agent/queue/` is created and managed by the `work-queue` skill.
+- `memory/exports/` is created by the `memory` skill (shareable, reviewable Markdown).
+- `.ica/` is the preferred place for project-local configuration (see `docs/configuration-guide.md`).
 
-## Common User Structures (Examples)
+## Agent Home Directories (Installed By ICA)
 
-### Option 1: Docs-focused project
-```
-project-root/
-├── CLAUDE.md
-├── memory/                  # Team-shared memories (exports + archive)
-├── docs/
-│   ├── architecture/        # Your architecture docs
-│   ├── best-practices/      # Your best practices
-│   └── standards/          # Your coding standards
-├── src/                    # Your source code
-└── drafts/                 # Your draft specs
-```
+ICA installs into a tool-specific "agent home" directory. Depending on your setup this may be:
 
-### Option 2: Standards at root
-```
-project-root/
-├── CLAUDE.md
-├── memory/                  # Team-shared memories (exports + archive)
-├── best-practices/          # Your practices at root
-│   ├── security.md
-│   └── performance.md
-├── architecture/            # Your architecture at root
-├── src/                     # Your source code
-└── specs/                   # Your specifications
+- User scope: `~/.claude`, `~/.codex`, `~/.cursor`, ...
+- Project scope: `<project>/.claude`, `<project>/.codex`, ...
+
+Those directories hold the installed skills/behaviors/roles/templates.
+
+### Claude Code-Only Files
+
+If Claude integration is enabled (`INSTALL_CLAUDE_INTEGRATION=true`):
+
+- Hooks live under the agent home: `~/.claude/hooks/`
+- Hook registration lives in: `~/.claude/settings.json`
+- MCP servers live in: `~/.claude.json`
+
+To opt out of Claude integration entirely, install with:
+
+```bash
+make install AGENT=claude INSTALL_CLAUDE_INTEGRATION=false
 ```
 
-### Option 3: Monorepo style
-```
-project-root/
-├── CLAUDE.md
-├── memory/                  # Shared across all packages (exports + archive)
-├── packages/
-│   ├── frontend/
-│   └── backend/
-├── docs/
-│   └── engineering/        # Your engineering docs
-│       ├── standards/
-│       └── patterns/
-└── rfcs/                   # Your proposals/drafts
-```
+## What ICA Does Not Require
 
-## Configuration in CLAUDE.md
+- You do not need `CLAUDE.md` unless you are using Claude Code and want ICA to wire in modes automatically.
+- You do not need to reorganize `src/`, `docs/`, or your existing conventions.
 
-Tell the system where YOUR files are:
-
-```yaml
-# In CLAUDE.md
-agenttask_configuration:
-  best_practices_paths:
-    - "docs/best-practices/"      # Your location
-    - "engineering/standards/"     # Your location
-    - "wherever/you/keep/them/"   # Your location
-    
-  code_pattern_search:
-    paths: ["src/", "lib/", "packages/"]  # Your code locations
-    
-  draft_locations:
-    - "drafts/"                   # Your draft location
-    - "rfcs/"                     # Your RFC location
-    - "proposals/"                # Your proposal location
-```
-
-## What the System Auto-Creates
-
-The system stores everything in YOUR project (version-controlled):
-- `memory/exports/` - Shareable memory exports (version-controlled)
-- `prbs/` - Generated AgentTasks (version-controlled)
-- `config.md` - Project settings (default location, not .claude/)
-
-## Key Points
-
-1. **NO forced structure** - Work how YOU want
-2. **NO .claude/ directories for user content** - That's system-only
-3. **Configure paths in CLAUDE.md** - Tell system where YOUR files are
-4. **Natural locations** - docs/, standards/, best-practices/, examples/
-5. **Your naming** - Use your project's conventions
-
-## Examples of What NOT to Do
-
-❌ DON'T: Force users into .claude/ directories
-```
-.claude/best-practices/    # NO!
-.claude/standards/         # NO!
-.claude/drafts/           # NO!
-```
-
-✅ DO: Let users work naturally
-```
-docs/best-practices/       # YES!
-standards/                 # YES!
-drafts/                   # YES!
-my-project-docs/          # YES!
-```
-
-The system adapts to YOU, not the other way around!

@@ -4,6 +4,7 @@
 1. [Installation Guide](installation-guide.md)
 2. [Configuration Guide](configuration-guide.md)
 3. [Workflow Guide](workflow-guide.md)
+4. [MCP Integration (Claude Code)](mcp-integration.md)
 
 Tip: For a clean reinstall on macOS/Linux, use `make clean-install` (force uninstall + reinstall).
 
@@ -11,6 +12,7 @@ Tip: For a clean reinstall on macOS/Linux, use `make clean-install` (force unins
 - [Roles and Skills](skills-reference.md)
 - [Architecture](architecture.md)
 - [Directory Structure](directory-structure.md)
+- [Project Configuration](project-configuration.md)
 
 ## Reference
 - [Virtual Team Guide](virtual-team-guide.md)
@@ -23,3 +25,4 @@ Tip: For a clean reinstall on macOS/Linux, use `make clean-install` (force unins
 
 ## Troubleshooting
 - [Troubleshooting](troubleshooting.md)
+- [MCP Integration Troubleshooting](mcp-integration-troubleshooting.md)

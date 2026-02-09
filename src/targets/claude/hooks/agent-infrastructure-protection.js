@@ -684,8 +684,9 @@ const DISABLE_MAIN_INFRA_BYPASS = process.env.CLAUDE_DISABLE_MAIN_INFRA_BYPASS =
 
     const tool_name = hookInput.tool_name;
 
-    // Only check Bash operations
-    if (tool_name !== 'Bash') {
+    // Only check shell operations. Claude Code has used both "Bash" and "BashTool"
+    // depending on version; accept either to stay forward/backward compatible.
+    if (tool_name !== 'Bash' && tool_name !== 'BashTool') {
       console.log(JSON.stringify(standardOutput));
       process.exit(0);
     }

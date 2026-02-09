@@ -223,21 +223,27 @@ function findConfigFile(projectRoot, filename) {
  */
 function loadWorkflowConfig() {
   // 1. Load default workflow configuration
-  // Try installed location first (~/.claude/), then repo root (for testing)
-  let defaultWorkflowPath = path.join(__dirname, '../..', 'ica.workflow.default.json');
-  let workflowConfig = loadJsonConfig(defaultWorkflowPath);
+  // Try installed location first (agent home), then repo root/cwd for development/testing.
+  const workflowCandidates = [
+    path.join(__dirname, '../..', 'ica.workflow.default.json'),
+    path.join(__dirname, '../../..', 'ica.workflow.default.json'),
+    // Repo-root fallback (this file lives under src/targets/claude/hooks/lib in the repo).
+    path.join(__dirname, '../../../../../', 'ica.workflow.default.json'),
+    path.join(process.cwd(), 'ica.workflow.default.json')
+  ];
 
-  if (!workflowConfig) {
-    // Fallback to repo root for local development/testing
-    defaultWorkflowPath = path.join(__dirname, '../../..', 'ica.workflow.default.json');
-    workflowConfig = loadJsonConfig(defaultWorkflowPath);
+  let workflowConfig = null;
+  for (const p of workflowCandidates) {
+    workflowConfig = loadJsonConfig(p);
+    if (workflowConfig) break;
   }
 
   if (!workflowConfig) {
     console.error('[config-loader] CRITICAL: Default workflow configuration not found');
     console.error('[config-loader] Searched paths:');
-    console.error('[config-loader]   - ' + path.join(__dirname, '../..', 'ica.workflow.default.json'));
-    console.error('[config-loader]   - ' + path.join(__dirname, '../../..', 'ica.workflow.default.json'));
+    for (const p of workflowCandidates) {
+      console.error('[config-loader]   - ' + p);
+    }
     workflowConfig = {};
   }
 
@@ -274,21 +280,27 @@ function loadConfig() {
   }
 
   // 1. Load default configuration
-  // Try installed location first (~/.claude/), then repo root (for testing)
-  let defaultConfigPath = path.join(__dirname, '../..', 'ica.config.default.json');
-  let config = loadJsonConfig(defaultConfigPath);
+  // Try installed location first (agent home), then repo root/cwd for development/testing.
+  const configCandidates = [
+    path.join(__dirname, '../..', 'ica.config.default.json'),
+    path.join(__dirname, '../../..', 'ica.config.default.json'),
+    // Repo-root fallback (this file lives under src/targets/claude/hooks/lib in the repo).
+    path.join(__dirname, '../../../../../', 'ica.config.default.json'),
+    path.join(process.cwd(), 'ica.config.default.json')
+  ];
 
-  if (!config) {
-    // Fallback to repo root for local development/testing
-    defaultConfigPath = path.join(__dirname, '../../..', 'ica.config.default.json');
-    config = loadJsonConfig(defaultConfigPath);
+  let config = null;
+  for (const p of configCandidates) {
+    config = loadJsonConfig(p);
+    if (config) break;
   }
 
   if (!config) {
     console.error('[config-loader] CRITICAL: Default configuration not found');
     console.error('[config-loader] Searched paths:');
-    console.error('[config-loader]   - ' + path.join(__dirname, '../..', 'ica.config.default.json'));
-    console.error('[config-loader]   - ' + path.join(__dirname, '../../..', 'ica.config.default.json'));
+    for (const p of configCandidates) {
+      console.error('[config-loader]   - ' + p);
+    }
     config = getHardcodedDefaults();
   }
 

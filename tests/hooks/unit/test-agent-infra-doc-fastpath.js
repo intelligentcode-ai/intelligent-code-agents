@@ -6,7 +6,10 @@ const { spawnSync } = require('child_process');
 const { runTestSuite } = require('../fixtures/test-helpers');
 
 function runHook(command) {
-  const hookPath = path.resolve(__dirname, '../../../src/hooks/agent-infrastructure-protection.js');
+  const hookPath = path.resolve(
+    __dirname,
+    '../../../src/targets/claude/hooks/agent-infrastructure-protection.js',
+  );
   const hookInput = {
     tool_name: 'Bash',
     tool_input: { command },

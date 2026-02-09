@@ -15,6 +15,10 @@ AGENT ?= claude
 AGENT_DIR_NAME ?=
 AGENT_DIR_NAME_INPUT := $(strip $(AGENT_DIR_NAME))
 
+# Claude Code-only integration steps (modes, hooks, settings.json, CLAUDE.md).
+# Set to "false" to keep ICA strictly platform-agnostic even when AGENT=claude.
+INSTALL_CLAUDE_INTEGRATION ?= true
+
 # Convenience alias for project-only installs (same behavior as TARGET_PATH).
 # If you set PROJECT_PATH=/path/to/repo, ICA will install into:
 #   /path/to/repo/<agent_home_dir>  (for example /path/to/repo/.codex)
@@ -69,7 +73,7 @@ help:
 	@echo "Intelligent Code Agents - Installation"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make install   [AGENT=claude|codex|cursor|gemini|antigravity] [AGENT_DIR_NAME=.custom] [HOST=ip] [USER=user] [TARGET_PATH=/path] [CONFIG_FILE=sample-configs/ica.config.sub-agent.json] [MCP_CONFIG=/path/to/mcps.json] [ENV_FILE=/path/to/.env] [KEY=~/.ssh/id_rsa | PASS=password]"
+	@echo "  make install   [AGENT=claude|codex|cursor|gemini|antigravity] [AGENT_DIR_NAME=.custom] [INSTALL_CLAUDE_INTEGRATION=true|false] [HOST=ip] [USER=user] [TARGET_PATH=/path] [CONFIG_FILE=sample-configs/ica.config.sub-agent.json] [MCP_CONFIG=/path/to/mcps.json] [ENV_FILE=/path/to/.env] [KEY=~/.ssh/id_rsa | PASS=password]"
 	@echo "  make uninstall [AGENT=...] [AGENT_DIR_NAME=...] [HOST=ip] [USER=user] [TARGET_PATH=/path] [KEY=~/.ssh/id_rsa | PASS=password] [FORCE=true]"
 	@echo "  make clean-install [AGENT=...] [AGENT_DIR_NAME=...] [HOST=ip] [USER=user] [TARGET_PATH=/path] [CONFIG_FILE=...] [MCP_CONFIG=...] [ENV_FILE=...] [KEY=... | PASS=...]"
 	@echo "  make install-project PROJECT_PATH=/path/to/project [AGENT=...]"
@@ -87,6 +91,7 @@ help:
 	@echo "  PROJECT_PATH - Alias for TARGET_PATH (project-only install)"
 	@echo "  AGENT - Target agent runtime/IDE integration (default: $(AGENT))"
 	@echo "  AGENT_DIR_NAME - Override the agent home dir name (default: $(AGENT_DIR_NAME))"
+	@echo "  INSTALL_CLAUDE_INTEGRATION - Enable Claude Code-only integration steps (default: $(INSTALL_CLAUDE_INTEGRATION))"
 	@echo "  CONFIG_FILE - Path to ica.config JSON to deploy (default ica.config.default.json)"
 	@echo "  MCP_CONFIG - Path to MCP servers configuration JSON file"
 	@echo "  ENV_FILE - Path to .env file with environment variables"
@@ -205,16 +210,17 @@ install:
 	fi
 	@if [ -z "$(HOST)" ]; then \
 		echo "Installing locally..."; \
-		$(ANSIBLE_PLAYBOOK) ansible/install.yml \
-			-i localhost, \
-			-c local \
-			-e "ansible_shell_type=sh" \
-            -e "target_path=$(TARGET_PATH)" \
-            -e "agent=$(AGENT)" \
-            -e "agent_dir_name=$(AGENT_DIR_NAME)" \
-            -e "mcp_config_file=$(MCP_CONFIG_ABS)" \
-            -e "env_file=$(ENV_FILE_ABS)" \
-            -e "config_file=$(CONFIG_FILE_ABS)"; \
+			$(ANSIBLE_PLAYBOOK) ansible/install.yml \
+				-i localhost, \
+				-c local \
+				-e "ansible_shell_type=sh" \
+	            -e "target_path=$(TARGET_PATH)" \
+	            -e "agent=$(AGENT)" \
+	            -e "agent_dir_name=$(AGENT_DIR_NAME)" \
+	            -e "install_claude_integration=$(INSTALL_CLAUDE_INTEGRATION)" \
+	            -e "mcp_config_file=$(MCP_CONFIG_ABS)" \
+	            -e "env_file=$(ENV_FILE_ABS)" \
+	            -e "config_file=$(CONFIG_FILE_ABS)"; \
 	else \
 		if [ -z "$(USER)" ]; then \
 			echo "ERROR: USER parameter required for remote installation!"; \
@@ -225,27 +231,29 @@ install:
 		if [ -n "$(PASS)" ]; then \
 			echo "Using password authentication..."; \
 			ANSIBLE_STDOUT_CALLBACK=actionable \
-			$(ANSIBLE_PLAYBOOK) ansible/install.yml \
-				-i "$(USER)@$(HOST)," \
-				-k -e "ansible_ssh_pass=$(PASS)" \
-                -e "target_path=$(TARGET_PATH)" \
-                -e "agent=$(AGENT)" \
-                -e "agent_dir_name=$(AGENT_DIR_NAME)" \
-                -e "mcp_config_file=$(MCP_CONFIG_ABS)" \
-                -e "env_file=$(ENV_FILE_ABS)" \
-                -e "config_file=$(CONFIG_FILE_ABS)"; \
+				$(ANSIBLE_PLAYBOOK) ansible/install.yml \
+					-i "$(USER)@$(HOST)," \
+					-k -e "ansible_ssh_pass=$(PASS)" \
+	                -e "target_path=$(TARGET_PATH)" \
+	                -e "agent=$(AGENT)" \
+	                -e "agent_dir_name=$(AGENT_DIR_NAME)" \
+	                -e "install_claude_integration=$(INSTALL_CLAUDE_INTEGRATION)" \
+	                -e "mcp_config_file=$(MCP_CONFIG_ABS)" \
+	                -e "env_file=$(ENV_FILE_ABS)" \
+	                -e "config_file=$(CONFIG_FILE_ABS)"; \
 		else \
 			echo "Using SSH key authentication..."; \
 			ANSIBLE_STDOUT_CALLBACK=actionable \
-			$(ANSIBLE_PLAYBOOK) ansible/install.yml \
-				-i "$(USER)@$(HOST)," \
-				-e "ansible_ssh_private_key_file=$(KEY)" \
-                -e "target_path=$(TARGET_PATH)" \
-                -e "agent=$(AGENT)" \
-                -e "agent_dir_name=$(AGENT_DIR_NAME)" \
-                -e "mcp_config_file=$(MCP_CONFIG_ABS)" \
-                -e "env_file=$(ENV_FILE_ABS)" \
-                -e "config_file=$(CONFIG_FILE_ABS)"; \
+				$(ANSIBLE_PLAYBOOK) ansible/install.yml \
+					-i "$(USER)@$(HOST)," \
+					-e "ansible_ssh_private_key_file=$(KEY)" \
+	                -e "target_path=$(TARGET_PATH)" \
+	                -e "agent=$(AGENT)" \
+	                -e "agent_dir_name=$(AGENT_DIR_NAME)" \
+	                -e "install_claude_integration=$(INSTALL_CLAUDE_INTEGRATION)" \
+	                -e "mcp_config_file=$(MCP_CONFIG_ABS)" \
+	                -e "env_file=$(ENV_FILE_ABS)" \
+	                -e "config_file=$(CONFIG_FILE_ABS)"; \
 		fi \
 	fi
 
@@ -294,6 +302,21 @@ test:
 	@ANSIBLE_COLLECTIONS_PATH=/dev/null ANSIBLE_STDOUT_CALLBACK=minimal $(MAKE) install AGENT=claude TARGET_PATH=test-install
 	@test -f test-install/CLAUDE.md || (echo "FAIL: Reinstall failed"; exit 1)
 	@echo "✅ Reinstall test passed!"
+	@rm -rf test-install
+	@echo ""
+	@echo "=== Agent: claude (integration disabled) ==="
+	@echo "Testing installation..."
+	@rm -rf test-install
+	@mkdir -p test-install
+	@ANSIBLE_COLLECTIONS_PATH=/dev/null ANSIBLE_STDOUT_CALLBACK=minimal $(MAKE) install AGENT=claude TARGET_PATH=test-install INSTALL_CLAUDE_INTEGRATION=false
+	@echo ""
+	@echo "Verifying installation..."
+	@test ! -f test-install/CLAUDE.md || (echo "FAIL: CLAUDE.md should not be created when INSTALL_CLAUDE_INTEGRATION=false"; exit 1)
+	@test -f test-install/.claude/skills/architect/SKILL.md || (echo "FAIL: skill definitions not installed"; exit 1)
+	@test ! -d test-install/.claude/modes || (echo "FAIL: modes directory should not exist when INSTALL_CLAUDE_INTEGRATION=false"; exit 1)
+	@test ! -d test-install/.claude/hooks || (echo "FAIL: hooks directory should not exist when INSTALL_CLAUDE_INTEGRATION=false"; exit 1)
+	@test ! -f test-install/.claude/settings.json || (echo "FAIL: settings.json should not be created when INSTALL_CLAUDE_INTEGRATION=false"; exit 1)
+	@echo "✅ Installation tests passed!"
 	@rm -rf test-install
 	@echo ""
 	@echo "=== Agent: codex ==="
