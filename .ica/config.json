@@ -1,0 +1,20 @@
+{
+  "autonomy": {
+    "level": "L3"
+  },
+  "git": {
+    "privacy": true,
+    "branch_protection": true,
+    "require_pr_for_main": true
+  },
+  "enforcement": {
+    "blocking_enabled": true,
+    "allow_markdown_outside_allowlist": false,
+    "allow_markdown_outside_allowlist_agents": false,
+    "tool_blacklist": {
+        "universal": [
+          "make install"
+        ]
+      }
+  }
+}

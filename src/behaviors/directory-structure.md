@@ -1,0 +1,19 @@
+# Directory Structure (Minimal)
+
+**MANDATORY:** Respect configured project paths.
+
+## Defaults
+- `stories/` (story_path)
+- `bugs/` (bug_path)
+- `memory/` (memory_path)
+- `docs/` (docs_path)
+- `summaries/` (summaries_path)
+- `src/` (src_path)
+- `tests/` (test_path)
+
+## Notes
+Paths are configurable via `ica.config.json`.
+
+Memory is split by intent:
+- Shareable exports (commit): `memory/exports/**` and `memory/archive/**`
+- Local runtime state (ignore): `.agent/memory/`

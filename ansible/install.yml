@@ -1,0 +1,67 @@
+---
+# Intelligent Code Agents - Installation Playbook
+# Runs from control machine, installs to targets via SSH
+# NO Ansible required on target machines!
+
+- name: Install Intelligent Code Agents
+  hosts: all
+  gather_facts: true
+  gather_subset:
+    - '!all'
+    - '!min'
+    - env
+  vars:
+    source_dir: "{{ playbook_dir }}/../src"
+
+  tasks:
+    - name: Determine agent target and home directory name
+      ansible.builtin.set_fact:
+        agent_name: "{{ agent | default('claude') }}"
+        agent_dir_name_effective: >-
+          {{
+            agent_dir_name
+            | default(
+              '.claude' if (agent | default('claude')) == 'claude'
+              else '.codex' if (agent | default('claude')) == 'codex'
+              else '.cursor' if (agent | default('claude')) == 'cursor'
+              else '.gemini' if (agent | default('claude')) == 'gemini'
+              else '.antigravity' if (agent | default('claude')) == 'antigravity'
+              else '.agent'
+            )
+          }}
+
+    - name: Determine installation scope and path
+      ansible.builtin.set_fact:
+        target_scope: "{{ 'project' if (target_path | default('')) else 'user' }}"
+        install_path: >-
+          {{ ((target_path | default('')) | realpath) + '/' + agent_dir_name_effective
+          if (target_path | default('')) else ansible_env.HOME + '/' + agent_dir_name_effective }}
+        project_path: >-
+          {{ (target_path | default('')) | realpath
+          if (target_path | default('')) else '' }}
+
+    - name: Display installation target
+      ansible.builtin.debug:
+        msg: "Installing to: {{ install_path }}"
+      when: ansible_verbosity >= 1
+
+    - name: Include intelligent_code_agents role
+      ansible.builtin.include_role:
+        name: intelligent_code_agents
+      vars:
+        agent_install_path: "{{ install_path }}"
+        agent_project_path: "{{ project_path }}"
+        agent_scope: "{{ target_scope }}"
+        agent_config_source: "{{ config_file | default('') }}"
+
+    - name: Install MCP servers if configuration provided
+      ansible.builtin.include_role:
+        name: mcp_integration
+      vars:
+        # Claude Code uses ~/.claude.json (not .claude/settings.json) for MCP servers.
+        # If you're targeting a different tool, set this explicitly via -e settings_json_path=...
+        settings_json_path: "{{ settings_json_path | default(ansible_env.HOME + '/.claude.json') }}"
+      when:
+        - agent_name == 'claude'
+        - install_claude_integration | default(true) | bool
+        - (mcp_config_file | default('')) != ''

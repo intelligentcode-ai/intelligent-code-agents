@@ -1,0 +1,63 @@
+name: memory-check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  memory-protection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Block Local Memory Runtime State
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Scanning tracked files for local-only memory runtime state..."
+
+          # Local memory runtime state must never be tracked.
+          TRACKED_AGENT_MEMORY="$(git ls-files | grep -E '^\\.agent/memory/' || true)"
+          if [[ -n "${TRACKED_AGENT_MEMORY}" ]]; then
+            echo "ERROR: Tracked files detected under .agent/memory/ (local-only runtime state)."
+            echo
+            echo "${TRACKED_AGENT_MEMORY}"
+            echo
+            echo "Fix:"
+            echo "  git rm -r --cached .agent/memory/"
+            echo "  git commit -m \"chore: stop tracking local memory runtime state\""
+            exit 1
+          fi
+
+          # Extra defense: block private local file extensions anywhere in the repo.
+          TRACKED_PRIVATE_EXT="$(git ls-files | grep -E '\\.memory$|\\.learning$' || true)"
+          if [[ -n "${TRACKED_PRIVATE_EXT}" ]]; then
+            echo "ERROR: Tracked local-only memory files detected (*.memory / *.learning)."
+            echo
+            echo "${TRACKED_PRIVATE_EXT}"
+            echo
+            echo "Fix:"
+            echo "  git rm --cached <file>"
+            echo "  git commit -m \"chore: stop tracking local-only memory files\""
+            exit 1
+          fi
+
+      - name: Verify .gitignore Includes .agent/memory/
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Be robust to CRLF checkouts (Windows-style line endings) and any formatting.
+          # We only require that the ignore contains ".agent/memory/" somewhere.
+          GI="$(tr -d '\r' < .gitignore)"
+          if ! printf '%s\n' "$GI" | grep -qF '.agent/memory/'; then
+            echo "ERROR: .gitignore must ignore .agent/memory/ (local-only runtime state)."
+            echo "Add a line:"
+            echo "  .agent/memory/"
+            echo
+            echo "Debug: .gitignore does not appear to contain '.agent/memory/'."
+            echo "Debug: last 60 lines of .gitignore:"
+            printf '%s\n' "$GI" | tail -n 60 | cat -vet
+            exit 1
+          fi

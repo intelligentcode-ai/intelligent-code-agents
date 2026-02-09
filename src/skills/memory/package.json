@@ -1,0 +1,35 @@
+{
+  "name": "@ica/memory-skill",
+  "version": "1.0.0",
+  "description": "Persistent memory skill with local RAG for ICA agents",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "echo 'No tests defined yet'"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  },
+  "optionalDependencies": {
+    "@xenova/transformers": "^2.17.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ica",
+    "memory",
+    "rag",
+    "embeddings",
+    "sqlite"
+  ],
+  "author": "ICA",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/intelligentcode-ai/intelligent-code-agents"
+  },
+  "notes": {
+    "better-sqlite3": "Required for SQLite storage with FTS5 full-text search",
+    "@xenova/transformers": "Optional but recommended for semantic search (downloads ~80MB model on first use)"
+  }
+}

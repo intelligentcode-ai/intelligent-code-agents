@@ -1,0 +1,236 @@
+# Large AgentTask Template - DEPRECATED
+# DO NOT USE: Work >15 points must become STORY in ./stories/ for breakdown
+# Maximum executable AgentTask: 15 points (medium)
+# This template preserved for reference only
+
+git_privacy: [GIT_PRIVACY_SETTING]
+id: "[PARENT_ID]-AGENTTASK-[NEXT_NUMBER]-[TITLE]-[CURRENT_DATE]"
+type: large-agenttask
+complexity: complex
+priority: "[PRIORITY_LEVEL]"
+title: "[ROLE] [DESCRIPTION]"
+requires_decomposition: true
+
+# MANDATORY: Complete Context Section
+complete_context:
+  project_root: "[PROJECT_ROOT]"
+  system_nature: "[SYSTEM_NATURE]"
+  project_overview: "[PROJECT_OVERVIEW]"
+  work_location: "[WORK_LOCATION]"
+  key_context: "[KEY_CONTEXT]"
+  system_features: "[SYSTEM_FEATURES]"
+  configuration:
+    git_privacy: "[FROM_CONFIG]"
+    branch_protection: "[FROM_CONFIG]"
+    default_branch: "[FROM_CONFIG]"
+    branch_strategy: "[FROM_CONFIG]"
+  business_goal: "[WHY_THIS_FEATURE_MATTERS]"
+  technical_scope: "[SYSTEM_COMPONENTS_AFFECTED]"
+  critical_files:
+    - path: "[CORE_FILE_1]"
+      purpose: "[PURPOSE_1]"
+      sample: "[SAMPLE_1]"
+    - path: "[CORE_FILE_2]"
+      purpose: "[PURPOSE_2]"
+      sample: "[SAMPLE_2]"
+  user_requirements:
+    original_request: "[USER_REQUEST]"
+    success_criteria: "[SUCCESS_CRITERIA]"
+    feature_scope: "[FEATURE_BOUNDARY]"
+
+  specialization_context:
+    technology_domains: "[TECHNOLOGY_DOMAINS]"
+    specialist_creation: "ALWAYS create specialists when technology expertise is needed"
+    unlimited_domains: "Support ANY technology domain through dynamic specialist creation"
+    role_assignment: "PM + Specialist Architect determine when specialists should be created"
+    coordination_specialists: "Create coordination specialists for complex multi-component features"
+    domain_examples: "react-developer, aws-engineer, kubernetes-devops-engineer, api-architect"
+
+# MANDATORY: Requirements Section
+requirements:
+  functional:
+    - "[MAIN_FEATURE_REQUIREMENT]"
+    - "[SUPPORTING_REQUIREMENT_1]"
+    - "[SUPPORTING_REQUIREMENT_2]"
+  processual:
+    - "Apply git_privacy for all sub-component commits"
+    - "Coordinate multi-component development"
+    - "Manage feature branch strategy"
+  technical:
+    - "Multi-component integration"
+    - "Complex feature coordination"
+
+# Git Privacy Execution Notes
+execution_notes: |
+  CRITICAL: MANDATORY git_privacy validation BEFORE ALL git operations:
+  1. Load git_privacy setting from configuration (NEVER assume)
+  2. When git_privacy=true, strip ALL AI mentions from:
+     - Commit messages (remove "AI", "Claude", "agent", "Generated with Claude Code", etc.)
+     - PR descriptions and titles
+     - Release notes and changelogs
+     - Any git-visible text including co-author attributions
+  3. Use clean, professional language in all git operations
+  4. Block git operations if privacy setting not validated
+
+# Sub-AgentTask Decomposition Strategy
+decomposition:
+  approach: "Break into Medium/Tiny AgentTasks for manageable execution"
+  sub_components:
+    - component: "[COMPONENT_1]"
+      agenttask_type: "medium"
+      dependencies: []
+    - component: "[COMPONENT_2]"
+      agenttask_type: "medium"
+      dependencies: ["[COMPONENT_1]"]
+    - component: "[INTEGRATION]"
+      agenttask_type: "tiny"
+      dependencies: ["[COMPONENT_1]", "[COMPONENT_2]"]
+  validation_enforcement:
+    mandatory_decomposition: true
+    blocking_requirements:
+      - "REQUIRED: Large AgentTasks MUST be broken into ≤15 point sub-AgentTasks"
+      - "REQUIRED: Each sub-component must have clear dependencies"
+      - "REQUIRED: Integration component must coordinate all parts"
+      - "REQUIRED: Sub-AgentTask naming must follow parent-child format"
+    sub_agenttask_limits:
+      - "All sub-AgentTasks must be ≤15 complexity points"
+      - "Sub-AgentTasks must use appropriate templates (medium/tiny)"
+      - "Dependencies must be explicitly documented"
+    error_message: "❌ Large AgentTasks MUST be decomposed into manageable sub-AgentTasks - direct execution FORBIDDEN"
+
+# Coordination Strategy
+coordination:
+  execution_order: "Sequential based on dependencies"
+  integration_points: "[HOW_COMPONENTS_CONNECT]"
+  validation_strategy: "[HOW_TO_TEST_INTEGRATION]"
+
+# MANDATORY: Knowledge Management
+knowledge_management:
+  capture_patterns: "Store complex feature coordination patterns"
+  capture_insights: "Document multi-component integration approach"
+  location: "memory/exports/architecture/complex-features.md"
+
+# MANDATORY: Git Operations
+git_operations:
+  branch_strategy: "Feature branch with sub-component branches"
+  commit_format: "[ID]: [DESCRIPTION]"
+  privacy_filter: "[FROM_CONFIG]"
+  coordination: "Merge sub-components to feature branch"
+  validation_enforcement:
+    mandatory_git_ops: true
+    blocking_requirements:
+      - "REQUIRED: Feature branch must be created for coordination"
+      - "REQUIRED: Sub-component branches must be managed"
+      - "REQUIRED: Commit format must follow [ID]: [DESCRIPTION] pattern"
+      - "REQUIRED: Privacy filter must be applied according to config"
+    disallowed_entries:
+      - "No git operations needed"
+      - "Skip git workflow"
+      - "Manual file changes only"
+    error_message: "❌ Large AgentTasks MUST follow git workflow - 'No git operations needed' is FORBIDDEN"
+
+# MANDATORY: Review Process
+review_process:
+  type: "architectural_review"
+  reviewer: "[PRE_ASSIGNED_ARCHITECT]"
+  focus: "Component integration and system design"
+  validation_enforcement:
+    mandatory_review: true
+    blocking_requirements:
+      - "REQUIRED: Architectural review must be completed before merge"
+      - "REQUIRED: Component integration validation must pass"
+      - "REQUIRED: System design review must be documented"
+    disallowed_entries:
+      - "No review needed"
+      - "Review not required"
+      - "Skip architectural review"
+    error_message: "❌ Large AgentTasks MUST have architectural review - 'No review needed' is FORBIDDEN"
+
+# MANDATORY: Documentation Updates
+documentation_updates:
+  changelog: "Document major feature addition"
+  architecture_docs: "Update system architecture if needed"
+  user_docs: "Update user-facing documentation"
+  validation_enforcement:
+    mandatory_docs: true
+    blocking_requirements:
+      - "REQUIRED: CHANGELOG must be updated with major feature addition"
+      - "REQUIRED: Architecture docs must be updated if system design changes"
+      - "REQUIRED: User documentation must reflect new functionality"
+    disallowed_entries:
+      - "No documentation needed"
+      - "Documentation not required"
+      - "Skip documentation updates"
+    error_message: "❌ Large AgentTasks MUST update documentation - 'No documentation needed' is FORBIDDEN"
+
+# MANDATORY: Workflow Configuration
+workflow:
+  version_bump: "[WORKFLOW_VERSION_BUMP]"
+  version_type: "[WORKFLOW_VERSION_TYPE]"
+  changelog_required: "[WORKFLOW_CHANGELOG_REQUIRED]"
+  pr_required: "[WORKFLOW_PR_REQUIRED]"
+  merge_strategy: "[WORKFLOW_MERGE_STRATEGY]"
+  release_automation: "[WORKFLOW_RELEASE_AUTOMATION]"
+  auto_merge: "[WORKFLOW_AUTO_MERGE]"
+  coordination_required: "[WORKFLOW_COORDINATION_REQUIRED]"
+  breaking_change_assessment: "[WORKFLOW_BREAKING_CHANGE_ASSESSMENT]"
+
+# MCP Operations Extension Points
+mcp_operations:
+  memory:
+    condition: "[MCP_MEMORY_ENABLED]"
+    provider: "[MCP_MEMORY_PROVIDER]"
+    operations:
+      - action: store_learning
+        topic: "[LEARNING_TOPIC]"
+        content: "[LEARNING_CONTENT]"
+    fallback: "file-based"
+
+  issue_tracking:
+    condition: "[MCP_ISSUE_ENABLED]"
+    provider: "[MCP_ISSUE_PROVIDER]"
+    operations:
+      - action: create_issue
+        type: "[ISSUE_TYPE]"
+        title: "[ISSUE_TITLE]"
+        description: "[ISSUE_DESCRIPTION]"
+    fallback: "file-based"
+
+  documentation:
+    condition: "[MCP_DOCS_ENABLED]"
+    provider: "[MCP_DOCS_PROVIDER]"
+    operations:
+      - action: generate_docs
+        path: "[DOC_PATH]"
+        content: "[DOC_CONTENT]"
+    fallback: "file-based"
+
+# MCP Placeholder Resolution Notes
+# During AgentTask generation, resolve these placeholders:
+# [MCP_MEMORY_ENABLED] → Check mcp_integrations.memory.enabled
+# [MCP_MEMORY_PROVIDER] → Get mcp_integrations.memory.provider
+# [MCP_ISSUE_ENABLED] → Check mcp_integrations.issue_tracking.enabled
+# [MCP_ISSUE_PROVIDER] → Get mcp_integrations.issue_tracking.provider
+# [MCP_DOCS_ENABLED] → Check mcp_integrations.documentation.enabled
+# [MCP_DOCS_PROVIDER] → Get mcp_integrations.documentation.provider
+# If not configured, set to false/"file-based"
+
+# Execution Strategy
+execution_strategy: |
+  1. Create feature branch for overall coordination
+  2. Generate and execute sub-AgentTasks in dependency order
+  3. Integrate components on feature branch
+  4. Comprehensive testing and validation
+  5. Update documentation and create pull request
+
+# EXECUTION CHECKLIST
+execution_checklist: |
+  ☐ Feature branch created for coordination (MANDATORY - validation enforced)
+  ☐ Sub-AgentTasks generated with proper dependencies (MANDATORY - decomposition enforced)
+  ☐ Components executed in correct order (MANDATORY - coordination validation)
+  ☐ Integration completed and tested (MANDATORY - integration validation)
+  ☐ Documentation updated comprehensively (MANDATORY - no "No documentation needed")
+  ☐ Architectural review completed (MANDATORY - no "Review not required")
+  ☐ Git operations followed properly (MANDATORY - no "No git operations needed")
+  ☐ All validation enforcement rules verified
+  ☐ Pull request created with detailed description

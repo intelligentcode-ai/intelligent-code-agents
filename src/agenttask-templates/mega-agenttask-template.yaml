@@ -1,0 +1,283 @@
+# Mega AgentTask Template - DEPRECATED
+# DO NOT USE: Work >15 points must become STORY in ./stories/ for breakdown
+# Maximum executable AgentTask: 15 points (medium)
+# This template preserved for reference only
+
+git_privacy: [GIT_PRIVACY_SETTING]
+id: "[PARENT_ID]-AGENTTASK-[NEXT_NUMBER]-[TITLE]-[CURRENT_DATE]"
+type: mega-agenttask
+complexity: system-wide
+priority: "[PRIORITY_LEVEL]"
+title: "[ROLE] [DESCRIPTION]"
+requires_epic_decomposition: true
+
+# MANDATORY: Complete Context Section
+complete_context:
+  project_root: "[PROJECT_ROOT]"
+  system_nature: "[SYSTEM_NATURE]"
+  project_overview: "[PROJECT_OVERVIEW]"
+  work_location: "[WORK_LOCATION]"
+  key_context: "[KEY_CONTEXT]"
+  system_features: "[SYSTEM_FEATURES]"
+  configuration:
+    git_privacy: "[FROM_CONFIG]"
+    branch_protection: "[FROM_CONFIG]"
+    default_branch: "[FROM_CONFIG]"
+    branch_strategy: "[FROM_CONFIG]"
+  business_driver: "[BUSINESS_JUSTIFICATION]"
+  impact_scope: "[ENTIRE_SYSTEM_AFFECTED]"
+  risk_level: "[HIGH|CRITICAL]"
+  rollback_required: true
+  coordination_complexity: "[SYSTEM_WIDE_COORDINATION_REQUIREMENTS]"
+  architectural_impact: "[ARCHITECTURAL_SYSTEM_CHANGES]"
+  critical_files:
+    - path: "[SYSTEM_CORE_1]"
+      purpose: "[CORE_PURPOSE_1]"
+      sample: "[CORE_SAMPLE_1]"
+    - path: "[SYSTEM_CORE_2]"
+      purpose: "[CORE_PURPOSE_2]"
+      sample: "[CORE_SAMPLE_2]"
+  user_requirements:
+    original_request: "[USER_REQUEST]"
+    success_criteria: "[SUCCESS_CRITERIA]"
+    system_scope: "[COMPLETE_SYSTEM_BOUNDARY]"
+
+  specialization_context:
+    technology_domains: "[TECHNOLOGY_DOMAINS]"
+    specialist_creation: "ALWAYS create specialists when technology expertise is needed"
+    unlimited_domains: "Support ANY technology domain through dynamic specialist creation"
+    role_assignment: "PM + Specialist Architect determine when specialists should be created"
+    system_specialists: "Create system-wide specialists for architectural changes"
+    coordination_architects: "Create coordination architects for mega-scale implementations"
+    domain_examples: "system-architect, migration-specialist, legacy-integration-engineer, performance-architect"
+
+# MANDATORY: Requirements Section
+requirements:
+  functional:
+    - "[SYSTEM_WIDE_REQUIREMENT_1]"
+    - "[SYSTEM_WIDE_REQUIREMENT_2]"
+    - "[SYSTEM_WIDE_REQUIREMENT_3]"
+  processual:
+    - "Apply git_privacy across all system changes"
+    - "Coordinate system-wide development phases"
+    - "Manage complex dependency chains"
+    - "Ensure rollback capability at all phases"
+  technical:
+    - "System-wide architecture changes"
+    - "Multi-system integration"
+    - "Backward compatibility management"
+
+# Git Privacy Execution Notes
+execution_notes: |
+  CRITICAL: MANDATORY git_privacy validation BEFORE ALL git operations:
+  1. Load git_privacy setting from configuration (NEVER assume)
+  2. When git_privacy=true, strip ALL AI mentions from:
+     - Commit messages (remove "AI", "Claude", "agent", "Generated with Claude Code", etc.)
+     - PR descriptions and titles
+     - Release notes and changelogs
+     - Any git-visible text including co-author attributions
+  3. Use clean, professional language in all git operations
+  4. Block git operations if privacy setting not validated
+
+# Epic Decomposition Strategy
+epic_decomposition:
+  approach: "Break into Large AgentTasks, then Medium/Tiny sub-AgentTasks"
+  major_phases:
+    - phase: "[PHASE_1]"
+      agenttask_type: "large"
+      scope: "[PHASE_1_SCOPE]"
+      dependencies: []
+    - phase: "[PHASE_2]"
+      agenttask_type: "large"
+      scope: "[PHASE_2_SCOPE]"
+      dependencies: ["[PHASE_1]"]
+    - phase: "[INTEGRATION]"
+      agenttask_type: "large"
+      scope: "[SYSTEM_INTEGRATION]"
+      dependencies: ["[PHASE_1]", "[PHASE_2]"]
+  validation_enforcement:
+    mandatory_epic_decomposition: true
+    blocking_requirements:
+      - "REQUIRED: Mega AgentTasks MUST be broken into Large AgentTask phases"
+      - "REQUIRED: Each phase must have clear scope and dependencies"
+      - "REQUIRED: Integration phase must coordinate all phases"
+      - "REQUIRED: Phase naming must follow epic-phase format"
+      - "REQUIRED: System-wide changes must follow phased approach"
+    phase_limits:
+      - "All phases must be Large AgentTasks (16-30 points)"
+      - "Phases must use large-agenttask-template.yaml"
+      - "Dependencies must be explicitly documented"
+      - "Integration phase is mandatory for system coordination"
+    epic_requirements:
+      - "Minimum 2 phases required for epic decomposition"
+      - "Maximum 5 phases recommended for manageable coordination"
+      - "Each phase must validate before next phase begins"
+    error_message: "❌ Mega AgentTasks MUST be decomposed into coordinated phases - direct execution FORBIDDEN"
+
+# Risk Management
+risk_management:
+  rollback_strategy: "[HOW_TO_ROLLBACK_AT_EACH_PHASE]"
+  validation_gates: "[VALIDATION_AT_EACH_PHASE]"
+  monitoring_plan: "[HOW_TO_MONITOR_SYSTEM_HEALTH]"
+
+# System Coordination
+system_coordination:
+  execution_phases: "Sequential with validation gates"
+  integration_strategy: "[SYSTEM_WIDE_INTEGRATION_APPROACH]"
+  testing_strategy: "[COMPREHENSIVE_SYSTEM_TESTING]"
+
+# MANDATORY: Knowledge Management
+knowledge_management:
+  capture_patterns: "Store system-wide change patterns"
+  capture_insights: "Document architectural transformation approach"
+  location: "memory/exports/architecture/system-changes.md"
+
+# MANDATORY: Git Operations
+git_operations:
+  branch_strategy: "Epic branch with phase branches"
+  commit_format: "[ID]: [DESCRIPTION]"
+  privacy_filter: "[FROM_CONFIG]"
+  coordination: "Merge phases to epic branch systematically"
+  validation_enforcement:
+    mandatory_git_ops: true
+    blocking_requirements:
+      - "REQUIRED: Epic branch must be created for system-wide coordination"
+      - "REQUIRED: Phase branches must be managed systematically"
+      - "REQUIRED: Commit format must follow [ID]: [DESCRIPTION] pattern"
+      - "REQUIRED: Privacy filter must be applied according to config"
+      - "REQUIRED: System-wide changes must follow epic workflow"
+    disallowed_entries:
+      - "No git operations needed"
+      - "Skip git workflow"
+      - "Manual system changes only"
+      - "Direct system modifications"
+    error_message: "❌ Mega AgentTasks MUST follow epic git workflow - 'No git operations needed' is FORBIDDEN"
+
+# MANDATORY: Review Process
+review_process:
+  type: "architectural_board_review"
+  reviewer: "[SYSTEM_ARCHITECT]"
+  focus: "System-wide impact and architectural integrity"
+  stakeholders: "[KEY_STAKEHOLDERS]"
+  validation_enforcement:
+    mandatory_board_review: true
+    blocking_requirements:
+      - "REQUIRED: Architectural board review must be completed before merge"
+      - "REQUIRED: System-wide impact assessment must be documented"
+      - "REQUIRED: Key stakeholders must approve system changes"
+      - "REQUIRED: Architectural integrity must be validated"
+      - "REQUIRED: System architect approval is mandatory"
+    disallowed_entries:
+      - "No review needed"
+      - "Review not required"
+      - "Skip architectural board review"
+      - "Internal review only"
+    error_message: "❌ Mega AgentTasks MUST have architectural board review - 'No review needed' is FORBIDDEN"
+    stakeholder_requirements:
+      - "System architect approval required"
+      - "Technical lead approval required"
+      - "Security review if applicable"
+      - "Performance impact assessment"
+
+# MANDATORY: Documentation Updates
+documentation_updates:
+  changelog: "Document major system changes"
+  architecture_docs: "Complete architecture documentation update"
+  user_docs: "Comprehensive user documentation overhaul"
+  migration_guide: "Provide migration path for users"
+  validation_enforcement:
+    mandatory_comprehensive_docs: true
+    blocking_requirements:
+      - "REQUIRED: CHANGELOG must document all major system changes"
+      - "REQUIRED: Architecture docs must be completely updated"
+      - "REQUIRED: User documentation must be comprehensively overhauled"
+      - "REQUIRED: Migration guide must be provided for users"
+      - "REQUIRED: System-wide documentation must be synchronized"
+    disallowed_entries:
+      - "No documentation needed"
+      - "Documentation not required"
+      - "Skip documentation updates"
+      - "Minimal documentation only"
+    error_message: "❌ Mega AgentTasks MUST have comprehensive documentation - 'No documentation needed' is FORBIDDEN"
+    documentation_scope:
+      - "System architecture overhaul documentation"
+      - "User impact and migration documentation"
+      - "Developer onboarding updates"
+      - "API and integration documentation updates"
+
+# MANDATORY: Workflow Configuration
+workflow:
+  version_bump: "[WORKFLOW_VERSION_BUMP]"
+  version_type: "[WORKFLOW_VERSION_TYPE]"
+  changelog_required: "[WORKFLOW_CHANGELOG_REQUIRED]"
+  pr_required: "[WORKFLOW_PR_REQUIRED]"
+  merge_strategy: "[WORKFLOW_MERGE_STRATEGY]"
+  release_automation: "[WORKFLOW_RELEASE_AUTOMATION]"
+  auto_merge: "[WORKFLOW_AUTO_MERGE]"
+  coordination_required: "[WORKFLOW_COORDINATION_REQUIRED]"
+  breaking_change_assessment: "[WORKFLOW_BREAKING_CHANGE_ASSESSMENT]"
+
+# MCP Operations Extension Points
+mcp_operations:
+  memory:
+    condition: "[MCP_MEMORY_ENABLED]"
+    provider: "[MCP_MEMORY_PROVIDER]"
+    operations:
+      - action: store_learning
+        topic: "[LEARNING_TOPIC]"
+        content: "[LEARNING_CONTENT]"
+    fallback: "file-based"
+
+  issue_tracking:
+    condition: "[MCP_ISSUE_ENABLED]"
+    provider: "[MCP_ISSUE_PROVIDER]"
+    operations:
+      - action: create_issue
+        type: "[ISSUE_TYPE]"
+        title: "[ISSUE_TITLE]"
+        description: "[ISSUE_DESCRIPTION]"
+    fallback: "file-based"
+
+  documentation:
+    condition: "[MCP_DOCS_ENABLED]"
+    provider: "[MCP_DOCS_PROVIDER]"
+    operations:
+      - action: generate_docs
+        path: "[DOC_PATH]"
+        content: "[DOC_CONTENT]"
+    fallback: "file-based"
+
+# MCP Placeholder Resolution Notes
+# During AgentTask generation, resolve these placeholders:
+# [MCP_MEMORY_ENABLED] → Check mcp_integrations.memory.enabled
+# [MCP_MEMORY_PROVIDER] → Get mcp_integrations.memory.provider
+# [MCP_ISSUE_ENABLED] → Check mcp_integrations.issue_tracking.enabled
+# [MCP_ISSUE_PROVIDER] → Get mcp_integrations.issue_tracking.provider
+# [MCP_DOCS_ENABLED] → Check mcp_integrations.documentation.enabled
+# [MCP_DOCS_PROVIDER] → Get mcp_integrations.documentation.provider
+# If not configured, set to false/"file-based"
+
+# Execution Strategy
+execution_strategy: |
+  1. Create epic branch for system-wide coordination
+  2. Execute Phase 1 Large AgentTasks with validation gates
+  3. Execute Phase 2 Large AgentTasks building on Phase 1
+  4. Execute Integration Large AgentTasks for system unification
+  5. Comprehensive system testing and validation
+  6. Documentation overhaul and migration guide creation
+  7. Staged rollout with rollback capability
+
+# EXECUTION CHECKLIST
+execution_checklist: |
+  ☐ Epic branch created for system coordination (MANDATORY - validation enforced)
+  ☐ Epic decomposition completed into phases (MANDATORY - no direct execution)
+  ☐ Phase 1 Large AgentTasks executed with validation (MANDATORY - phased approach)
+  ☐ Phase 2 Large AgentTasks executed building on Phase 1 (MANDATORY - dependency validation)
+  ☐ Integration Large AgentTasks executed for system unification (MANDATORY - coordination)
+  ☐ Comprehensive system testing completed (MANDATORY - system validation)
+  ☐ Documentation completely updated with migration guide (MANDATORY - no "No documentation needed")
+  ☐ Architectural board review completed (MANDATORY - no "Review not required")
+  ☐ Git operations followed epic workflow (MANDATORY - no "No git operations needed")
+  ☐ All stakeholder approvals obtained (MANDATORY - validation enforced)
+  ☐ All validation enforcement rules verified
+  ☐ Staged rollout plan executed with rollback capability

@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": { "tools": ["BashTool", "Bash"] },
+        "hooks": [{
+          "type": "command",
+          "command": "node {{ agent_install_path }}/hooks/agent-infrastructure-protection.js",
+          "timeout": 5000
+        }]
+      },
+      {
+        "matcher": { "tools": ["FileWriteTool", "FileEditTool", "Write", "Edit"] },
+        "hooks": [{
+          "type": "command",
+          "command": "node {{ agent_install_path }}/hooks/summary-file-enforcement.js",
+          "timeout": 5000
+        }]
+      }
+    ]
+  }
+}
