@@ -66,7 +66,6 @@ feature/* ← WHERE WORK HAPPENS
 ### Step 1.0: Memory Check (AUTOMATIC)
 ```
 BEFORE implementing, search memory:
-<<<<<<< HEAD
 
   # Portable: resolve memory CLI location (prefers ICA_HOME when set)
   MEMORY_CLI=""
@@ -87,9 +86,6 @@ BEFORE implementing, search memory:
       grep -R "relevant keywords" memory/exports
     fi
   fi
-=======
-  node /skills/memory/cli.js search "relevant keywords"
->>>>>>> origin/dev
 
 IF similar problem solved before:
   - Review the solution
@@ -149,7 +145,6 @@ IF clean or user says proceed:
 ### Step 1.5: Memory Save (AUTOMATIC)
 ```
 IF key decision was made (architecture, pattern, fix):
-<<<<<<< HEAD
   # Portable: resolve memory CLI location (prefers ICA_HOME when set)
   MEMORY_CLI=""
   for d in "${ICA_HOME:-}" "$HOME/.codex" "$HOME/.claude"; do
@@ -187,12 +182,6 @@ created: YYYY-MM-DDTHH:MM:SSZ
 ...
 EOF
   fi
-=======
-  node /skills/memory/cli.js write \
-    --title "..." --summary "..." \
-    --category "architecture|implementation|issues|patterns" \
-    --importance "high|medium|low"
->>>>>>> origin/dev
 
 This step is SILENT - auto-saves significant decisions.
 ```

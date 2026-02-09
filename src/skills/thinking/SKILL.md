@@ -53,7 +53,6 @@ Structured problem-solving through explicit step-by-step analysis.
 ### Before Analysis
 ```bash
 # Search for similar problems solved before
-<<<<<<< HEAD
 # Portable: resolve memory CLI location (prefers ICA_HOME when set)
 MEMORY_CLI=""
 for d in "${ICA_HOME:-}" "$HOME/.codex" "$HOME/.claude"; do
@@ -73,9 +72,6 @@ elif [ -d "memory/exports" ]; then
     grep -R "relevant problem keywords" memory/exports
   fi
 fi
-=======
-node /skills/memory/cli.js search "relevant problem keywords"
->>>>>>> origin/dev
 
 IF similar analysis found:
   - Review the approach
@@ -86,7 +82,6 @@ IF similar analysis found:
 ### After Significant Analysis
 ```bash
 # Store valuable analysis patterns
-<<<<<<< HEAD
 # Portable: resolve memory CLI location (prefers ICA_HOME when set)
 MEMORY_CLI=""
 for d in "${ICA_HOME:-}" "$HOME/.codex" "$HOME/.claude"; do
@@ -123,14 +118,6 @@ created: YYYY-MM-DDTHH:MM:SSZ
 <approach that worked, key tradeoffs>
 EOF
 fi
-=======
-node /skills/memory/cli.js write \
-  --title "Analysis: <problem type>" \
-  --summary "<approach that worked, key tradeoffs>" \
-  --tags "analysis,<domain>" \
-  --category "patterns" \
-  --importance "medium"
->>>>>>> origin/dev
 ```
 
 This is **SILENT** - builds knowledge for future analysis without user notification.

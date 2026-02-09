@@ -36,7 +36,6 @@ Best practices are stored in `best-practices/<category>/`:
    ```
 3. **Search memory** for related patterns:
    ```bash
-<<<<<<< HEAD
    # Portable: resolve memory CLI location (prefers ICA_HOME when set)
    MEMORY_CLI=""
    for d in "${ICA_HOME:-}" "$HOME/.codex" "$HOME/.claude"; do
@@ -56,9 +55,6 @@ Best practices are stored in `best-practices/<category>/`:
        grep -R "<relevant keywords>" memory/exports
      fi
    fi
-=======
-   node /skills/memory/cli.js search "<relevant keywords>"
->>>>>>> origin/dev
    ```
 4. **Apply** established patterns to implementation
 5. **Note** deviations with justification

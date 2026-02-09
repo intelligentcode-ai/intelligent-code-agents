@@ -262,7 +262,6 @@ After fixing recurring issues, auto-save to memory:
 
 ```bash
 # When a pattern emerges (same fix multiple times):
-<<<<<<< HEAD
 # Portable: resolve memory CLI location (prefers ICA_HOME when set)
 MEMORY_CLI=""
 for d in "${ICA_HOME:-}" "$HOME/.codex" "$HOME/.claude"; do
@@ -299,14 +298,6 @@ created: YYYY-MM-DDTHH:MM:SSZ
 <what to check for and how to fix>
 EOF
 fi
-=======
-node /skills/memory/cli.js write \
-  --title "Recurring: <issue type>" \
-  --summary "<what to check for and how to fix>" \
-  --tags "recurring,security|quality|patterns" \
-  --category "issues" \
-  --importance "medium"
->>>>>>> origin/dev
 ```
 
 This is **SILENT** - no user notification. Builds knowledge for future reviews.
