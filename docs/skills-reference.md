@@ -41,6 +41,9 @@ qa-engineer, backend-tester, requirements-engineer, user-tester, reviewer
 - `ica-version`: show current ICA version / install status
 - `ica-get-setting`: read config values from the config hierarchy
 
+### Tooling Skills (1)
+- `agent-browser`: reproduce/debug web UI flows via Agent Browser CLI (snapshots, screenshots, redirects, console/network/errors)
+
 ### Process Skills (15)
 thinking, work-queue, process, best-practices, validate,
 autonomy, parallel-execution, workflow, mcp-config,
