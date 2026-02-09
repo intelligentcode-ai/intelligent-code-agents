@@ -252,14 +252,29 @@ If the memory skill's dependencies are installed:
 
 ```bash
 # Path to CLI (adjust for your installation)
-MEMORY_CLI="$HOME/.claude/skills/memory/cli.js"  # Linux/macOS
-# $env:USERPROFILE\.claude\skills\memory\cli.js   # Windows
+#
+# Portable (Linux/macOS):
+# - Prefer ICA_HOME if set (works for custom installs like ~/.ica)
+# - Fallback to common agent homes (~/.codex, ~/.claude)
+MEMORY_CLI=""
+for d in "${ICA_HOME:-}" "$HOME/.codex" "$HOME/.claude"; do
+  if [ -n "$d" ] && [ -f "$d/skills/memory/cli.js" ]; then
+    MEMORY_CLI="$d/skills/memory/cli.js"
+    break
+  fi
+done
+#
+# Windows PowerShell equivalent (example):
+# $MemoryCli = @($env:ICA_HOME, "$env:USERPROFILE\\.codex", "$env:USERPROFILE\\.claude") |
+#   Where-Object { $_ -and (Test-Path (Join-Path $_ "skills\\memory\\cli.js")) } |
+#   ForEach-Object { Join-Path $_ "skills\\memory\\cli.js" } |
+#   Select-Object -First 1
 
 # Check if CLI is available
-node $MEMORY_CLI --help
+node "$MEMORY_CLI" --help
 
 # Write a memory
-node $MEMORY_CLI write \
+node "$MEMORY_CLI" write \
   --title "JWT Authentication" \
   --summary "Use 15-min access tokens with refresh tokens" \
   --tags "auth,jwt,security" \
@@ -267,19 +282,19 @@ node $MEMORY_CLI write \
   --importance "high"
 
 # Search (hybrid: keyword + semantic)
-node $MEMORY_CLI search "authentication tokens"
+node "$MEMORY_CLI" search "authentication tokens"
 
 # Quick search (keyword only, faster)
-node $MEMORY_CLI quick "jwt"
+node "$MEMORY_CLI" quick "jwt"
 
 # List memories
-node $MEMORY_CLI list --category architecture
+node "$MEMORY_CLI" list --category architecture
 
 # Get specific memory
-node $MEMORY_CLI get mem-001
+node "$MEMORY_CLI" get mem-001
 
 # Statistics
-node $MEMORY_CLI stats
+node "$MEMORY_CLI" stats
 ```
 
 ### Method 2: Manual Markdown (Fallback)
