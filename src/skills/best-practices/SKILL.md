@@ -36,7 +36,25 @@ Best practices are stored in `best-practices/<category>/`:
    ```
 3. **Search memory** for related patterns:
    ```bash
-   node /skills/memory/cli.js search "<relevant keywords>"
+   # Portable: resolve memory CLI location (prefers ICA_HOME when set)
+   MEMORY_CLI=""
+   for d in "${ICA_HOME:-}" "$HOME/.codex" "$HOME/.claude"; do
+     if [ -n "$d" ] && [ -f "$d/skills/memory/cli.js" ]; then
+       MEMORY_CLI="$d/skills/memory/cli.js"
+       break
+     fi
+   done
+
+   if [ -n "$MEMORY_CLI" ]; then
+     node "$MEMORY_CLI" search "<relevant keywords>"
+   elif [ -d "memory/exports" ]; then
+     # Fallback: search shareable markdown exports (git-trackable)
+     if command -v rg >/dev/null 2>&1; then
+       rg -n "<relevant keywords>" memory/exports
+     else
+       grep -R "<relevant keywords>" memory/exports
+     fi
+   fi
    ```
 4. **Apply** established patterns to implementation
 5. **Note** deviations with justification
