@@ -44,10 +44,10 @@ qa-engineer, backend-tester, requirements-engineer, user-tester, reviewer
 ### Tooling Skills (1)
 - `agent-browser`: reproduce/debug web UI flows via Agent Browser CLI (snapshots, screenshots, redirects, console/network/errors)
 
-### Process Skills (15)
+### Process Skills (17)
 thinking, work-queue, process, best-practices, validate,
 autonomy, parallel-execution, workflow, mcp-config,
-story-breakdown, git-privacy, commit-pr, release, suggest, memory
+story-breakdown, git-privacy, commit-pr, pr-automerge, release, suggest, memory, tdd
 
 ### Enforcement Companion Skills (3)
 file-placement, branch-protection, infrastructure-protection
