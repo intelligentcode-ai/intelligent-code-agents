@@ -560,6 +560,21 @@
       "sourcePath": "src/skills/system-engineer"
     },
     {
+      "name": "tdd",
+      "description": "Activate when user asks for Test-Driven Development, test-first implementation, red-green-refactor, or writing tests before code. Use for feature work, bug fixes, and refactors where behavior can be specified and verified incrementally with automated tests.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/tdd"
+    },
+    {
       "name": "thinking",
       "description": "Activate when facing complex problems, multi-step decisions, high-risk changes, complex debugging, or architectural decisions. Activate when careful analysis is needed before taking action. Provides explicit step-by-step validation.",
       "category": "process",

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.2.12] - 2026-02-11
+
+### Added
+- New portable `tdd` process skill for test-first development with an explicit Red -> Green -> Refactor loop, acceptance-test planning template, and output contract.
+
+### Changed
+- Skills documentation now lists `tdd` in process skills across architecture/reference docs.
+- Skills reference process list now includes `pr-automerge` for consistency with the shipped process skill set.
+
 ## [10.2.11] - 2026-02-11
 
 ### Added
