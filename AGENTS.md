@@ -1,89 +1,104 @@
 # ICA Integration Guide
 
-This repository ships a portable set of `SKILL.md` instructions (plus optional hooks) that can be installed into different agent runtimes and IDEs.
+ICA installs `SKILL.md` assets and supporting defaults into agent home directories.
 
 ## Terminology
 
-- **Agent home**: the tool-specific directory where skills/config live (for example `~/.claude` or `~/.codex`).
-- **ICA_HOME**: optional environment variable pointing at the agent home directory (used by some scripts/hooks for portability).
+- **Agent home**: tool-specific runtime directory (for example `~/.claude`, `~/.codex`)
+- **ICA_HOME**: optional env var pointing to an agent home
 
 ## Install Targets
 
-### Claude Code
+- `claude` -> `~/.claude`
+- `codex` -> `~/.codex`
+- `cursor` -> `~/.cursor`
+- `gemini` -> `~/.gemini`
+- `antigravity` -> `~/.antigravity`
 
-- Agent home: `~/.claude`
-- Install (macOS/Linux): `make install AGENT=claude`
-- Install (Windows): `.\install.ps1 install -Agent claude`
+## Install Methods
 
-Claude integration includes:
+### 1) Verified bootstrap (recommended)
 
-- Modes (`modes/`)
-- Minimal hooks (`hooks/`) + `settings.json` PreToolUse registration
-
-### Codex
-
-- Agent home: `~/.codex`
-- Install (macOS/Linux): `make install AGENT=codex`
-- Install (Windows): `.\install.ps1 install -Agent codex`
-
-Codex install focuses on portable assets:
-
-- Skills (`skills/`)
-- Roles, behaviors, templates (portable reference material)
-- Config defaults (`ica.config.default.json`, `ica.workflow.default.json`)
-
-### Cursor / Gemini CLI / Antigravity
-
-Tool wiring differs by version.
-
-Recommended approach:
-
-1. Install ICA into a dedicated agent home directory:
-   - `make install AGENT=custom AGENT_DIR_NAME=.ica`
-2. Point your tool at `skills/` (or copy/link skills into the tool's rules/skills mechanism).
-3. Set `ICA_HOME` to that directory for scripts/hooks that support it:
+macOS/Linux:
 
 ```bash
-export ICA_HOME="$HOME/.ica"
+curl -fsSL https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.sh | bash
 ```
 
-## Discovery And Multi-Target Install (Local)
+Windows PowerShell:
 
-Best-effort detection will look for common agent home directories and/or binaries.
+```powershell
+iwr https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.ps1 -UseBasicParsing | iex
+```
 
-- macOS/Linux:
-  - `make discover-targets`
-  - `make install-discovered` (installs into every discovered target)
-- Windows:
-  - `.\install.ps1 discover`
-  - `.\install.ps1 install-discovered`
+### 2) Local CLI build + run
 
-Override discovery if needed:
+```bash
+npm ci
+npm run build:quick
+node dist/src/installer-cli/index.js install --yes --targets=codex --scope=user --mode=symlink
+```
 
-- `ICA_DISCOVER_TARGETS=claude,codex` (explicit list)
-- `ICA_DISCOVER_ALL=1` (all supported targets)
+## Discovery + Multi-target
 
-## Project-Only Install
+Best-effort discovery is built into CLI and dashboard.
 
-To install ICA into a single repository (and not into your user agent home), use a project path:
+Explicit list example:
 
-- macOS/Linux:
-  - `make install-project PROJECT_PATH=/path/to/project AGENT=codex`
-  - You can combine with discovery: `make install-discovered PROJECT_PATH=/path/to/project`
-- Windows:
-  - `.\install.ps1 install -ProjectPath C:\MyProject -Agent codex`
-  - `.\install.ps1 install-discovered -ProjectPath C:\MyProject`
+```bash
+node dist/src/installer-cli/index.js install --yes \
+  --targets=claude,codex,cursor \
+  --scope=user \
+  --mode=symlink
+```
+
+## Project-only Install
+
+```bash
+node dist/src/installer-cli/index.js install --yes \
+  --targets=codex \
+  --scope=project \
+  --project-path=/path/to/project \
+  --mode=symlink
+```
 
 ## Where Files Live
 
-Installed files (within the agent home):
-
-- `skills/` (core `SKILL.md` library)
-- `ica.config.json` and `ica.config.default.json`
+Installed files (inside agent home):
+- `skills/`
+- `ica.config.json`
+- `ica.config.default.json`
 - `ica.workflow.default.json`
 - `VERSION`
+- `.ica/install-state.json`
 
-Project files (inside repositories using ICA):
+Project conventions used by skills:
+- `.agent/queue/`
+- `summaries/`
+- `memory/`
+- `stories/`
+- `bugs/`
 
-- `.agent/queue/` (created/managed by `work-queue`)
-- `summaries/`, `memory/`, `stories/`, `bugs/` (used by skills for file placement conventions)
+## Claude-specific Integration
+
+When enabled, Claude installs may manage:
+- `hooks/`
+- `modes/`
+- `settings.json` registration
+- `CLAUDE.md` wiring
+
+Disable with:
+
+```bash
+node dist/src/installer-cli/index.js install --yes \
+  --targets=claude \
+  --scope=user \
+  --install-claude-integration=false
+```
+
+## Removed Legacy Paths
+
+Legacy deployment paths are removed from this repository:
+- `Makefile` deployment flow
+- Ansible deployment flow
+- old root `install.ps1` deployment wrapper
