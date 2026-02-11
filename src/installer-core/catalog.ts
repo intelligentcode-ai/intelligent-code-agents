@@ -93,7 +93,16 @@ function toCatalogEntry(skillDir: string, repoRoot: string): SkillCatalogEntry |
   };
 }
 
-export function buildLocalCatalog(repoRoot: string, version: string): SkillCatalog {
+function resolveGeneratedAt(sourceDateEpoch?: string): string {
+  if (sourceDateEpoch && /^\d+$/.test(sourceDateEpoch)) {
+    return new Date(Number(sourceDateEpoch) * 1000).toISOString();
+  }
+
+  // Stable default to keep generated artifacts reproducible across rebuilds.
+  return "1970-01-01T00:00:00.000Z";
+}
+
+export function buildLocalCatalog(repoRoot: string, version: string, sourceDateEpoch?: string): SkillCatalog {
   const skillsRoot = path.join(repoRoot, "src", "skills");
   const skills = fs
     .readdirSync(skillsRoot, { withFileTypes: true })
@@ -103,7 +112,7 @@ export function buildLocalCatalog(repoRoot: string, version: string): SkillCatal
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt: resolveGeneratedAt(sourceDateEpoch),
     source: "local-repo",
     version,
     skills,

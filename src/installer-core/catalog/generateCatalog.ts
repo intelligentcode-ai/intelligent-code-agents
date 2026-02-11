@@ -7,7 +7,7 @@ function main(): void {
   const repoRoot = findRepoRoot(__dirname);
   const versionFile = path.join(repoRoot, "VERSION");
   const version = fs.existsSync(versionFile) ? fs.readFileSync(versionFile, "utf8").trim() : "0.0.0";
-  const catalog = buildLocalCatalog(repoRoot, version);
+  const catalog = buildLocalCatalog(repoRoot, version, process.env.SOURCE_DATE_EPOCH);
 
   const outPath = path.join(repoRoot, "src", "catalog", "skills.catalog.json");
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
