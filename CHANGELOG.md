@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.2.8] - 2026-02-11
+
+### Added
+- New `skill-writer` meta skill for TDD-first skill authoring workflows.
+- Memory backend auto-fallback to system `sqlite3` CLI when `better-sqlite3` is unavailable.
+- `memory backend` CLI command to report active backend and fallback capabilities.
+
+### Changed
+- Memory skill guidance now uses permission-first dependency messaging before running `npm install`.
+- Memory search now falls back to keyword `LIKE` queries if FTS5 matching is unavailable.
+- Added `agent-browser` skill documentation and integration to the skill set.
+
 ## [10.2.6] - 2026-02-09
 
 ### Changed
