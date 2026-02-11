@@ -7,17 +7,28 @@ Skills-first agent workflows with a modern installer stack:
 
 ## Dashboard Preview
 
-### Animated walkthrough
+### Animated walkthrough (full flow)
 ![ICA Dashboard Animated Preview](docs/assets/dashboard/dashboard-preview.gif)
 
-### Full command-center view
-![ICA Dashboard Overview](docs/assets/dashboard/dashboard-overview.png)
+### 1) Start with current state
+![ICA Dashboard Current State](docs/assets/dashboard/dashboard-step-01-current-state.png)
+Initial installed/selected overview before changing targets, scope, or skills.
 
-### Search + filtered workflow
-![ICA Dashboard Search](docs/assets/dashboard/dashboard-search.png)
+### 2) Select skills and scope
+![ICA Dashboard Skill Selection](docs/assets/dashboard/dashboard-step-02-selection.png)
+`Project` scope with explicit target + skill selection (`reviewer`, `developer`, `process`).
 
-### Installed state and operations area
-![ICA Dashboard Panels](docs/assets/dashboard/dashboard-state-panels.png)
+### 3) Search/filter skills
+![ICA Dashboard Search](docs/assets/dashboard/dashboard-step-03-search.png)
+Live filtering by keyword (`review`) while preserving selected targets/scope.
+
+### 4) Install selected skills
+![ICA Dashboard Installation](docs/assets/dashboard/dashboard-step-04-installation.png)
+Post-install evidence with expanded `Installed State` and `Operation Report`.
+
+### 5) Manage installed skills (uninstall/sync/report)
+![ICA Dashboard Management](docs/assets/dashboard/dashboard-step-05-management.png)
+Management action example (`Uninstall selected`) with updated state/report.
 
 ## Install (Verified Bootstrap)
 
