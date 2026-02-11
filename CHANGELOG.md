@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.2.9] - 2026-02-11
+
+### Added
+- New ICA-owned `mcp-proxy` skill with local stdio MCP proxy support for register-once tool wiring.
+- New shared `mcp-common` core for portable config layering, OAuth/token handling, and transport session creation.
+- New `mcp-client` skill docs and references for generic, multi-agent MCP usage.
+- Trust gate controls for project-defined stdio MCP servers (strict mode + trust/untrust CLI).
+- New MCP proxy/core/security test coverage under `tests/mcp_proxy/`.
+
+### Changed
+- Updated docs index with a dedicated MCP proxy guide.
+- Test runner now executes MCP proxy Python tests when available.
+
 ## [10.2.8] - 2026-02-11
 
 ### Added
