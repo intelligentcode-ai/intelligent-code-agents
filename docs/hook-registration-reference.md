@@ -1,19 +1,21 @@
-# Hook Registration Reference (v10.2)
+# Hook Registration Reference
 
-Claude Code hooks are kept **minimal** and only enforce behaviors CC does not provide natively.
+Claude hook set is intentionally minimal.
 
 ## Active Hooks
 
 ### PreToolUse
-- `agent-infrastructure-protection.js` — Infra safety enforcement
-- `summary-file-enforcement.js` — Summary/report file placement + ALL‑CAPS blocking
+- `agent-infrastructure-protection.js`
+- `summary-file-enforcement.js`
 
-Note: Git privacy is now handled via the `git-privacy` skill rather than a hook.
+Git privacy is handled by `git-privacy` skill.
 
-## Registration
-Hooks are registered by:
-- `ansible/roles/intelligent_code_agents/templates/settings.json.j2`
-- `install.ps1` (Register‑ProductionHooks)
+## Registration Path
+
+Hooks are registered by the current installer surface:
+- `ica` CLI install flow
+- dashboard install flow
 
 ## Version
-Hook system version: **v10.2.x**
+
+Hook system version: `v10.2+`.

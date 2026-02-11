@@ -216,8 +216,8 @@ Use refresh tokens with 15-min access token expiry.
 
 ## Setup
 
-### Automatic (via ICA installers)
-If npm is available during `make install` or `.\install.ps1 install`, dependencies are installed automatically.
+### Automatic (via ICA installer flows)
+If npm is available during `ica install` (CLI or dashboard-backed operations), dependencies are installed automatically.
 
 ### Manual Setup (if needed)
 ```bash
