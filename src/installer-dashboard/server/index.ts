@@ -9,6 +9,7 @@ import { discoverTargets, resolveTargetPaths } from "../../installer-core/target
 import { SUPPORTED_TARGETS } from "../../installer-core/constants";
 import { findRepoRoot } from "../../installer-core/repo";
 import { InstallRequest, InstallScope, TargetPlatform } from "../../installer-core/types";
+import { registerHarness } from "../../harness";
 
 interface Capability {
   id: string;
@@ -97,6 +98,7 @@ function detectLegacyInstalledSkills(installPath: string, catalogSkillNames: Set
 async function main(): Promise<void> {
   const app = Fastify({ logger: false });
   const repoRoot = findRepoRoot(__dirname);
+  await registerHarness(app, repoRoot);
 
   const webBuildPath = path.join(repoRoot, "dist", "installer-dashboard", "web-build");
   if (fs.existsSync(webBuildPath)) {
@@ -176,10 +178,17 @@ async function main(): Promise<void> {
   });
 
   app.addHook("preHandler", async (request, reply) => {
+    const isHarnessAttachmentUpload =
+      request.method === "POST" &&
+      request.url.startsWith("/api/v1/harness/work-items/") &&
+      request.url.includes("/attachments");
+    const isHarnessMutation =
+      request.url.startsWith("/api/v1/harness/") &&
+      (request.method === "POST" || request.method === "PUT" || request.method === "PATCH");
     if (
-      request.method !== "POST" ||
+      (!isHarnessMutation && request.method !== "POST") ||
       !request.url.startsWith("/api/v1/") ||
-      (!request.url.endsWith("/apply") && request.url !== "/api/v1/sync/apply")
+      (!isHarnessMutation && !request.url.endsWith("/apply") && request.url !== "/api/v1/sync/apply")
     ) {
       return;
     }
@@ -190,6 +199,9 @@ async function main(): Promise<void> {
     }
 
     const contentType = String(request.headers["content-type"] || "");
+    if (isHarnessAttachmentUpload && contentType.toLowerCase().includes("multipart/form-data")) {
+      return;
+    }
     if (!contentType.toLowerCase().includes("application/json")) {
       return reply.code(415).send({ error: "Unsupported media type: expected application/json." });
     }

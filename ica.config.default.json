@@ -354,6 +354,37 @@
     }
   },
 
+  "harness": {
+    "enabled": true,
+    "db_path": ".agent/harness/harness.db",
+    "uploads_path": ".agent/harness/uploads",
+    "artifacts_path": ".agent/harness/artifacts",
+    "logs_path": ".agent/harness/logs",
+    "auth_path": ".agent/harness/auth",
+    "runtime_default": "docker",
+    "prompt_injection_mode": "block",
+    "dispatcher_poll_ms": 2000,
+    "max_parallel_runs": 1
+  },
+
+  "auth_broker": {
+    "enabled": true,
+    "callback_host": "127.0.0.1",
+    "callback_port": 4173,
+    "encryption_key_env": "ICA_HARNESS_OAUTH_ENCRYPTION_KEY",
+    "providers": {
+      "gemini": {
+        "oauth_proxy_required": true
+      },
+      "codex": {
+        "oauth_proxy_required": false
+      },
+      "claude": {
+        "oauth_proxy_required": false
+      }
+    }
+  },
+
   "cache": {
     "ttl_minutes": 5,
     "enabled": true

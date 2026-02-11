@@ -12,10 +12,11 @@
     "dev:dashboard:web": "vite --config src/installer-dashboard/web/vite.config.ts",
     "start:dashboard": "node dist/src/installer-dashboard/server/index.js",
     "build:quick": "tsc -p tsconfig.json && node dist/src/installer-core/catalog/generateCatalog.js",
-    "test": "npm run build:quick && node --test dist/tests/installer/*.test.js && bash tests/run-tests.sh"
+    "test": "npm run build:quick && node --test dist/tests/installer/*.test.js dist/tests/harness/*.test.js && bash tests/run-tests.sh"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
+    "@fastify/multipart": "^9.4.0",
     "@fastify/static": "^8.2.0",
     "fastify": "^5.2.1"
   },

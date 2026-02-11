@@ -95,6 +95,17 @@ Dashboard UX highlights:
 - Select/clear all skills globally and per category
 - Installed-state and operation-report panels collapsed by default
 
+Harness UX highlights:
+
+- New `Harness` tab with work-item intake (`bug`, `finding`, `story`, `task`)
+- Markdown + lightweight WYSIWYG authoring with image paste support
+- Closed-loop dispatcher controls (`start/stop`, manual dispatch)
+- Agent discovery scan with capability visibility and ready-only filtering
+- Profile configuration for complexity/stage routing (`plan`, `execute`, `test`)
+- OAuth broker session launch flow for callback-based providers (Gemini plugin first)
+- Run logs, findings chain, and queue-compatible status projection
+- Prompt-injection guardrails enabled by default (`block` mode)
+
 Container image can be built from `src/installer-dashboard/Dockerfile` and published to GHCR via `.github/workflows/dashboard-ghcr.yml`.
 
 ### Compatibility entrypoints

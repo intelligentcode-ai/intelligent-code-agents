@@ -14,10 +14,12 @@
     "jsx": "react-jsx"
   },
   "include": [
+    "src/harness/**/*.ts",
     "src/installer-core/**/*.ts",
     "src/installer-cli/**/*.ts",
     "src/installer-dashboard/server/**/*.ts",
-    "tests/installer/**/*.ts"
+    "tests/installer/**/*.ts",
+    "tests/harness/**/*.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

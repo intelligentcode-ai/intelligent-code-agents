@@ -487,3 +487,241 @@ pre {
     flex-direction: column;
   }
 }
+
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid rgba(142, 194, 255, 0.3);
+  background: linear-gradient(180deg, rgba(11, 46, 90, 0.96) 0%, rgba(8, 34, 72, 0.96) 100%);
+  backdrop-filter: blur(8px);
+}
+
+.harness-shell .panel h4 {
+  margin: 0.75rem 0 0.4rem;
+  font-size: 0.9rem;
+}
+
+.wysiwyg {
+  border: 1px solid rgba(143, 194, 255, 0.4);
+  border-radius: 10px;
+  min-height: 160px;
+  padding: 0.65rem;
+  background: rgba(10, 40, 79, 0.58);
+  color: #dcf0ff;
+}
+
+.wysiwyg:focus {
+  outline: 2px solid rgba(152, 201, 255, 0.5);
+  outline-offset: 0;
+}
+
+.toggle-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: end;
+}
+
+.work-items-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.runs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 1rem;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.list-item {
+  border: 1px solid rgba(143, 194, 255, 0.4);
+  border-radius: 10px;
+  background: rgba(10, 41, 80, 0.62);
+  color: #dcefff;
+  padding: 0.55rem;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  cursor: pointer;
+}
+
+.list-item.selected {
+  border-color: rgba(180, 222, 255, 0.85);
+  box-shadow: 0 0 0 2px rgba(121, 182, 255, 0.24);
+}
+
+.badge {
+  display: inline-block;
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid rgba(165, 211, 255, 0.5);
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.status-completed {
+  background: rgba(43, 146, 90, 0.25);
+}
+
+.status-blocked,
+.status-failed,
+.status-needs_input {
+  background: rgba(164, 62, 62, 0.28);
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+@media (max-width: 980px) {
+  .work-items-grid,
+  .runs-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.harness-topbar {
+  margin-top: 1rem;
+  margin-bottom: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.harness-main,
+.harness-sidebar {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.harness-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.8rem;
+  margin-bottom: 0.7rem;
+}
+
+.harness-section-head h2 {
+  margin: 0;
+}
+
+.harness-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.harness-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-bottom: 0.6rem;
+}
+
+.harness-editor {
+  min-height: 220px;
+}
+
+.harness-agent-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.harness-agent-card {
+  border: 1px solid rgba(129, 180, 239, 0.35);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(10, 42, 86, 0.64) 0%, rgba(8, 36, 74, 0.64) 100%);
+  padding: 0.55rem 0.6rem;
+}
+
+.harness-agent-card p {
+  margin: 0.2rem 0;
+}
+
+.harness-auth-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.harness-auth-card {
+  border: 1px solid rgba(129, 180, 239, 0.35);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(10, 42, 86, 0.64) 0%, rgba(8, 36, 74, 0.64) 100%);
+  padding: 0.65rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.harness-auth-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.harness-auth-head h3 {
+  margin: 0;
+}
+
+.harness-auth-row {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.harness-warning-list {
+  margin: 0;
+  padding-left: 1rem;
+  color: #ffd5dd;
+}
+
+.harness-warning-list li {
+  font-size: 0.8rem;
+}
+
+@media (max-width: 1220px) {
+  .harness-sidebar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .harness-sidebar .harness-panel:last-child {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 980px) {
+  .harness-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .harness-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .harness-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .harness-sidebar .harness-panel:last-child {
+    grid-column: auto;
+  }
+}
