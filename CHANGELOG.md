@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.2.11] - 2026-02-11
+
+### Added
+- New TypeScript installer core + `ica` CLI commands for install/uninstall/sync/list/catalog/doctor with target/scope/mode selection.
+- New local-first installer dashboard (Fastify + React) with skill catalog cards, resource metadata, target/scope controls, install mode toggle, and install/uninstall/sync actions.
+- New bootstrap installers (`scripts/bootstrap/install.sh`, `scripts/bootstrap/install.ps1`) and installer API/schema surfaces for cross-platform web-link installs.
+
+### Changed
+- Existing `make`, PowerShell, and Ansible entrypoints now delegate to the shared installer core while preserving compatibility flags and workflows.
+- Installer dashboard UX now includes modern blue command-center styling, search, category/global select-all toggles, and collapsed diagnostics by default.
+- Catalog generation now uses deterministic metadata and file ordering for reproducible release artifacts.
+
+### Fixed
+- Catalog resource discovery now ignores transient directories (for example `__pycache__`) to prevent environment-dependent catalog diffs.
+- Release branch metadata now stays in sync by refreshing generated catalog version fields before release.
+
 ## [10.2.10] - 2026-02-11
 
 ### Added
