@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.2.14] - 2026-02-11
+
+### Added
+- New explicit dashboard documentation flow in README covering:
+  - current state
+  - skill selection
+  - search
+  - installation
+  - management
+- New focused dashboard screenshots for each flow step under `docs/assets/dashboard/`.
+
+### Changed
+- Dashboard preview GIF now uses the same five-step sequence with clearer framing and labels.
+- README dashboard section now includes contextual captions for each step.
+
+### Removed
+- Old generic dashboard preview screenshots that did not map to the end-to-end user flow.
+
 ## [10.2.13] - 2026-02-11
 
 ### Added
