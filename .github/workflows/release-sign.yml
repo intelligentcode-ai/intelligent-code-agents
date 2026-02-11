@@ -1,0 +1,165 @@
+name: release-sign
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+concurrency:
+  group: release-sign-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-artifacts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure tagged commit is on main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "Tagged commit ${GITHUB_SHA} is not reachable from origin/main; aborting release." >&2
+            exit 1
+          fi
+
+      - name: Build deterministic release artifacts
+        run: |
+          set -euo pipefail
+          ./scripts/release/build-artifacts.sh "${GITHUB_REF_NAME}" "${GITHUB_SHA}" dist
+
+      - name: Upload release artifact bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-artifacts-${{ github.ref_name }}
+          path: |
+            dist/ica-${{ github.ref_name }}-source.tar.gz
+            dist/ica-${{ github.ref_name }}-source.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+  verify-reproducible:
+    runs-on: ubuntu-latest
+    needs: build-artifacts
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Download previously built artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-artifacts-${{ github.ref_name }}
+          path: dist-original
+
+      - name: Verify downloaded artifacts against checksum manifest
+        run: |
+          set -euo pipefail
+          (cd dist-original && sha256sum -c SHA256SUMS.txt)
+
+      - name: Rebuild artifacts independently
+        run: |
+          set -euo pipefail
+          ./scripts/release/build-artifacts.sh "${GITHUB_REF_NAME}" "${GITHUB_SHA}" dist-rebuild
+
+      - name: Compare artifact hashes between builds
+        run: |
+          set -euo pipefail
+          cp dist-original/SHA256SUMS.txt dist-original/SHA256SUMS.normalized.txt
+          cp dist-rebuild/SHA256SUMS.txt dist-rebuild/SHA256SUMS.normalized.txt
+          diff -u dist-original/SHA256SUMS.normalized.txt dist-rebuild/SHA256SUMS.normalized.txt
+
+  sign-attest-release:
+    runs-on: ubuntu-latest
+    needs:
+      - build-artifacts
+      - verify-reproducible
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-artifacts-${{ github.ref_name }}
+          path: dist
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
+
+      - name: Keyless sign release artifacts
+        run: |
+          set -euo pipefail
+          for file in \
+            "dist/ica-${GITHUB_REF_NAME}-source.tar.gz" \
+            "dist/ica-${GITHUB_REF_NAME}-source.zip" \
+            "dist/SHA256SUMS.txt"
+          do
+            cosign sign-blob --yes \
+              --output-signature "${file}.sig" \
+              --output-certificate "${file}.pem" \
+              "${file}"
+          done
+
+      - name: Verify signatures against workflow identity
+        run: |
+          set -euo pipefail
+          IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release-sign.yml@${GITHUB_REF}"
+          ISSUER="https://token.actions.githubusercontent.com"
+          for file in \
+            "dist/ica-${GITHUB_REF_NAME}-source.tar.gz" \
+            "dist/ica-${GITHUB_REF_NAME}-source.zip" \
+            "dist/SHA256SUMS.txt"
+          do
+            cosign verify-blob \
+              --certificate "${file}.pem" \
+              --signature "${file}.sig" \
+              --certificate-identity "${IDENTITY}" \
+              --certificate-oidc-issuer "${ISSUER}" \
+              "${file}"
+          done
+
+      - name: Attest source tarball provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/ica-${{ github.ref_name }}-source.tar.gz
+
+      - name: Attest source zip provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/ica-${{ github.ref_name }}-source.zip
+
+      - name: Attest checksum manifest provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/SHA256SUMS.txt
+
+      - name: Publish GitHub release with signed assets
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/ica-${{ github.ref_name }}-source.tar.gz
+            dist/ica-${{ github.ref_name }}-source.tar.gz.sig
+            dist/ica-${{ github.ref_name }}-source.tar.gz.pem
+            dist/ica-${{ github.ref_name }}-source.zip
+            dist/ica-${{ github.ref_name }}-source.zip.sig
+            dist/ica-${{ github.ref_name }}-source.zip.pem
+            dist/SHA256SUMS.txt
+            dist/SHA256SUMS.txt.sig
+            dist/SHA256SUMS.txt.pem
