@@ -19,7 +19,7 @@ Skills are the primary interface for specialized capabilities. They are:
 - **Command Skills (2):** ica-version, ica-get-setting
 - **Process Skills:** thinking, work-queue, process, best-practices, validate, autonomy, parallel-execution, workflow, mcp-config, story-breakdown, git-privacy, commit-pr, pr-automerge, release, suggest
 - **Enforcement Companion Skills (3):** file-placement, branch-protection, infrastructure-protection
-- **Meta Skill (1):** skill-creator
+- **Meta Skills (2):** skill-creator, skill-writer
 
 ### Behaviors (4 foundational)
 Portable, always-available structural guidance:
