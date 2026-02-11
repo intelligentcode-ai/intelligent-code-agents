@@ -60,7 +60,10 @@ function collectResources(skillDir: string): SkillResource[] {
     const location = path.join(skillDir, resourceType);
     if (!fs.existsSync(location)) continue;
 
-    for (const file of fs.readdirSync(location, { withFileTypes: true })) {
+    for (const file of fs
+      .readdirSync(location, { withFileTypes: true })
+      .filter((entry) => entry.isFile() || entry.isSymbolicLink())
+      .sort((a, b) => a.name.localeCompare(b.name))) {
       resources.push({
         type: resourceType,
         path: path.join("skills", path.basename(skillDir), resourceType, file.name),

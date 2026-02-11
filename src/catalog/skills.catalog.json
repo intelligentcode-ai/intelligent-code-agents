@@ -290,10 +290,6 @@
       "resources": [
         {
           "type": "scripts",
-          "path": "skills/mcp-common/scripts/__pycache__"
-        },
-        {
-          "type": "scripts",
           "path": "skills/mcp-common/scripts/ica_mcp_core.py"
         }
       ],
