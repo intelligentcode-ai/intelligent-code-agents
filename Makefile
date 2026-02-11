@@ -18,6 +18,9 @@ AGENT_DIR_NAME_INPUT := $(strip $(AGENT_DIR_NAME))
 # Claude Code-only integration steps (modes, hooks, settings.json, CLAUDE.md).
 # Set to "false" to keep ICA strictly platform-agnostic even when AGENT=claude.
 INSTALL_CLAUDE_INTEGRATION ?= true
+INSTALL_MODE ?= symlink
+SKILLS ?=
+REMOVE_UNSELECTED ?= false
 
 # Convenience alias for project-only installs (same behavior as TARGET_PATH).
 # If you set PROJECT_PATH=/path/to/repo, ICA will install into:
@@ -73,7 +76,7 @@ help:
 	@echo "Intelligent Code Agents - Installation"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make install   [AGENT=claude|codex|cursor|gemini|antigravity] [AGENT_DIR_NAME=.custom] [INSTALL_CLAUDE_INTEGRATION=true|false] [HOST=ip] [USER=user] [TARGET_PATH=/path] [CONFIG_FILE=sample-configs/ica.config.sub-agent.json] [MCP_CONFIG=/path/to/mcps.json] [ENV_FILE=/path/to/.env] [KEY=~/.ssh/id_rsa | PASS=password]"
+	@echo "  make install   [AGENT=claude|codex|cursor|gemini|antigravity] [AGENT_DIR_NAME=.custom] [INSTALL_MODE=symlink|copy] [SKILLS=skill1,skill2] [REMOVE_UNSELECTED=true|false] [INSTALL_CLAUDE_INTEGRATION=true|false] [HOST=ip] [USER=user] [TARGET_PATH=/path] [CONFIG_FILE=sample-configs/ica.config.sub-agent.json] [MCP_CONFIG=/path/to/mcps.json] [ENV_FILE=/path/to/.env] [KEY=~/.ssh/id_rsa | PASS=password]"
 	@echo "  make uninstall [AGENT=...] [AGENT_DIR_NAME=...] [HOST=ip] [USER=user] [TARGET_PATH=/path] [KEY=~/.ssh/id_rsa | PASS=password] [FORCE=true]"
 	@echo "  make clean-install [AGENT=...] [AGENT_DIR_NAME=...] [HOST=ip] [USER=user] [TARGET_PATH=/path] [CONFIG_FILE=...] [MCP_CONFIG=...] [ENV_FILE=...] [KEY=... | PASS=...]"
 	@echo "  make install-project PROJECT_PATH=/path/to/project [AGENT=...]"
@@ -92,6 +95,9 @@ help:
 	@echo "  AGENT - Target agent runtime/IDE integration (default: $(AGENT))"
 	@echo "  AGENT_DIR_NAME - Override the agent home dir name (default: $(AGENT_DIR_NAME))"
 	@echo "  INSTALL_CLAUDE_INTEGRATION - Enable Claude Code-only integration steps (default: $(INSTALL_CLAUDE_INTEGRATION))"
+	@echo "  INSTALL_MODE - Skill install mode: symlink (default) or copy"
+	@echo "  SKILLS - Comma-separated skill selection (default installs all)"
+	@echo "  REMOVE_UNSELECTED - Remove managed skills not selected (sync behavior)"
 	@echo "  CONFIG_FILE - Path to ica.config JSON to deploy (default ica.config.default.json)"
 	@echo "  MCP_CONFIG - Path to MCP servers configuration JSON file"
 	@echo "  ENV_FILE - Path to .env file with environment variables"
@@ -190,38 +196,28 @@ export ANSIBLE_PLAYBOOK
 
 # Single install target handles both local and remote
 install:
-	@if [ -z "$(ANSIBLE_PLAYBOOK)" ]; then \
-		echo "ERROR: ansible-playbook not found!"; \
-		echo ""; \
-		echo "Searched in:"; \
-		echo "  - System PATH"; \
-		echo "  - /opt/homebrew/bin (macOS Homebrew)"; \
-		echo "  - /usr/local/bin (common location)"; \
-		echo "  - /usr/bin (system packages)"; \
-		echo "  - ~/.local/bin (Python user install)"; \
-		echo "  - ~/Library/Python/3.*/bin (macOS Python)"; \
-		echo ""; \
-		echo "Please install Ansible:"; \
-		echo "  macOS:  brew install ansible"; \
-		echo "  Ubuntu: sudo apt install ansible"; \
-		echo "  Fedora: sudo dnf install ansible"; \
-		echo "  Python: pip install --user ansible"; \
-		exit 1; \
-	fi
 	@if [ -z "$(HOST)" ]; then \
-		echo "Installing locally..."; \
-			$(ANSIBLE_PLAYBOOK) ansible/install.yml \
-				-i localhost, \
-				-c local \
-				-e "ansible_shell_type=sh" \
-	            -e "target_path=$(TARGET_PATH)" \
-	            -e "agent=$(AGENT)" \
-	            -e "agent_dir_name=$(AGENT_DIR_NAME)" \
-	            -e "install_claude_integration=$(INSTALL_CLAUDE_INTEGRATION)" \
-	            -e "mcp_config_file=$(MCP_CONFIG_ABS)" \
-	            -e "env_file=$(ENV_FILE_ABS)" \
-	            -e "config_file=$(CONFIG_FILE_ABS)"; \
+		echo "Installing locally via ICA CLI..."; \
+		scope="user"; \
+		project_args=""; \
+		if [ -n "$(TARGET_PATH)" ]; then scope="project"; project_args="--project-path=$(TARGET_PATH)"; fi; \
+		skills_arg=""; \
+		if [ -n "$(SKILLS)" ]; then skills_arg="--skills=$(SKILLS)"; fi; \
+		remove_arg=""; \
+		if [ "$(REMOVE_UNSELECTED)" = "true" ]; then remove_arg="--remove-unselected"; fi; \
+		config_arg=""; \
+		if [ -n "$(CONFIG_FILE_ABS)" ]; then config_arg="--config-file=$(CONFIG_FILE_ABS)"; fi; \
+		mcp_arg=""; \
+		if [ -n "$(MCP_CONFIG_ABS)" ]; then mcp_arg="--mcp-config=$(MCP_CONFIG_ABS)"; fi; \
+		env_arg=""; \
+		if [ -n "$(ENV_FILE_ABS)" ]; then env_arg="--env-file=$(ENV_FILE_ABS)"; fi; \
+		./scripts/run-ica-cli.sh install --yes --targets="$(AGENT)" --scope="$$scope" $$project_args --agent-dir-name="$(AGENT_DIR_NAME)" --mode="$(INSTALL_MODE)" $$skills_arg $$remove_arg --install-claude-integration="$(INSTALL_CLAUDE_INTEGRATION)" $$config_arg $$mcp_arg $$env_arg; \
 	else \
+		if [ -z "$(ANSIBLE_PLAYBOOK)" ]; then \
+			echo "ERROR: ansible-playbook not found!"; \
+			echo "Please install Ansible for remote installs."; \
+			exit 1; \
+		fi; \
 		if [ -z "$(USER)" ]; then \
 			echo "ERROR: USER parameter required for remote installation!"; \
 			echo "Usage: make install HOST=ip USER=username [PASS=pwd|KEY=keyfile]"; \
@@ -344,35 +340,20 @@ test:
 
 # Uninstall existing installation (conservative by default, force with FORCE=true)
 uninstall:
-	@if [ -z "$(ANSIBLE_PLAYBOOK)" ]; then \
-		echo "ERROR: ansible-playbook not found!"; \
-		echo ""; \
-		echo "Searched in:"; \
-		echo "  - System PATH"; \
-		echo "  - /opt/homebrew/bin (macOS Homebrew)"; \
-		echo "  - /usr/local/bin (common location)"; \
-		echo "  - /usr/bin (system packages)"; \
-		echo "  - ~/.local/bin (Python user install)"; \
-		echo "  - ~/Library/Python/3.*/bin (macOS Python)"; \
-		echo ""; \
-		echo "Please install Ansible:"; \
-		echo "  macOS:  brew install ansible"; \
-		echo "  Ubuntu: sudo apt install ansible"; \
-		echo "  Fedora: sudo dnf install ansible"; \
-		echo "  Python: pip install --user ansible"; \
-		exit 1; \
-	fi
 	@if [ -z "$(HOST)" ]; then \
-		echo "Uninstalling locally..."; \
-		$(ANSIBLE_PLAYBOOK) ansible/uninstall.yml \
-			-i localhost, \
-			-c local \
-			-e "ansible_shell_type=sh" \
-			-e "target_path=$(TARGET_PATH)" \
-			-e "agent=$(AGENT)" \
-			-e "agent_dir_name=$(AGENT_DIR_NAME)" \
-			-e "force_remove=$(FORCE)"; \
+		echo "Uninstalling locally via ICA CLI..."; \
+		scope="user"; \
+		project_args=""; \
+		if [ -n "$(TARGET_PATH)" ]; then scope="project"; project_args="--project-path=$(TARGET_PATH)"; fi; \
+		force_arg=""; \
+		if [ "$(FORCE)" = "true" ]; then force_arg="--force"; fi; \
+		./scripts/run-ica-cli.sh uninstall --yes --targets="$(AGENT)" --scope="$$scope" $$project_args --agent-dir-name="$(AGENT_DIR_NAME)" --mode="$(INSTALL_MODE)" $$force_arg; \
 	else \
+		if [ -z "$(ANSIBLE_PLAYBOOK)" ]; then \
+			echo "ERROR: ansible-playbook not found!"; \
+			echo "Please install Ansible for remote uninstalls."; \
+			exit 1; \
+		fi; \
 		if [ -z "$(USER)" ]; then \
 			echo "ERROR: USER parameter required for remote uninstall!"; \
 			echo "Usage: make uninstall HOST=ip USER=username [PASS=pwd|KEY=keyfile] [FORCE=true]"; \

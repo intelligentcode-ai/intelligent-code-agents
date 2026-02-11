@@ -10,6 +10,12 @@ param(
     [string]$ProjectPath = "",
     [string]$McpConfig = "",
     [string]$ConfigFile = "",
+    [ValidateSet("symlink", "copy")]
+    [string]$Mode = "symlink",
+    [string]$Skills = "",
+    [switch]$RemoveUnselected = $false,
+    [switch]$Json = $false,
+    [switch]$Yes = $true,
     [bool]$InstallClaudeIntegration = $true,
     [switch]$Force = $false
 )
@@ -26,8 +32,8 @@ function Show-Help {
     Write-Host "Intelligent Code Agents - Windows Installation" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Usage:" -ForegroundColor Yellow
-    Write-Host "  .\install.ps1 install [-Agent <claude|codex|...>] [-AgentDirName <.dir>] [-TargetPath <path>] [-McpConfig <path>] [-ConfigFile <path>] [-InstallClaudeIntegration <$true|$false>]" 
-    Write-Host "  .\install.ps1 install -ProjectPath <path> [-Agent <...>] [-AgentDirName <.dir>] [-McpConfig <path>] [-ConfigFile <path>]"
+    Write-Host "  .\install.ps1 install [-Agent <claude|codex|...>] [-AgentDirName <.dir>] [-TargetPath <path>] [-McpConfig <path>] [-ConfigFile <path>] [-Mode <symlink|copy>] [-Skills <csv>] [-RemoveUnselected] [-InstallClaudeIntegration <$true|$false>]"
+    Write-Host "  .\install.ps1 install -ProjectPath <path> [-Agent <...>] [-AgentDirName <.dir>] [-McpConfig <path>] [-ConfigFile <path>] [-Mode <symlink|copy>]"
     Write-Host "  .\install.ps1 discover"
     Write-Host "  .\install.ps1 install-discovered [-TargetPath <path> | -ProjectPath <path>] [-AgentDirName <.dir>] [-McpConfig <path>] [-ConfigFile <path>]"
     Write-Host "  .\install.ps1 uninstall-discovered [-TargetPath <path> | -ProjectPath <path>] [-AgentDirName <.dir>] [-Force]"
@@ -38,11 +44,14 @@ function Show-Help {
     Write-Host ""
     Write-Host "Parameters:" -ForegroundColor Yellow
     Write-Host "  -Agent       - Target agent runtime/IDE integration (default: claude)"
-    Write-Host "  -AgentDirName - Override the agent home dir name (default: based on -Agent)" 
-    Write-Host "  -TargetPath  - Target path (omit for user scope in your agent home dir)" 
-    Write-Host "  -ProjectPath - Alias for -TargetPath (project-only install)" 
-    Write-Host "  -McpConfig   - Path to MCP servers configuration JSON file" 
-    Write-Host "  -ConfigFile  - Path to ica.config JSON to install (fallback: ica.config.default.json)" 
+    Write-Host "  -AgentDirName - Override the agent home dir name (default: based on -Agent)"
+    Write-Host "  -TargetPath  - Target path (omit for user scope in your agent home dir)"
+    Write-Host "  -ProjectPath - Alias for -TargetPath (project-only install)"
+    Write-Host "  -McpConfig   - Path to MCP servers configuration JSON file"
+    Write-Host "  -ConfigFile  - Path to ica.config JSON to install (fallback: ica.config.default.json)"
+    Write-Host "  -Mode       - Install mode: symlink (default) or copy"
+    Write-Host "  -Skills     - Comma-separated skill selection (default: all skills for install/sync)"
+    Write-Host "  -RemoveUnselected - Remove previously managed skills not in -Skills"
     Write-Host "  -InstallClaudeIntegration - Enable Claude Code-only integration (hooks/modes/settings/CLAUDE.md). Default: True"
     Write-Host "  -Force       - Force complete removal including user data (uninstall only)"
     Write-Host ""
@@ -109,17 +118,17 @@ function Get-DiscoveredAgents {
 
 function Test-Prerequisites {
     Write-Host "Checking prerequisites..." -ForegroundColor Yellow
-    
+
     # Check if source directory exists
     if (-not (Test-Path $SourceDir)) {
         throw "ERROR: Source directory not found at: $SourceDir"
     }
-    
+
     # Check PowerShell version (requires 5.0+)
     if ($PSVersionTable.PSVersion.Major -lt 5) {
         throw "ERROR: PowerShell 5.0 or higher required. Current version: $($PSVersionTable.PSVersion)"
     }
-    
+
     Write-Host "✅ Prerequisites check passed!" -ForegroundColor Green
 }
 
@@ -137,7 +146,7 @@ function Get-InstallPaths {
             default { $EffectiveAgentDirName = ".agent" }
         }
     }
-    
+
     if ($TargetPath) {
         $ResolvedTarget = Resolve-Path $TargetPath -ErrorAction SilentlyContinue
         if (-not $ResolvedTarget) {
@@ -153,13 +162,83 @@ function Get-InstallPaths {
         $ProjectPath = ""
         $Scope = "user"
     }
-    
+
     return @{
         InstallPath = $InstallPath
         ProjectPath = $ProjectPath
         Scope = $Scope
         Agent = $Agent
         AgentDirName = $EffectiveAgentDirName
+    }
+}
+
+function Invoke-IcaCli {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$CommandName,
+        [string]$TargetPath,
+        [switch]$IncludeInstallOptions = $false,
+        [switch]$IncludeUninstallOptions = $false
+    )
+
+    $CliPath = Join-Path $PSScriptRoot "dist\\src\\installer-cli\\index.js"
+    if (-not (Test-Path $CliPath)) {
+        $Npm = Get-Command npm -ErrorAction SilentlyContinue
+        if (-not $Npm) {
+            throw "Node.js/npm required to build ICA CLI. Could not find npm."
+        }
+        Write-Host "Building ICA CLI..." -ForegroundColor Yellow
+        Push-Location $PSScriptRoot
+        try {
+            npm install | Out-Null
+            npm run build:quick | Out-Null
+        } finally {
+            Pop-Location
+        }
+    }
+
+    $Node = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $Node) {
+        throw "Node.js is required to run ICA CLI. Could not find node."
+    }
+
+    $paths = Get-InstallPaths -TargetPath $TargetPath
+    $scope = if ($paths.Scope -eq "project") { "project" } else { "user" }
+
+    $Args = @($CliPath, $CommandName, "--targets=$Agent", "--scope=$scope", "--mode=$Mode", "--agent-dir-name=$($paths.AgentDirName)")
+    if ($Yes) {
+        $Args += "--yes"
+    }
+    if ($Json) {
+        $Args += "--json"
+    }
+    if ($paths.Scope -eq "project") {
+        $Args += "--project-path=$($paths.ProjectPath)"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Skills)) {
+        $Args += "--skills=$Skills"
+    }
+    if ($RemoveUnselected) {
+        $Args += "--remove-unselected"
+    }
+
+    if ($IncludeInstallOptions) {
+        $Args += "--install-claude-integration=$InstallClaudeIntegration"
+        if (-not [string]::IsNullOrWhiteSpace($ConfigFile)) {
+            $Args += "--config-file=$ConfigFile"
+        }
+        if (-not [string]::IsNullOrWhiteSpace($McpConfig)) {
+            $Args += "--mcp-config=$McpConfig"
+        }
+    }
+
+    if ($IncludeUninstallOptions -and $Force) {
+        $Args += "--force"
+    }
+
+    & node @Args
+    if ($LASTEXITCODE -ne 0) {
+        throw "ICA CLI command failed: $CommandName"
     }
 }
 
@@ -403,12 +482,12 @@ function Install-IntelligentCodeAgents {
         [string]$TargetPath,
         [string]$McpConfig
     )
-    
+
     Test-Prerequisites
-    
+
     $Paths = Get-InstallPaths -TargetPath $TargetPath
     Write-Host "Installing to: $($Paths.InstallPath)" -ForegroundColor Cyan
-    
+
     # Create installation directory
     if (-not (Test-Path $Paths.InstallPath)) {
         New-Item -Path $Paths.InstallPath -ItemType Directory -Force | Out-Null
@@ -486,7 +565,7 @@ function Install-IntelligentCodeAgents {
 
         Install-HookSystem -InstallPath $Paths.InstallPath -SourceDir $SourceDir
     }
-    
+
     # Claude Code-only: ensure project/user CLAUDE.md imports the virtual team mode.
     if ($Paths.Agent -eq "claude" -and $InstallClaudeIntegration) {
         $ClaudemdPath = if ($Paths.Scope -eq "project") {
@@ -512,7 +591,7 @@ function Install-IntelligentCodeAgents {
             Set-Content -Path $ClaudemdPath -Value $ImportLine -Encoding UTF8
         }
     }
-    
+
     # Create essential directories
     $DirsToCreate = @("memory", "agenttasks\ready", "agenttasks\completed", "stories\drafts")
     foreach ($Dir in $DirsToCreate) {
@@ -539,7 +618,7 @@ function Install-IntelligentCodeAgents {
     }
 
     Copy-Item -Path $DefaultConfigPath -Destination (Join-Path $Paths.InstallPath "ica.config.default.json") -Force
-    
+
     # Install MCP configuration if provided
     if ($McpConfig -and (Test-Path $McpConfig)) {
         if ($Paths.Agent -eq "claude" -and $InstallClaudeIntegration) {
@@ -549,7 +628,7 @@ function Install-IntelligentCodeAgents {
             Write-Warning "MCP configuration is currently supported only for -Agent claude. Skipping MCP install."
         }
     }
-    
+
     # Install memory skill dependencies if npm is available
     $NpmPath = Get-Command npm -ErrorAction SilentlyContinue
     if ($NpmPath) {
@@ -578,7 +657,7 @@ function Install-McpConfiguration {
         [string]$McpConfigPath,
         [string]$InstallPath
     )
-    
+
     try {
         # Validate JSON syntax.
         # Expected format (same as Ansible):
@@ -592,20 +671,20 @@ function Install-McpConfiguration {
         $SettingsPath = Join-Path $HOME ".claude.json"
         $Epoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         $BackupPath = "$SettingsPath.backup.$Epoch"
-        
+
         # Backup existing settings if they exist
         if (Test-Path $SettingsPath) {
             Copy-Item $SettingsPath $BackupPath -Force
             Write-Host "  Backed up existing settings to: $BackupPath" -ForegroundColor Gray
         }
-        
+
         # Create or update ~/.claude.json
         $Settings = if (Test-Path $SettingsPath) {
             Get-Content $SettingsPath -Raw | ConvertFrom-Json
         } else {
             @{}
         }
-        
+
         # Add MCP servers configuration
         if (-not $Settings.mcpServers) {
             $Settings | Add-Member -MemberType NoteProperty -Name "mcpServers" -Value @{}
@@ -623,15 +702,15 @@ function Install-McpConfiguration {
         foreach ($ServerName in $ServersToMerge.PSObject.Properties.Name) {
             $Settings.mcpServers | Add-Member -MemberType NoteProperty -Name $ServerName -Value $ServersToMerge.$ServerName -Force
         }
-        
+
         # Save updated settings
         $Settings | ConvertTo-Json -Depth 10 | Set-Content $SettingsPath -Encoding UTF8
-        
+
         Write-Host "  ✅ MCP configuration installed successfully!" -ForegroundColor Green
-        
+
     } catch {
         Write-Error "Failed to install MCP configuration: $($_.Exception.Message)"
-        
+
         # Restore backup if it exists
         if (Test-Path $BackupPath) {
             Copy-Item $BackupPath $SettingsPath -Force
@@ -768,7 +847,7 @@ function Uninstall-IntelligentCodeAgents {
             }
         }
     }
-    
+
     # Claude Code-only: remove import line from CLAUDE.md if it exists
     if ($Paths.Agent -eq "claude") {
         $ClaudemdPath = if ($Paths.Scope -eq "project") {
@@ -793,28 +872,28 @@ function Uninstall-IntelligentCodeAgents {
             }
         }
     }
-    
+
     Write-Host "✅ Uninstall completed!" -ForegroundColor Green
 }
 
 function Test-Installation {
     Write-Host "Testing installation..." -ForegroundColor Cyan
-    
+
     $TestDir = "test-install"
-    
+
     try {
         # Clean any existing test directory
         if (Test-Path $TestDir) {
             Remove-Item -Path $TestDir -Recurse -Force
         }
-        
+
         Write-Host "Testing installation..." -ForegroundColor Yellow
         New-Item -Path $TestDir -ItemType Directory -Force | Out-Null
         Install-IntelligentCodeAgents -TargetPath $TestDir
 
         $Paths = Get-InstallPaths -TargetPath $TestDir
         $HomeDir = $Paths.AgentDirName
-        
+
         Write-Host "Verifying installation..." -ForegroundColor Yellow
 
         if ($Paths.Agent -eq "claude") {
@@ -837,7 +916,7 @@ function Test-Installation {
                 "$TestDir\$HomeDir\ica.workflow.default.json"
             )
         }
-        
+
         foreach ($Path in $TestPaths) {
             if (-not (Test-Path $Path)) {
                 throw "FAIL: Required file not found: $Path"
@@ -901,11 +980,11 @@ function Test-Installation {
         }
 
         Write-Host "✅ Installation tests passed!" -ForegroundColor Green
-        
+
         Write-Host "Testing idempotency..." -ForegroundColor Yellow
         Install-IntelligentCodeAgents -TargetPath $TestDir
         Write-Host "✅ Idempotency test passed!" -ForegroundColor Green
-        
+
         Write-Host "Testing conservative uninstall..." -ForegroundColor Yellow
         Uninstall-IntelligentCodeAgents -TargetPath $TestDir
 
@@ -939,31 +1018,31 @@ function Test-Installation {
                 }
             }
         }
-        
+
         Write-Host "✅ Conservative uninstall test passed!" -ForegroundColor Green
-        
+
         Write-Host "Testing force uninstall..." -ForegroundColor Yellow
         Install-IntelligentCodeAgents -TargetPath $TestDir
         Uninstall-IntelligentCodeAgents -TargetPath $TestDir -Force
-        
+
         if (Test-Path "$TestDir\\$HomeDir") {
             throw "FAIL: $HomeDir directory not removed during force uninstall"
         }
-        
+
         Write-Host "✅ Force uninstall test passed!" -ForegroundColor Green
-        
+
         Write-Host "Testing install after uninstall..." -ForegroundColor Yellow
         Install-IntelligentCodeAgents -TargetPath $TestDir
-        
+
         if ($Paths.Agent -eq "claude") {
             if (-not (Test-Path "$TestDir\\CLAUDE.md")) {
                 throw "FAIL: Reinstall failed"
             }
         }
-        
+
         Write-Host "✅ Reinstall test passed!" -ForegroundColor Green
         Write-Host "✅ All tests passed!" -ForegroundColor Green
-        
+
     } finally {
         # Clean up test directory
         if (Test-Path $TestDir) {
@@ -974,16 +1053,16 @@ function Test-Installation {
 
 function Clean-TestFiles {
     Write-Host "Cleaning test installations and temporary files..." -ForegroundColor Yellow
-    
+
     # Remove test directories
     Get-ChildItem -Path . -Directory -Name "test-*" | ForEach-Object {
         Remove-Item -Path $_ -Recurse -Force
         Write-Host "  Removed: $_" -ForegroundColor Gray
     }
-    
+
     # Clean temporary PowerShell files
     $TempPath = $env:TEMP
-    Get-ChildItem -Path $TempPath -Directory -Name "tmp*" -ErrorAction SilentlyContinue | 
+    Get-ChildItem -Path $TempPath -Directory -Name "tmp*" -ErrorAction SilentlyContinue |
         Where-Object { $_.CreationTime -lt (Get-Date).AddHours(-1) } |
         ForEach-Object {
             try {
@@ -993,7 +1072,7 @@ function Clean-TestFiles {
                 # Ignore errors for locked temp files
             }
         }
-    
+
     Write-Host "✅ Test directories removed" -ForegroundColor Green
     Write-Host "✅ Temporary files cleaned" -ForegroundColor Green
 }
@@ -1011,7 +1090,7 @@ try {
             $Targets | ForEach-Object { Write-Output $_ }
         }
         "install" {
-            Install-IntelligentCodeAgents -TargetPath $TargetPath -McpConfig $McpConfig
+            Invoke-IcaCli -CommandName "install" -TargetPath $TargetPath -IncludeInstallOptions
         }
         "install-discovered" {
             $Targets = Get-DiscoveredAgents
@@ -1028,7 +1107,7 @@ try {
                     Write-Host "=== Installing for Agent: $t ===" -ForegroundColor Cyan
                     $script:Agent = $t
                     $script:AgentDirName = $OriginalAgentDirName
-                    Install-IntelligentCodeAgents -TargetPath $TargetPath -McpConfig $McpConfig
+                    Invoke-IcaCli -CommandName "install" -TargetPath $TargetPath -IncludeInstallOptions
                 }
             } finally {
                 $script:Agent = $OriginalAgent
@@ -1036,7 +1115,7 @@ try {
             }
         }
         "uninstall" {
-            Uninstall-IntelligentCodeAgents -TargetPath $TargetPath -Force:$Force
+            Invoke-IcaCli -CommandName "uninstall" -TargetPath $TargetPath -IncludeUninstallOptions
         }
         "uninstall-discovered" {
             $Targets = Get-DiscoveredAgents
@@ -1053,7 +1132,7 @@ try {
                     Write-Host "=== Uninstalling for Agent: $t ===" -ForegroundColor Cyan
                     $script:Agent = $t
                     $script:AgentDirName = $OriginalAgentDirName
-                    Uninstall-IntelligentCodeAgents -TargetPath $TargetPath -Force:$Force
+                    Invoke-IcaCli -CommandName "uninstall" -TargetPath $TargetPath -IncludeUninstallOptions
                 }
             } finally {
                 $script:Agent = $OriginalAgent

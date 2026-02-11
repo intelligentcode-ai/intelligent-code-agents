@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://intelligentcode.ai/schemas/operation-request.schema.json",
+  "title": "ICA Operation Request",
+  "type": "object",
+  "required": ["operation", "targets", "scope", "mode", "skills"],
+  "properties": {
+    "operation": { "type": "string", "enum": ["install", "uninstall", "sync"] },
+    "targets": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["claude", "codex", "cursor", "gemini", "antigravity"] }
+    },
+    "scope": { "type": "string", "enum": ["user", "project"] },
+    "projectPath": { "type": "string" },
+    "agentDirName": { "type": "string" },
+    "mode": { "type": "string", "enum": ["symlink", "copy"] },
+    "skills": { "type": "array", "items": { "type": "string" } },
+    "removeUnselected": { "type": "boolean" },
+    "installClaudeIntegration": { "type": "boolean" },
+    "force": { "type": "boolean" },
+    "configFile": { "type": "string" },
+    "mcpConfigFile": { "type": "string" },
+    "envFile": { "type": "string" }
+  }
+}

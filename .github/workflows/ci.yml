@@ -17,6 +17,15 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Build ICA installer modules
+        run: npm run build:quick
+
+      - name: Installer core unit tests
+        run: node --test dist/tests/installer/*.test.js
+
       - name: Install Ansible
         run: |
           python3 -m pip install --upgrade pip
@@ -27,4 +36,3 @@ jobs:
 
       - name: Installer Tests
         run: make test
-
