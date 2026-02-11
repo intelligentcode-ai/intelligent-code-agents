@@ -229,17 +229,41 @@ cd $env:USERPROFILE\.claude\skills\memory
 npm install --production
 ```
 
+### Permission-First Install Behavior
+
+If `better-sqlite3` is missing, explicitly ask the user for permission before installing:
+
+1. Explain why install is requested:
+`better-sqlite3` is the Node.js SQLite binding used by the memory CLI's primary backend.
+2. Offer zero-extra-package fallback:
+if system `sqlite3` CLI is available, memory persistence still works without npm install.
+3. Ask for approval before running install commands:
+`cd <skill-home>/skills/memory && npm install --production`
+
+Do not run dependency installation silently.
+
 ## Dependencies
 
-For CLI features (optional but recommended):
+For CLI features:
 - `better-sqlite3` - SQLite with native bindings
-- `@xenova/transformers` - Local embedding generation
+- `@xenova/transformers` - Local embedding generation (optional)
 
 First use of embeddings downloads the model (~80MB) to `~/.cache/transformers/`.
 
+### Why `better-sqlite3` instead of "default sqlite"
+
+- SQLite itself is the database engine/file format.
+- `better-sqlite3` is the Node.js driver that gives this JavaScript CLI direct, reliable DB access.
+- When `better-sqlite3` is unavailable, the skill now falls back to the system `sqlite3` CLI backend automatically (if present).
+
 ## Fallback Behavior
 
-If CLI/dependencies unavailable, the skill works via manual markdown:
+If the primary backend is unavailable:
+
+1. Use sqlite3 CLI fallback automatically (when `sqlite3` binary exists)
+2. If neither backend is available, use manual markdown workflow
+
+Manual markdown mode:
 1. Write memories as markdown files in `memory/exports/`
 2. Search using Grep tool or file search
 3. All memory functionality remains available, just without hybrid RAG
@@ -295,6 +319,9 @@ node "$MEMORY_CLI" get mem-001
 
 # Statistics
 node "$MEMORY_CLI" stats
+
+# Backend status (better-sqlite3 vs sqlite3 CLI fallback)
+node "$MEMORY_CLI" backend
 ```
 
 ### Method 2: Manual Markdown (Fallback)
