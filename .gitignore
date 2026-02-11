@@ -109,3 +109,10 @@ bugs/
 
 # Memory runtime state (SQLite + caches) is local-only
 .agent/memory/
+
+# MCP client configs (can contain secrets)
+.mcp.json
+src/skills/mcp-client/references/mcp-config.json
+mcp-servers.json
+mcp.json
+mcp-tokens.json

@@ -5,6 +5,7 @@
 2. [Configuration Guide](configuration-guide.md)
 3. [Workflow Guide](workflow-guide.md)
 4. [MCP Integration (Claude Code)](mcp-integration.md)
+5. [MCP Proxy (ICA-Owned)](mcp-proxy.md)
 
 Tip: For a clean reinstall on macOS/Linux, use `make clean-install` (force uninstall + reinstall).
 
