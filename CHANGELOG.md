@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.2.10] - 2026-02-11
+
+### Added
+- New tag-driven `release-sign` GitHub Actions workflow to build deterministic source artifacts and publish signed release assets.
+- New release artifact build script at `scripts/release/build-artifacts.sh` for deterministic tar/zip creation and checksum generation.
+- New release-signing documentation at `docs/release-signing.md`.
+
+### Changed
+- Release workflow now requires tags to point to commits reachable from `origin/main` before publishing.
+- Reproducibility validation now verifies downloaded artifacts against `SHA256SUMS.txt` before sign/attest/release steps.
+- Workflow guide and docs index now link to the release-signing process.
+
 ## [10.2.9] - 2026-02-11
 
 ### Added
