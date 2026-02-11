@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ansible/` deployment/uninstall roles and playbooks
   - old root-level PowerShell deployment script (`install.ps1`)
 
+## [10.2.12] - 2026-02-11
+
+### Added
+- New portable `tdd` process skill for test-first development with an explicit Red -> Green -> Refactor loop, acceptance-test planning template, and output contract.
+
+### Changed
+- Skills documentation now lists `tdd` in process skills across architecture/reference docs.
+- Skills reference process list now includes `pr-automerge` for consistency with the shipped process skill set.
+
 ## [10.2.11] - 2026-02-11
 
 ### Added
