@@ -8,8 +8,6 @@
 5. [MCP Proxy (ICA-Owned)](mcp-proxy.md)
 6. [Harness Guide](harness-guide.md)
 
-Tip: For a clean reinstall on macOS/Linux, use `make clean-install` (force uninstall + reinstall).
-
 ## Core Concepts
 - [Roles and Skills](skills-reference.md)
 - [Architecture](architecture.md)

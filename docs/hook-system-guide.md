@@ -1,20 +1,20 @@
 # Hook System Guide
 
-The v10.2 hook system is intentionally minimal and only enforces behaviors Claude Code does not provide natively.
+The hook system is intentionally minimal and enforces safety/file-hygiene that runtimes do not handle natively.
 
 ## Active Hooks (PreToolUse)
 
-- `agent-infrastructure-protection.js` — blocks imperative infra changes and guides IaC.
-- `summary-file-enforcement.js` — routes summary/report files into `summaries/` and blocks ALL‑CAPS filenames.
+- `agent-infrastructure-protection.js`
+- `summary-file-enforcement.js`
 
-Note: Git privacy is now handled via the `git-privacy` skill rather than a hook.
+Git privacy is enforced via the `git-privacy` skill (not a hook).
 
 ## Registration
 
-Hooks are registered by:
-- `ansible/roles/intelligent_code_agents/templates/settings.json.j2`
-- `install.ps1` (Register‑ProductionHooks)
+Hooks are registered through current installer flows:
+- `ica` CLI (`install` with Claude integration enabled)
+- installer dashboard apply operations for Claude target
 
-## Why only PreToolUse?
+## Why PreToolUse Only
 
-Claude Code already handles role orchestration and subagent execution. The remaining hooks focus purely on safety and file hygiene.
+Runtime-native orchestration handles roles/subagents; ICA hooks focus on safety and output hygiene.

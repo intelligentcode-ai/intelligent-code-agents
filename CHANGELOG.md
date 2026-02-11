@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.2.14] - 2026-02-11
+
+### Added
+- New explicit dashboard documentation flow in README covering:
+  - current state
+  - skill selection
+  - search
+  - installation
+  - management
+- New focused dashboard screenshots for each flow step under `docs/assets/dashboard/`.
+
+### Changed
+- Dashboard preview GIF now uses the same five-step sequence with clearer framing and labels.
+- README dashboard section now includes contextual captions for each step.
+
+### Removed
+- Old generic dashboard preview screenshots that did not map to the end-to-end user flow.
+
+## [10.2.13] - 2026-02-11
+
+### Added
+- New README dashboard visual section with a prominent animated walkthrough GIF and refreshed 16:9 screenshots.
+- New dashboard image assets under `docs/assets/dashboard/` for overview, search flow, and state panels.
+
+### Changed
+- Installation and integration docs now consistently describe the current installer surface (`bootstrap` + `ica` CLI + dashboard).
+- CI workflow now validates with Node-only build/test steps (`npm ci`, `npm run build`, `npm test`).
+
+### Removed
+- Legacy deployment surfaces removed from repository:
+  - top-level `Makefile` deployment workflow
+  - `ansible/` deployment/uninstall roles and playbooks
+  - old root-level PowerShell deployment script (`install.ps1`)
+
+## [10.2.12] - 2026-02-11
+
+### Added
+- New portable `tdd` process skill for test-first development with an explicit Red -> Green -> Refactor loop, acceptance-test planning template, and output contract.
+
+### Changed
+- Skills documentation now lists `tdd` in process skills across architecture/reference docs.
+- Skills reference process list now includes `pr-automerge` for consistency with the shipped process skill set.
+
 ## [10.2.11] - 2026-02-11
 
 ### Added

@@ -1,49 +1,36 @@
 # Troubleshooting
 
-This guide covers common issues when installing and using ICA.
+## Installer Build Errors
 
-Tip: For a full reset on macOS/Linux, use `make clean-install` with the same arguments you pass to `make install`.
-
-## Installation (macOS/Linux)
-
-### `ansible-playbook not found`
-
-Install Ansible:
+If `tsc` or build commands fail:
 
 ```bash
-brew install ansible
+npm ci
+npm run build
 ```
 
-Verify:
+## Permissions Errors
 
-```bash
-ansible-playbook --version
-```
-
-### Permissions Errors
-
-If the installer can't write into the target path (user or project scope), ensure the directory is owned by the
-user running install and is writable.
+If install cannot write to target paths, ensure the current user owns and can write the target directory.
 
 ## Claude Integration (Hooks / Modes)
 
-### Claude Code Error: "Hooks use a new format with matchers"
-
-ICA writes hook registration into `~/.claude/settings.json` using the matcher-based format (Claude Code requirement).
-
-If you have an older/broken file, reinstall for Claude:
+If Claude hooks look stale, reinstall for Claude target:
 
 ```bash
-make install AGENT=claude
+node dist/src/installer-cli/index.js install --yes --targets=claude --scope=user
 ```
 
-If you do not want ICA to touch Claude integration at all:
+To keep ICA from touching Claude integration:
 
 ```bash
-make install AGENT=claude INSTALL_CLAUDE_INTEGRATION=false
+node dist/src/installer-cli/index.js install --yes \
+  --targets=claude \
+  --scope=user \
+  --install-claude-integration=false
 ```
 
-### Confirm Hook Registration
+Confirm hook registration:
 
 ```bash
 jq '.hooks.PreToolUse' ~/.claude/settings.json
@@ -60,11 +47,6 @@ See:
 
 ## Work Queue
 
-If you're using the work queue, check:
-
 ```bash
 ls -la .agent/queue
 ```
-
-The queue format is defined by the `work-queue` skill.
-

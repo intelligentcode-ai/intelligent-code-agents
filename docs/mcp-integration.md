@@ -1,18 +1,16 @@
 # MCP Integration (Claude Code)
 
-ICA is platform-agnostic, but **MCP server wiring is currently only supported for Claude Code** via the Ansible
-installer (macOS/Linux) and the PowerShell installer (Windows).
+ICA is platform-agnostic. Claude-specific MCP wiring is available through the modern `ica` installer flow.
 
-This integration **merges** MCP servers from a JSON file into your Claude Code MCP config file:
+ICA merges MCP servers from a JSON file into:
+- `~/.claude.json`
+- key: `mcpServers`
 
-- Default MCP config file: `~/.claude.json`
-- Key: `mcpServers`
-
-Important: This is **not** the same file as ICA's Claude hook registration file (`~/.claude/settings.json`).
+This is separate from hook registration in `~/.claude/settings.json`.
 
 ## Quick Start
 
-1. Create an MCP servers file, for example `config/mcps.json`:
+1. Create an MCP config file, for example `config/mcps.json`:
 
 ```json
 {
@@ -20,59 +18,40 @@ Important: This is **not** the same file as ICA's Claude hook registration file 
     "sequential-thinking": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
-    },
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
-      }
     }
   }
 }
 ```
 
-2. Install ICA with MCP config (macOS/Linux):
+2. Install with MCP config:
 
 ```bash
-make install AGENT=claude MCP_CONFIG=./config/mcps.json
+node dist/src/installer-cli/index.js install --yes \
+  --targets=claude \
+  --scope=user \
+  --mcp-config=./config/mcps.json
 ```
 
-Windows:
+## What ICA Does
 
-```powershell
-.\install.ps1 install -Agent claude -McpConfig .\config\mcps.json
-```
+When `--mcp-config` is provided and Claude integration is enabled:
 
-## What The Installer Does
+1. Validates JSON and required `mcpServers.*.command` fields
+2. Backs up `~/.claude.json` to `~/.claude.json.backup.<epoch>`
+3. Loads optional env vars from `--env-file`
+4. Resolves `${VARS}` best-effort
+5. Merges servers into existing `mcpServers`
+6. Writes final JSON back to `~/.claude.json`
 
-When `MCP_CONFIG` / `-McpConfig` is provided (and Claude integration is enabled):
-
-1. Validates JSON syntax and ensures `mcpServers.*.command` exists.
-2. Creates a backup of the current `~/.claude.json`:
-   - `~/.claude.json.backup.<epoch-seconds>`
-3. Loads env vars from `ENV_FILE` (optional) and the process environment.
-4. Resolves `${VARS}` in `args[]` and `env{}` best-effort.
-5. Merges the new servers into the existing `mcpServers` map (updates existing keys).
-6. Writes the final merged JSON back to `~/.claude.json`.
-
-## Opting Out (Strictly Platform-Agnostic)
-
-If you want ICA installs to **not** touch Claude-specific integration (hooks/modes/settings/CLAUDE.md/MCP):
-
-macOS/Linux:
+## Opting Out Of Claude Integration
 
 ```bash
-make install AGENT=claude INSTALL_CLAUDE_INTEGRATION=false
-```
-
-Windows:
-
-```powershell
-.\install.ps1 install -Agent claude -InstallClaudeIntegration $false
+node dist/src/installer-cli/index.js install --yes \
+  --targets=claude \
+  --scope=user \
+  --install-claude-integration=false
 ```
 
 ## Troubleshooting
 
 See `docs/mcp-integration-troubleshooting.md`.
-

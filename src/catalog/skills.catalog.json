@@ -1,7 +1,7 @@
 {
   "generatedAt": "1970-01-01T00:00:00.000Z",
   "source": "local-repo",
-  "version": "10.2.11",
+  "version": "10.2.14",
   "skills": [
     {
       "name": "agent-browser",
@@ -558,6 +558,21 @@
       ],
       "resources": [],
       "sourcePath": "src/skills/system-engineer"
+    },
+    {
+      "name": "tdd",
+      "description": "Activate when user asks for Test-Driven Development, test-first implementation, red-green-refactor, or writing tests before code. Use for feature work, bug fixes, and refactors where behavior can be specified and verified incrementally with automated tests.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/tdd"
     },
     {
       "name": "thinking",

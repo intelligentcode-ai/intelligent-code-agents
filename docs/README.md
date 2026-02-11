@@ -1,5 +1,8 @@
 # Documentation
 
-See [index.md](index.md) for the small, curated navigation of the docs. The index links the core guides (install, configure, operate, troubleshoot) without the noise.
+See [index.md](index.md) for the curated navigation of install, configuration, workflow, and troubleshooting guides.
 
-Note: Any place the docs say `make install`, you can use `make clean-install` for a full reset (force uninstall + reinstall) on macOS/Linux.
+Deployment documentation in this repo now reflects only:
+- verified bootstrap installers
+- `ica` CLI workflows
+- dashboard workflows

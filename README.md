@@ -1,41 +1,36 @@
 # Intelligent Code Agents (ICA)
 
-Portable, skills-first agent workflow (roles, reviewer gates, work queue, and installers) designed to run across multiple agent runtimes and IDEs.
+Skills-first agent workflows with a modern installer stack:
+- `ica` CLI for install/uninstall/sync/list/catalog/doctor
+- local-first dashboard for visual skill management
+- verified web bootstrap + signed, reproducible releases
 
-## What You Get
+## Dashboard Preview
 
-- Skills-first architecture (`SKILL.md`) for roles like PM/Architect/Developer/Reviewer, plus workflow/enforcement companions.
-- A reproducible PR gate: **post-PR Stage 3 review receipt** (`ICA-REVIEW-RECEIPT`) for the current head SHA.
-- Cross-tool work tracking via `.agent/queue/` (created/managed by the `work-queue` skill).
-- Optional Claude Code integration: minimal PreToolUse hooks (infra protection + summary/file hygiene), plus optional MCP server wiring.
+### Animated walkthrough (full flow)
+![ICA Dashboard Animated Preview](docs/assets/dashboard/dashboard-preview.gif)
 
-## Supported Targets
+### 1) Start with current state
+![ICA Dashboard Current State](docs/assets/dashboard/dashboard-step-01-current-state.png)
+Initial installed/selected overview before changing targets, scope, or skills.
 
-ICA installs into a tool-specific "agent home" directory:
+### 2) Select skills and scope
+![ICA Dashboard Skill Selection](docs/assets/dashboard/dashboard-step-02-selection.png)
+`Project` scope with explicit target + skill selection (`reviewer`, `developer`, `process`).
 
-- Claude Code: `~/.claude` (default)
-- Codex: `~/.codex` (default)
-- Cursor / Gemini CLI / Antigravity: supported via `AGENT_DIR_NAME` mapping, plus `AGENTS.md` guidance (tool-specific wiring varies).
+### 3) Search/filter skills
+![ICA Dashboard Search](docs/assets/dashboard/dashboard-step-03-search.png)
+Live filtering by keyword (`review`) while preserving selected targets/scope.
 
-Best-effort discovery (local):
+### 4) Install selected skills
+![ICA Dashboard Installation](docs/assets/dashboard/dashboard-step-04-installation.png)
+Post-install evidence with expanded `Installed State` and `Operation Report`.
 
-- macOS/Linux: `make discover-targets` and `make install-discovered`
-- Windows: `.\install.ps1 discover` and `.\install.ps1 install-discovered`
+### 5) Manage installed skills (uninstall/sync/report)
+![ICA Dashboard Management](docs/assets/dashboard/dashboard-step-05-management.png)
+Management action example (`Uninstall selected`) with updated state/report.
 
-Override discovery if needed:
-
-- `ICA_DISCOVER_TARGETS=claude,codex` (explicit list)
-- `ICA_DISCOVER_ALL=1` (all supported targets)
-
-Set `ICA_HOME` to your chosen agent home directory if you run ICA scripts/hooks outside Claude Code:
-
-```bash
-export ICA_HOME="$HOME/.claude"   # or "$HOME/.codex"
-```
-
-## Install
-
-### One-line bootstrap (verified release)
+## Install (Verified Bootstrap)
 
 macOS/Linux:
 
@@ -43,22 +38,31 @@ macOS/Linux:
 curl -fsSL https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.sh | bash
 ```
 
-Windows:
+Windows PowerShell:
 
 ```powershell
 iwr https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.ps1 -UseBasicParsing | iex
 ```
 
-Bootstrap verifies artifact checksums and hard-fails on validation errors.
-
-### CLI installer (`ica`)
+## Build From Source
 
 ```bash
-# Build CLI locally
-npm install
-npm run build:quick
+npm ci
+npm run build
+```
 
-# Install selected skills to project-scoped Codex home
+## CLI Usage (`ica`)
+
+```bash
+# Install into user scope for Codex + Claude
+node dist/src/installer-cli/index.js install --yes \
+  --targets=codex,claude \
+  --scope=user \
+  --mode=symlink
+```
+
+```bash
+# Project scope, selected skills only
 node dist/src/installer-cli/index.js install --yes \
   --targets=codex \
   --scope=project \
@@ -67,8 +71,7 @@ node dist/src/installer-cli/index.js install --yes \
   --skills=developer,architect,reviewer
 ```
 
-Available commands:
-
+Commands:
 - `ica install`
 - `ica uninstall`
 - `ica sync`
@@ -76,24 +79,19 @@ Available commands:
 - `ica doctor`
 - `ica catalog`
 
-### Dashboard (local-first)
+## Dashboard
+
+Start locally (binds to `127.0.0.1`):
 
 ```bash
-# Build backend + web bundle
-npm install
+npm ci
 npm run build
-
-# Start dashboard API/UI at http://127.0.0.1:4173
 npm run start:dashboard
 ```
 
-Dashboard UX highlights:
+Open: `http://127.0.0.1:4173`
 
-- Modern blue command-center layout with sticky control rail
-- Skill search across names, descriptions, categories, and resources
-- Installed skills preselected automatically (managed state + legacy `skills/*/SKILL.md` detection)
-- Select/clear all skills globally and per category
-- Installed-state and operation-report panels collapsed by default
+### GHCR Container
 
 Harness UX highlights:
 
@@ -108,98 +106,66 @@ Harness UX highlights:
 
 Container image can be built from `src/installer-dashboard/Dockerfile` and published to GHCR via `.github/workflows/dashboard-ghcr.yml`.
 
-### Compatibility entrypoints
-
-Existing commands remain valid and now delegate local installs to the new `ica` core:
-
-macOS/Linux (Ansible-driven):
+Build from source:
 
 ```bash
-git clone https://github.com/intelligentcode-ai/intelligent-code-agents.git
-cd intelligent-code-agents
-
-make install AGENT=claude   # installs into ~/.claude
-make install AGENT=codex    # installs into ~/.codex
-
-# Keep ICA strictly platform-agnostic (no Claude Code modes/hooks/settings/CLAUDE.md changes)
-make install AGENT=claude INSTALL_CLAUDE_INTEGRATION=false
-
-# Project-only install (installs into /path/to/project/<agent_home_dir>)
-make install-project PROJECT_PATH=/path/to/project AGENT=codex
+docker build -f src/installer-dashboard/Dockerfile -t ica-dashboard:local .
 ```
 
-Windows (PowerShell):
-
-```powershell
-git clone https://github.com/intelligentcode-ai/intelligent-code-agents.git
-cd intelligent-code-agents
-
-.\install.ps1 install -Agent claude
-.\install.ps1 install -Agent codex
-
-# Keep ICA strictly platform-agnostic (no Claude Code modes/hooks/settings/CLAUDE.md changes)
-.\install.ps1 install -Agent claude -InstallClaudeIntegration $false
-
-# Best-effort discovery
-.\install.ps1 discover
-.\install.ps1 install-discovered
-
-# Project-only install
-.\install.ps1 install -ProjectPath C:\MyProject -Agent codex
-```
-
-Override the agent home directory name (advanced):
+Run:
 
 ```bash
-make install AGENT=custom AGENT_DIR_NAME=.my-agent-home
+docker run --rm -p 4173:4173 ica-dashboard:local
 ```
 
-## Using ICA
+## Supported Targets
 
-Use skills by name and keep prompts explicit about the intent and output.
+- `claude`
+- `codex`
+- `cursor`
+- `gemini`
+- `antigravity`
 
-```text
-pm break down the story into work items in .agent/queue/
-architect review the approach and call out risks/tradeoffs
-developer implement the change
-reviewer audit for regressions and post an ICA-REVIEW-RECEIPT
-```
+## Install Modes
 
-## Workflow Gate (PRs)
+- `symlink` (default)
+- `copy`
 
-Default branch flow:
+If symlink creation fails, ICA falls back to `copy` and records the effective mode.
 
-```text
-feature/*  -> PR -> dev  -> (release PR) -> main
-```
+## Scope Modes
 
-Merge gate:
+- `user` scope: installs into tool home (`~/.claude`, `~/.codex`, ...)
+- `project` scope: installs into `<project>/<agent-home-dir>`
 
-- A dedicated **post-PR** review run (temp checkout) must post `ICA-REVIEW-RECEIPT`.
-- Receipt must match the PR's current head SHA and indicate **PASS / NO FINDINGS**.
-- Checks/tests must be green.
+## Managed State
 
-## Configuration
+ICA tracks managed installs in:
 
-- `ica.config.json`: behavior/enforcement configuration (git privacy, branch protection, paths, etc.)
-- `ica.workflow.json`: workflow automation controls (auto-merge standing approval, optional GitHub approval gate, release automation)
+- `<agent-home>/.ica/install-state.json`
 
-Reference defaults are shipped as:
+This enables safe uninstall/sync of managed assets without deleting unmanaged user content.
 
-- `ica.config.default.json`
-- `ica.workflow.default.json`
+## Release + Supply Chain
 
-Preferred project-local locations:
+Tag releases from `main` (`vX.Y.Z`). The `release-sign` workflow:
+- builds deterministic artifacts
+- verifies reproducibility
+- signs via keyless Sigstore flow
+- attaches signatures/certs/checksums to GitHub release assets
 
-- `./.ica/config.json`
-- `./.ica/workflow.json`
+## Documentation
 
-## Docs
+- [Installation Guide](docs/installation-guide.md)
+- [Configuration Guide](docs/configuration-guide.md)
+- [Workflow Guide](docs/workflow-guide.md)
+- [Release Signing](docs/release-signing.md)
 
-- `AGENTS.md` (how to consume ICA from different tools)
-- `docs/index.md` (start here)
-- `docs/release-signing.md` (tag-driven keyless signing + reproducible release artifacts)
+## Legacy Deployment Paths Removed
 
-## License
+Legacy deployment entrypoints were removed:
+- `Makefile` deployment flow
+- Ansible deployment flow
+- old root `install.ps1` deployment wrapper
 
-MIT (see `LICENSE`)
+Use bootstrap, `ica` CLI, or dashboard going forward.
