@@ -20,6 +20,15 @@ else
   echo "No unit tests found yet"
 fi
 
+# Run Python MCP proxy tests if present (best-effort).
+if command -v python3 >/dev/null 2>&1 && [ -d "tests/mcp_proxy" ]; then
+  echo "🐍 Python tests..."
+  # Don't fail the whole suite if dependencies aren't installed; unittest will skip when mcp is missing.
+  python3 -m unittest discover -s tests/mcp_proxy -p "test_*.py"
+else
+  echo "No Python tests found (or python3 missing)"
+fi
+
 # Run integration tests (once they exist)
 if [ -d "tests/hooks/integration" ] && [ "$(ls -A tests/hooks/integration/*.js 2>/dev/null)" ]; then
   echo "🔗 Integration tests..."
