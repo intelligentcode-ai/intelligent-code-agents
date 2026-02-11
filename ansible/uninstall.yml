@@ -40,6 +40,45 @@
       ansible.builtin.debug:
         msg: "Uninstalling from: {{ install_path }}"
 
+    - name: Uninstall via ICA CLI (local connection user scope)
+      ansible.builtin.command:
+        argv:
+          - "{{ playbook_dir }}/../scripts/run-ica-cli.sh"
+          - uninstall
+          - --yes
+          - --targets={{ agent_name }}
+          - --scope=user
+          - --mode={{ install_mode | default('symlink') }}
+          - --agent-dir-name={{ agent_dir_name_effective }}
+          - --force={{ force_remove | default(false) | bool }}
+      when:
+        - ansible_connection == 'local'
+        - use_ica_cli | default(true) | bool
+        - target_scope == 'user'
+
+    - name: Uninstall via ICA CLI (local connection project scope)
+      ansible.builtin.command:
+        argv:
+          - "{{ playbook_dir }}/../scripts/run-ica-cli.sh"
+          - uninstall
+          - --yes
+          - --targets={{ agent_name }}
+          - --scope=project
+          - --project-path={{ project_path }}
+          - --mode={{ install_mode | default('symlink') }}
+          - --agent-dir-name={{ agent_dir_name_effective }}
+          - --force={{ force_remove | default(false) | bool }}
+      when:
+        - ansible_connection == 'local'
+        - use_ica_cli | default(true) | bool
+        - target_scope == 'project'
+
+    - name: End play after ICA CLI uninstall path
+      meta: end_play
+      when:
+        - ansible_connection == 'local'
+        - use_ica_cli | default(true) | bool
+
     - name: Include intelligent_code_agents uninstall role
       ansible.builtin.include_role:
         name: intelligent_code_agents_uninstall

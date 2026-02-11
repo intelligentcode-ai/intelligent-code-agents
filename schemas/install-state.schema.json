@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://intelligentcode.ai/schemas/install-state.schema.json",
+  "title": "ICA Install State",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "installerVersion",
+    "target",
+    "scope",
+    "installedAt",
+    "updatedAt",
+    "managedSkills",
+    "managedBaselinePaths",
+    "history"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string" },
+    "installerVersion": { "type": "string" },
+    "target": { "type": "string", "enum": ["claude", "codex", "cursor", "gemini", "antigravity"] },
+    "scope": { "type": "string", "enum": ["user", "project"] },
+    "projectPath": { "type": "string" },
+    "installedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "managedSkills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "installMode", "effectiveMode", "destinationPath", "sourcePath"],
+        "properties": {
+          "name": { "type": "string" },
+          "installMode": { "type": "string", "enum": ["symlink", "copy"] },
+          "effectiveMode": { "type": "string", "enum": ["symlink", "copy"] },
+          "destinationPath": { "type": "string" },
+          "sourcePath": { "type": "string" }
+        }
+      }
+    },
+    "managedBaselinePaths": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["timestamp", "operation", "summary"],
+        "properties": {
+          "timestamp": { "type": "string", "format": "date-time" },
+          "operation": { "type": "string", "enum": ["install", "uninstall", "sync"] },
+          "summary": { "type": "string" }
+        }
+      }
+    }
+  }
+}

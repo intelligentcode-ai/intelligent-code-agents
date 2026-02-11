@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "types": ["node"],
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/installer-core/**/*.ts",
+    "src/installer-cli/**/*.ts",
+    "src/installer-dashboard/server/**/*.ts",
+    "tests/installer/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

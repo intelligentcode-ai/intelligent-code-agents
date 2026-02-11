@@ -45,6 +45,49 @@
         msg: "Installing to: {{ install_path }}"
       when: ansible_verbosity >= 1
 
+    - name: Install via ICA CLI (local connection)
+      ansible.builtin.command:
+        cmd: >-
+          {{ (playbook_dir ~ '/../scripts/run-ica-cli.sh') | quote }} install --yes
+          --targets={{ agent_name | quote }}
+          --scope={{ target_scope | quote }}
+          --mode={{ (install_mode | default('symlink')) | quote }}
+          --agent-dir-name={{ agent_dir_name_effective | quote }}
+          --install-claude-integration={{ ((install_claude_integration | default(true) | bool) | string) | quote }}
+          {% if (skills | default('')) | length > 0 %} --skills={{ skills | quote }} {% endif %}
+          {% if (config_file | default('')) | length > 0 %} --config-file={{ config_file | quote }} {% endif %}
+          {% if (mcp_config_file | default('')) | length > 0 %} --mcp-config={{ mcp_config_file | quote }} {% endif %}
+          {% if (env_file | default('')) | length > 0 %} --env-file={{ env_file | quote }} {% endif %}
+      when:
+        - ansible_connection == 'local'
+        - use_ica_cli | default(true) | bool
+        - target_scope == 'user'
+
+    - name: Add project path to ICA CLI call (local connection)
+      ansible.builtin.command:
+        cmd: >-
+          {{ (playbook_dir ~ '/../scripts/run-ica-cli.sh') | quote }} install --yes
+          --targets={{ agent_name | quote }}
+          --scope=project
+          --project-path={{ project_path | quote }}
+          --mode={{ (install_mode | default('symlink')) | quote }}
+          --agent-dir-name={{ agent_dir_name_effective | quote }}
+          --install-claude-integration={{ ((install_claude_integration | default(true) | bool) | string) | quote }}
+          {% if (skills | default('')) | length > 0 %} --skills={{ skills | quote }} {% endif %}
+          {% if (config_file | default('')) | length > 0 %} --config-file={{ config_file | quote }} {% endif %}
+          {% if (mcp_config_file | default('')) | length > 0 %} --mcp-config={{ mcp_config_file | quote }} {% endif %}
+          {% if (env_file | default('')) | length > 0 %} --env-file={{ env_file | quote }} {% endif %}
+      when:
+        - ansible_connection == 'local'
+        - use_ica_cli | default(true) | bool
+        - target_scope == 'project'
+
+    - name: End play after ICA CLI install path
+      meta: end_play
+      when:
+        - ansible_connection == 'local'
+        - use_ica_cli | default(true) | bool
+
     - name: Include intelligent_code_agents role
       ansible.builtin.include_role:
         name: intelligent_code_agents

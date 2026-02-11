@@ -49,6 +49,7 @@ archives/tasks/
 
 # Node (if ever added)
 node_modules/
+dist/
 
 # Python (if ever added)
 __pycache__/

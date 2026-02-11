@@ -35,6 +35,72 @@ export ICA_HOME="$HOME/.claude"   # or "$HOME/.codex"
 
 ## Install
 
+### One-line bootstrap (verified release)
+
+macOS/Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.sh | bash
+```
+
+Windows:
+
+```powershell
+iwr https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.ps1 -UseBasicParsing | iex
+```
+
+Bootstrap verifies artifact checksums and hard-fails on validation errors.
+
+### CLI installer (`ica`)
+
+```bash
+# Build CLI locally
+npm install
+npm run build:quick
+
+# Install selected skills to project-scoped Codex home
+node dist/src/installer-cli/index.js install --yes \
+  --targets=codex \
+  --scope=project \
+  --project-path=/path/to/project \
+  --mode=symlink \
+  --skills=developer,architect,reviewer
+```
+
+Available commands:
+
+- `ica install`
+- `ica uninstall`
+- `ica sync`
+- `ica list`
+- `ica doctor`
+- `ica catalog`
+
+### Dashboard (local-first)
+
+```bash
+# Build backend + web bundle
+npm install
+npm run build
+
+# Start dashboard API/UI at http://127.0.0.1:4173
+npm run start:dashboard
+```
+
+Dashboard UX highlights:
+
+- Modern blue command-center layout with sticky control rail
+- Skill search across names, descriptions, categories, and resources
+- Installed skills preselected automatically (managed state + legacy `skills/*/SKILL.md` detection)
+- Select/clear all skills globally and per category
+- Installed-state and operation-report panels collapsed by default
+
+Container image can be built from `src/installer-dashboard/Dockerfile` and published to GHCR via `.github/workflows/dashboard-ghcr.yml`.
+
+### Compatibility entrypoints
+
+Existing commands remain valid and now delegate local installs to the new `ica` core:
+
 macOS/Linux (Ansible-driven):
 
 ```bash
