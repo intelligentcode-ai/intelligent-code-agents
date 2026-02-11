@@ -1,0 +1,653 @@
+{
+  "generatedAt": "1970-01-01T00:00:00.000Z",
+  "source": "local-repo",
+  "version": "10.2.10",
+  "skills": [
+    {
+      "name": "agent-browser",
+      "description": "Use when you need to reproduce or debug web UI flows (especially auth/OIDC) via the Agent Browser CLI, capture snapshots/screenshots, and extract redirect URLs and on-page errors deterministically. Includes install/setup guidance when the CLI is missing.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/agent-browser"
+    },
+    {
+      "name": "ai-engineer",
+      "description": "Activate when user needs AI/ML work - model integration, behavioral frameworks, intelligent automation. Activate when the ai-engineer skill is requested or work involves machine learning, agentic systems, or AI-driven features.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/ai-engineer"
+    },
+    {
+      "name": "architect",
+      "description": "Activate when user needs architectural decisions, system design, technology selection, or design reviews. Activate when the architect skill is requested or work requires structural decisions. Provides design patterns and architectural guidance.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/architect"
+    },
+    {
+      "name": "autonomy",
+      "description": "Activate when a subagent completes work and needs continuation check. Activate when a task finishes to determine next steps or when detecting work patterns in user messages. Governs automatic work continuation and queue management.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/autonomy"
+    },
+    {
+      "name": "backend-tester",
+      "description": "Activate when user needs API or backend testing - REST/GraphQL validation, integration tests, database verification. Activate when the backend-tester skill is requested or work requires backend quality assurance.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/backend-tester"
+    },
+    {
+      "name": "best-practices",
+      "description": "Activate when starting new work to check for established patterns. Activate when ensuring consistency with team standards or when promoting successful memory patterns. Searches and applies best practices before implementation.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/best-practices"
+    },
+    {
+      "name": "branch-protection",
+      "description": "Activate when performing git operations. MANDATORY by default - prevents direct commits to main/master, blocks destructive operations (force push, reset --hard). Enforces dev-first workflow where all changes go to dev before main. Assumes branch protection enabled unless disabled in settings.",
+      "category": "enforcement",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/branch-protection"
+    },
+    {
+      "name": "commit-pr",
+      "description": "Activate when user asks to commit, push changes, create a PR, open a pull request, or submit changes for review. Activate when process skill reaches commit or PR phase. Provides commit message formatting and PR structure. PRs default to dev branch, not main. Works with git-privacy skill.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/commit-pr"
+    },
+    {
+      "name": "database-engineer",
+      "description": "Activate when user needs database work - schema design, query optimization, migrations, data modeling. Activate when the database-engineer skill is requested or work involves database design or performance tuning.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/database-engineer"
+    },
+    {
+      "name": "developer",
+      "description": "Activate when user asks to code, build, implement, create, fix bugs, refactor, or write software. Activate when the developer skill is requested. Provides implementation patterns and coding standards for hands-on development work.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/developer"
+    },
+    {
+      "name": "devops-engineer",
+      "description": "Activate when user needs CI/CD or deployment work - pipeline design, deployment automation, release management. Activate when the devops-engineer skill is requested or work involves build systems or infrastructure automation.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/devops-engineer"
+    },
+    {
+      "name": "file-placement",
+      "description": "Activate when creating any summary, report, or output file. Ensures files go to correct directories (summaries/, memory/, stories/, bugs/). Mirrors what summary-file-enforcement hook enforces.",
+      "category": "enforcement",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/file-placement"
+    },
+    {
+      "name": "git-privacy",
+      "description": "Activate when performing git commits, creating pull requests, or any git operation. MANDATORY by default - prevents AI attribution (Co-Authored-By, \"Generated with\" footers). Does NOT block legitimate AI feature descriptions.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/git-privacy"
+    },
+    {
+      "name": "ica-get-setting",
+      "description": "Activate when needing configuration values like git.privacy, autonomy.level, paths.*, team.default_reviewer. Retrieves ICA settings using dot notation from config hierarchy.",
+      "category": "command",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/ica-get-setting"
+    },
+    {
+      "name": "ica-version",
+      "description": "Activate when user asks about version, system status, \"what version\", or wants to verify ICA installation. Displays version, component status, and installation info.",
+      "category": "command",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/ica-version"
+    },
+    {
+      "name": "infrastructure-protection",
+      "description": "Activate when performing infrastructure, VM, container, or cloud operations. Ensures safety protocols are followed and blocks destructive operations by default. Mirrors agent-infrastructure-protection hook.",
+      "category": "enforcement",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/infrastructure-protection"
+    },
+    {
+      "name": "mcp-client",
+      "description": "Universal MCP client for connecting to MCP servers with progressive disclosure. Use when you need to list MCP servers/tools or call an MCP tool against a server that is not already wired into the current agent runtime.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [
+        {
+          "type": "references",
+          "path": "skills/mcp-client/references/example-mcp-config.json"
+        },
+        {
+          "type": "references",
+          "path": "skills/mcp-client/references/mcp-servers.md"
+        },
+        {
+          "type": "references",
+          "path": "skills/mcp-client/references/python-mcp-sdk.md"
+        },
+        {
+          "type": "scripts",
+          "path": "skills/mcp-client/scripts/mcp_client.py"
+        }
+      ],
+      "sourcePath": "src/skills/mcp-client"
+    },
+    {
+      "name": "mcp-common",
+      "description": "Internal shared helpers for ICA MCP tooling (client/proxy). Not intended to be invoked directly by users.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [
+        {
+          "type": "scripts",
+          "path": "skills/mcp-common/scripts/ica_mcp_core.py"
+        }
+      ],
+      "sourcePath": "src/skills/mcp-common"
+    },
+    {
+      "name": "mcp-config",
+      "description": "Activate when setting up MCP servers, resolving MCP tool availability, or configuring fallbacks for MCP-dependent features. Configures and troubleshoots MCP (Model Context Protocol) integrations.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/mcp-config"
+    },
+    {
+      "name": "mcp-proxy",
+      "description": "Local stdio MCP proxy server that mirrors upstream MCP servers/tools and centralizes authentication (OAuth, headers/env). Register one server in your agent runtime, manage upstreams via .mcp.json and/or $ICA_HOME/mcp-servers.json.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [
+        {
+          "type": "scripts",
+          "path": "skills/mcp-proxy/scripts/mcp_proxy_cli.py"
+        },
+        {
+          "type": "scripts",
+          "path": "skills/mcp-proxy/scripts/mcp_proxy_server.py"
+        }
+      ],
+      "sourcePath": "src/skills/mcp-proxy"
+    },
+    {
+      "name": "memory",
+      "description": "Activate when user wants to save knowledge, search past decisions, or manage persistent memories. Handles architecture patterns, implementation logic, issues/fixes, and past implementations. Uses local SQLite + FTS5 + vector embeddings for fast hybrid search. Supports write, search, update, archive, and list operations.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/memory"
+    },
+    {
+      "name": "parallel-execution",
+      "description": "Activate when multiple independent work items can execute concurrently. Activate when coordinating non-blocking task patterns in L3 autonomy mode. Manages parallel execution from .agent/queue/.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/parallel-execution"
+    },
+    {
+      "name": "pm",
+      "description": "Activate when user needs coordination, story breakdown, task delegation, or progress tracking. Activate when the pm skill is requested or work requires planning before implementation. PM coordinates specialists but does not implement.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/pm"
+    },
+    {
+      "name": "pr-automerge",
+      "description": "Activate when asked to auto-review and merge a PR. Runs a closed-loop workflow: subagent Stage 3 review -> fix findings -> re-review -> post ICA-REVIEW receipt -> merge (optional via workflow.auto_merge).",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/pr-automerge"
+    },
+    {
+      "name": "process",
+      "description": "Activate when user explicitly requests the development workflow process, asks about workflow phases, or says \"start work\", \"begin development\", \"follow the process\". Activate when creating PRs or deploying to production. NOT for simple questions or minor fixes. Executes AUTONOMOUSLY - only pauses when human decision is genuinely required.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/process"
+    },
+    {
+      "name": "qa-engineer",
+      "description": "Activate when user needs test planning or QA strategy - test frameworks, quality metrics, test automation. Activate when the qa-engineer skill is requested or work requires a comprehensive quality assurance approach.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/qa-engineer"
+    },
+    {
+      "name": "release",
+      "description": "Activate when user asks to release, bump version, cut a release, merge to main, or tag a version. Handles version bumping (semver), CHANGELOG updates, PR merging, git tagging, and GitHub release creation.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/release"
+    },
+    {
+      "name": "requirements-engineer",
+      "description": "Activate when user needs requirements gathering - business analysis, specification development, user stories. Activate when the requirements-engineer skill is requested or work requires bridging business and technical understanding.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/requirements-engineer"
+    },
+    {
+      "name": "reviewer",
+      "description": "Activate when reviewing code, before committing, after committing, or before merging a PR. Activate when user asks to review, audit, check for security issues, or find regressions. Analyzes code for logic errors, regressions, edge cases, security issues, and test gaps. Fixes findings AUTOMATICALLY. Required at process skill quality gates.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/reviewer"
+    },
+    {
+      "name": "security-engineer",
+      "description": "Activate when user needs security work - vulnerability assessment, security architecture, compliance audits, penetration testing. Activate when the security-engineer skill is requested or work requires security review.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/security-engineer"
+    },
+    {
+      "name": "skill-creator",
+      "description": "Activate when user wants to create a new skill or update an existing skill. Activate when extending capabilities with specialized knowledge, workflows, or tool integrations. Provides guidance for effective skill design.",
+      "category": "meta",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/skill-creator"
+    },
+    {
+      "name": "skill-writer",
+      "description": "Activate when users want to create or update an Agent Skill and want a Test-Driven Development approach. Defines a red-green-refactor workflow for SKILL.md authoring, trigger quality, validation, and iterative refinement.",
+      "category": "meta",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/skill-writer"
+    },
+    {
+      "name": "story-breakdown",
+      "description": "Activate when user presents a large story or epic that needs decomposition. Activate when a task spans multiple components or requires coordination across specialists. Creates work items in .agent/queue/ for execution.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/story-breakdown"
+    },
+    {
+      "name": "suggest",
+      "description": "Activate when user asks for improvement suggestions, refactoring ideas, or \"what could be better\". Analyzes code and provides realistic, context-aware proposals. Implements safe improvements AUTOMATICALLY. Separate from reviewer (which finds problems).",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/suggest"
+    },
+    {
+      "name": "system-engineer",
+      "description": "Activate when user needs infrastructure or system operations work - system reliability, monitoring, capacity planning. Activate when the system-engineer skill is requested or work involves configuration management or operational excellence.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/system-engineer"
+    },
+    {
+      "name": "thinking",
+      "description": "Activate when facing complex problems, multi-step decisions, high-risk changes, complex debugging, or architectural decisions. Activate when careful analysis is needed before taking action. Provides explicit step-by-step validation.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/thinking"
+    },
+    {
+      "name": "user-tester",
+      "description": "Activate when user needs E2E or user journey testing - browser automation, Puppeteer/Playwright, cross-browser testing. Activate when the user-tester skill is requested or work requires user flow validation or experience verification.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/user-tester"
+    },
+    {
+      "name": "validate",
+      "description": "Activate when checking if work meets requirements, verifying completion criteria, validating file placement, or ensuring quality standards. Use before marking work complete to verify success criteria are met.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/validate"
+    },
+    {
+      "name": "web-designer",
+      "description": "Activate when user needs UI/UX design work - interface design, user research, design systems, accessibility. Activate when the web-designer skill is requested or work requires visual design or user experience expertise.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/web-designer"
+    },
+    {
+      "name": "work-queue",
+      "description": "Activate when user has a large task to break into smaller work items. Activate when user asks about work queue status or what remains to do. Activate when managing sequential or parallel execution. Creates and manages .agent/queue/ for cross-platform work tracking.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/work-queue"
+    },
+    {
+      "name": "workflow",
+      "description": "Activate when checking workflow step requirements, resolving workflow conflicts, or ensuring proper execution sequence. Applies workflow enforcement patterns and validates compliance.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "src/skills/workflow"
+    }
+  ]
+}

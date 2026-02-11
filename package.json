@@ -1,0 +1,31 @@
+{
+  "name": "intelligent-code-agents",
+  "version": "10.3.0",
+  "private": true,
+  "description": "ICA cross-platform interactive installer, CLI, and dashboard",
+  "bin": {
+    "ica": "dist/src/installer-cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node dist/src/installer-core/catalog/generateCatalog.js && npm run build:dashboard:web",
+    "build:dashboard:web": "vite build --config src/installer-dashboard/web/vite.config.ts",
+    "dev:dashboard:web": "vite --config src/installer-dashboard/web/vite.config.ts",
+    "start:dashboard": "node dist/src/installer-dashboard/server/index.js",
+    "build:quick": "tsc -p tsconfig.json && node dist/src/installer-core/catalog/generateCatalog.js",
+    "test": "npm run build:quick && node --test dist/tests/installer/*.test.js && bash tests/run-tests.sh"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@fastify/static": "^8.2.0",
+    "fastify": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0"
+  }
+}

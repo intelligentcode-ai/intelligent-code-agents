@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://intelligentcode.ai/schemas/skill-catalog.schema.json",
+  "title": "ICA Skill Catalog",
+  "type": "object",
+  "required": ["generatedAt", "source", "version", "skills"],
+  "properties": {
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "source": { "type": "string", "enum": ["local-repo", "github-release"] },
+    "version": { "type": "string" },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "category", "dependencies", "compatibleTargets", "resources", "sourcePath"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "category": { "type": "string" },
+          "dependencies": { "type": "array", "items": { "type": "string" } },
+          "compatibleTargets": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["claude", "codex", "cursor", "gemini", "antigravity"]
+            }
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "path"],
+              "properties": {
+                "type": { "type": "string", "enum": ["references", "scripts", "assets"] },
+                "path": { "type": "string" }
+              }
+            }
+          },
+          "sourcePath": { "type": "string" }
+        }
+      }
+    }
+  }
+}
