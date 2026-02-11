@@ -121,6 +121,7 @@ Preferred project-local locations:
 
 - `AGENTS.md` (how to consume ICA from different tools)
 - `docs/index.md` (start here)
+- `docs/release-signing.md` (tag-driven keyless signing + reproducible release artifacts)
 
 ## License
 

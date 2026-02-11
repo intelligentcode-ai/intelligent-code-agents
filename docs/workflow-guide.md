@@ -60,7 +60,8 @@ Release is a separate workflow (explicitly requested):
 5. Merge release PR to `main` (explicit approval).
 6. Tag and publish release:
    - `git tag -a vX.Y.Z -m "Release vX.Y.Z"`
-   - `gh release create vX.Y.Z ...`
+   - `git push origin vX.Y.Z`
+   - GitHub Actions `release-sign` workflow builds deterministic artifacts, verifies reproducibility, signs (keyless), attests provenance, and publishes the GitHub release.
 7. Sync `main` back into `dev` (release PR is often squashed on `main`).
 
 ## Configuration
