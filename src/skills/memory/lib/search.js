@@ -130,8 +130,60 @@ function ftsSearch(database, parsed, limit = 20) {
     }));
   } catch (e) {
     console.warn('FTS search failed:', e.message);
-    return [];
+    return basicKeywordSearch(database, parsed, limit);
   }
+}
+
+/**
+ * Fallback keyword search when FTS5 is unavailable.
+ * Uses LIKE matching on memories table.
+ * @param {object} database - SQLite database
+ * @param {object} parsed - Parsed query
+ * @param {number} limit - Max results
+ * @returns {Array} Search results
+ */
+function basicKeywordSearch(database, parsed, limit = 20) {
+  const queryText = [
+    parsed.exactPhrase,
+    ...parsed.terms
+  ].filter(Boolean).join(' ').trim();
+
+  if (!queryText) return [];
+
+  let sql = `
+    SELECT m.id, m.title, m.summary, m.category, m.importance,
+           m.access_count, m.created_at, m.archived
+    FROM memories m
+    WHERE (LOWER(m.title) LIKE ? OR LOWER(m.summary) LIKE ? OR LOWER(m.content) LIKE ?)
+  `;
+
+  const like = `%${queryText.toLowerCase()}%`;
+  const params = [like, like, like];
+
+  if (!parsed.includeArchived) {
+    sql += ' AND m.archived = 0';
+  }
+
+  if (parsed.category) {
+    sql += ' AND m.category = ?';
+    params.push(parsed.category);
+  }
+
+  if (parsed.importance) {
+    sql += ' AND m.importance = ?';
+    params.push(parsed.importance);
+  }
+
+  sql += ' ORDER BY m.access_count DESC, m.created_at DESC LIMIT ?';
+  params.push(limit);
+
+  const rows = database.prepare(sql).all(...params);
+
+  // Lower-confidence keyword score compared to FTS.
+  return rows.map((r, idx) => ({
+    ...r,
+    keyword_score: Math.max(0.2, 1 - (idx / Math.max(limit, 1)))
+  }));
 }
 
 /**

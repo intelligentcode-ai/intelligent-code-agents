@@ -52,8 +52,9 @@ story-breakdown, git-privacy, commit-pr, release, suggest, memory
 ### Enforcement Companion Skills (3)
 file-placement, branch-protection, infrastructure-protection
 
-### Meta (System) Skill
+### Meta (System) Skills (2)
 - `skill-creator`: guidance for creating new skills
+- `skill-writer`: TDD-first guidance for creating and refining skills
 
 ## Configuration Files (Where Skills Read Settings)
 

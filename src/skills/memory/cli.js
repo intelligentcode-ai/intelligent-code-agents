@@ -141,6 +141,12 @@ async function main() {
         break;
       }
 
+      case 'backend': {
+        const info = memory.backend({ projectRoot });
+        console.log(JSON.stringify(info, null, 2));
+        break;
+      }
+
       case 'update': {
         const id = opts._[0];
         if (!id) {
@@ -220,6 +226,7 @@ Commands:
   get <id>                          Get memory by ID
   list [--category X] [--tag Y]     List memories
   stats                             Show statistics
+  backend                           Show active DB backend and fallback status
   update <id> [--title/--summary/...] Update a memory
   link <source> <target>            Link two memories
   archive <id>                      Archive a memory

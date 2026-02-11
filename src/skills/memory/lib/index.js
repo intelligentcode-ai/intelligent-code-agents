@@ -21,7 +21,7 @@ function init(projectRoot = process.cwd()) {
   // can immediately search/list existing project knowledge.
   const importStats = exporter.rebuildFromExports(projectRoot);
 
-  return { success: true, importStats };
+  return { success: true, importStats, backend: db.getBackendInfo() };
 }
 
 /**
@@ -290,10 +290,21 @@ function stats(options = {}) {
 
   return {
     ...dbStats,
+    backend: db.getBackendInfo(),
     embeddingsAvailable: embeddings.isAvailable(),
     modelName: embeddings.getModelName(),
     embeddingDimension: embeddings.getDimension()
   };
+}
+
+/**
+ * Report active memory backend and fallback status
+ * @param {object} options - Options
+ * @returns {object} Backend info
+ */
+function backend(options = {}) {
+  db.initDatabase(options.projectRoot);
+  return db.getBackendInfo();
 }
 
 /**
@@ -365,6 +376,7 @@ module.exports = {
   getArchiveCandidates,
   exportAll,
   rebuild,
+  backend,
   close,
 
   // Sub-modules (for advanced usage)
