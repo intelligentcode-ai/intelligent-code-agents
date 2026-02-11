@@ -16,7 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release workflow now requires tags to point to commits reachable from `origin/main` before publishing.
 - Reproducibility validation now verifies downloaded artifacts against `SHA256SUMS.txt` before sign/attest/release steps.
 - Workflow guide and docs index now link to the release-signing process.
-
 ## [10.2.9] - 2026-02-11
 
 ### Added
