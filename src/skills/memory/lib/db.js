@@ -5,10 +5,13 @@
 
 const path = require('path');
 const fs = require('fs');
+const { createSqliteCliAdapter, isSqliteCliAvailable } = require('./sqlite-cli-adapter');
 
 // Database instance (lazy-loaded)
 let db = null;
 let Database = null;
+let backendType = 'none'; // better-sqlite3 | sqlite3-cli | none
+let backendNoticeShown = false;
 
 function sleepMs(ms) {
   // Synchronous sleep (Node) to allow retry loops during initialization.
@@ -48,21 +51,40 @@ function ensureMemoryDir(projectRoot = process.cwd()) {
 function initDatabase(projectRoot = process.cwd()) {
   if (db) return db;
 
-  // Try to load better-sqlite3
-  try {
-    Database = require('better-sqlite3');
-  } catch (e) {
-    console.error('better-sqlite3 not installed. Run: npm install better-sqlite3');
-    console.error('Memory skill will operate in degraded mode (no persistence).');
-    return null;
-  }
-
   ensureMemoryDir(projectRoot);
   const dbPath = getDbPath(projectRoot);
+  const skillDir = path.resolve(__dirname, '..');
 
-  // Allow concurrent writers to wait briefly instead of failing with
-  // "database is locked" when multiple processes initialize/write at once.
-  db = new Database(dbPath, { timeout: 5000 });
+  // Preferred backend: better-sqlite3 (native Node binding)
+  try {
+    Database = require('better-sqlite3');
+    db = new Database(dbPath, { timeout: 5000 });
+    backendType = 'better-sqlite3';
+  } catch (e) {
+    if (isSqliteCliAvailable()) {
+      db = createSqliteCliAdapter(dbPath);
+      backendType = 'sqlite3-cli';
+
+      if (!backendNoticeShown) {
+        console.warn('Memory backend: better-sqlite3 is not installed.');
+        console.warn('Using sqlite3 CLI fallback backend (persistence remains enabled).');
+        console.warn('If you want the primary Node backend, please ask for permission before running:');
+        console.warn(`  cd "${skillDir}" && npm install --production`);
+        console.warn('Why: better-sqlite3 is the Node.js SQLite binding used by this skill for the primary driver.');
+        backendNoticeShown = true;
+      }
+    } else {
+      backendType = 'none';
+      if (!backendNoticeShown) {
+        console.error('Memory backend unavailable: better-sqlite3 is not installed and sqlite3 CLI was not found.');
+        console.error('Please grant permission to install the dependency in the memory skill directory:');
+        console.error(`  cd "${skillDir}" && npm install --production`);
+        console.error('Or install sqlite3 CLI system-wide to use the no-extra-package fallback backend.');
+        backendNoticeShown = true;
+      }
+      return null;
+    }
+  }
 
   // New projects can run multiple concurrent "init" calls (multiple agent
   // processes). SQLite only allows one writer, so we retry initialization on
@@ -242,25 +264,26 @@ function generateId() {
     return `mem-${Date.now()}-${rand}`;
   }
 
-  // Concurrency-safe sequential id allocation.
-  // Two concurrent writers must never observe the same "next id" value.
-  //
-  // We use a tiny meta table as a counter and allocate ids inside a write
-  // transaction. The first statement is a write, so SQLite serializes writers.
-  const allocate = db.transaction(() => {
-    db.prepare(`
-      INSERT OR IGNORE INTO meta (key, value) VALUES ('next_id', 1)
-    `).run();
-
-    // Increment first to acquire the write lock, then read and subtract 1.
-    db.prepare(`
-      UPDATE meta SET value = value + 1 WHERE key = 'next_id'
-    `).run();
-
+  // In sqlite3 CLI mode, each call runs in a separate process, so the
+  // transaction-based allocator below is not available. Fall back to
+  // "max(id)+1" with collision retry in createMemory().
+  if (backendType !== 'better-sqlite3') {
     const row = db.prepare(`
-      SELECT value FROM meta WHERE key = 'next_id'
+      SELECT MAX(CAST(SUBSTR(id, 5) AS INTEGER)) AS max_seq
+      FROM memories
+      WHERE id LIKE 'mem-%'
+        AND id NOT LIKE 'mem-%-%'
+        AND SUBSTR(id, 5) GLOB '[0-9]*'
     `).get();
+    const seq = Number(row?.max_seq || 0) + 1;
+    return `mem-${String(seq).padStart(3, '0')}`;
+  }
 
+  // Concurrency-safe sequential id allocation for better-sqlite3.
+  const allocate = db.transaction(() => {
+    db.prepare(`INSERT OR IGNORE INTO meta (key, value) VALUES ('next_id', 1)`).run();
+    db.prepare(`UPDATE meta SET value = value + 1 WHERE key = 'next_id'`).run();
+    const row = db.prepare(`SELECT value FROM meta WHERE key = 'next_id'`).get();
     const seq = (row?.value || 1) - 1;
     return `mem-${String(seq).padStart(3, '0')}`;
   });
@@ -451,6 +474,7 @@ function addLink(sourceId, targetId, linkType = 'related') {
  */
 function storeEmbedding(id, embedding) {
   if (!db) return;
+  if (backendType !== 'better-sqlite3') return;
 
   const buffer = Buffer.from(embedding.buffer);
 
@@ -467,6 +491,7 @@ function storeEmbedding(id, embedding) {
  */
 function getEmbedding(id) {
   if (!db) return null;
+  if (backendType !== 'better-sqlite3') return null;
 
   const result = db.prepare(`
     SELECT embedding FROM memories_vec WHERE memory_id = ?
@@ -483,6 +508,7 @@ function getEmbedding(id) {
  */
 function getAllEmbeddings() {
   if (!db) return [];
+  if (backendType !== 'better-sqlite3') return [];
 
   const results = db.prepare(`
     SELECT mv.memory_id, mv.embedding, m.archived
@@ -616,7 +642,21 @@ function closeDatabase() {
   if (db) {
     db.close();
     db = null;
+    backendType = 'none';
   }
+}
+
+function getBackendInfo() {
+  const skillDir = path.resolve(__dirname, '..');
+  return {
+    backend: backendType,
+    initialized: !!db,
+    usingFallback: backendType === 'sqlite3-cli',
+    supportsPersistence: backendType !== 'none',
+    supportsVectorStorage: backendType === 'better-sqlite3',
+    installHint: `cd "${skillDir}" && npm install --production`,
+    installReason: 'better-sqlite3 is the primary Node.js SQLite binding used by the memory CLI',
+  };
 }
 
 module.exports = {
@@ -637,5 +677,6 @@ module.exports = {
   listMemories,
   getArchiveCandidates,
   getStats,
+  getBackendInfo,
   closeDatabase
 };
