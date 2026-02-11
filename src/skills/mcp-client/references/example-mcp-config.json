@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "remote-example": {
+      "url": "https://example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${REMOTE_API_KEY}"
+      },
+      "_comment": "Put REMOTE_API_KEY in your environment. Optional sugar: api_key becomes headers.Authorization."
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    }
+  }
+}
