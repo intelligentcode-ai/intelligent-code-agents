@@ -25,6 +25,11 @@ If one repository references another inside Git metadata, the precise term is **
 - **Enforcement Companion Skills (3):** file-placement, branch-protection, infrastructure-protection
 - **Meta Skills (2):** skill-creator, skill-writer
 
+**Category resolution (catalog):**
+- Preferred: `category:` in `SKILL.md` frontmatter.
+- Fallback: ICA infers category by skill name using built-in role/command/enforcement/meta sets.
+- Final fallback: `process`.
+
 ### Behaviors (4 foundational)
 Portable, always-available structural guidance:
 - `config-system.md` - Configuration hierarchy

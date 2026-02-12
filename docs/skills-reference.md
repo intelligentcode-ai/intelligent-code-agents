@@ -32,6 +32,11 @@ See the `work-queue` skill for the exact format.
 
 ## Skills By Category
 
+Catalog category mapping is now explicit:
+- Preferred: set `category:` in `SKILL.md` frontmatter.
+- Fallback: ICA infers by known skill-name sets.
+- Default: `process`.
+
 ### Role Skills (14)
 pm, architect, developer, system-engineer, devops-engineer,
 database-engineer, security-engineer, ai-engineer, web-designer,

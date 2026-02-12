@@ -93,6 +93,7 @@ function toCatalogSkill(source: SkillSource, skillDir: string): CatalogSkill | n
   const skillName = frontmatter.name || path.basename(skillDir);
   const skillId = `${source.id}/${skillName}`;
   const stat = fs.statSync(skillFile);
+  const explicitCategory = (frontmatter.category || "").trim().toLowerCase();
 
   return {
     skillId,
@@ -102,7 +103,7 @@ function toCatalogSkill(source: SkillSource, skillDir: string): CatalogSkill | n
     skillName,
     name: skillName,
     description: frontmatter.description || "",
-    category: inferCategory(skillName),
+    category: explicitCategory || inferCategory(skillName),
     dependencies: [],
     compatibleTargets: ["claude", "codex", "cursor", "gemini", "antigravity"] satisfies TargetPlatform[],
     resources: collectResources(skillDir, skillName),

@@ -94,11 +94,12 @@ function toCatalogEntry(skillDir: string, repoRoot: string): LocalCatalogEntry |
   const frontmatter = parseFrontmatter(content);
   const name = frontmatter.name || path.basename(skillDir);
   const description = frontmatter.description || "";
+  const explicitCategory = (frontmatter.category || "").trim().toLowerCase();
 
   return {
     name,
     description,
-    category: inferCategory(name),
+    category: explicitCategory || inferCategory(name),
     dependencies: [],
     compatibleTargets: ["claude", "codex", "cursor", "gemini", "antigravity"] satisfies TargetPlatform[],
     resources: collectResources(skillDir),
