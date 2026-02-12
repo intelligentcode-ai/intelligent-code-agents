@@ -29,6 +29,12 @@
         "required": ["name", "installMode", "effectiveMode", "destinationPath", "sourcePath"],
         "properties": {
           "name": { "type": "string" },
+          "skillName": { "type": "string" },
+          "skillId": { "type": "string" },
+          "sourceId": { "type": "string" },
+          "sourceUrl": { "type": "string" },
+          "sourceRevision": { "type": "string" },
+          "orphaned": { "type": "boolean" },
           "installMode": { "type": "string", "enum": ["symlink", "copy"] },
           "effectiveMode": { "type": "string", "enum": ["symlink", "copy"] },
           "destinationPath": { "type": "string" },

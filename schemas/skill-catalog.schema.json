@@ -3,17 +3,58 @@
   "$id": "https://intelligentcode.ai/schemas/skill-catalog.schema.json",
   "title": "ICA Skill Catalog",
   "type": "object",
-  "required": ["generatedAt", "source", "version", "skills"],
+  "required": ["generatedAt", "source", "version", "sources", "skills"],
   "properties": {
     "generatedAt": { "type": "string", "format": "date-time" },
-    "source": { "type": "string", "enum": ["local-repo", "github-release"] },
+    "source": { "type": "string", "enum": ["local-repo", "github-release", "multi-source"] },
     "version": { "type": "string" },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "repoUrl", "transport", "official", "enabled", "skillsRoot", "removable"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "repoUrl": { "type": "string" },
+          "transport": { "type": "string", "enum": ["https", "ssh"] },
+          "official": { "type": "boolean" },
+          "enabled": { "type": "boolean" },
+          "skillsRoot": { "type": "string" },
+          "credentialRef": { "type": "string" },
+          "removable": { "type": "boolean" },
+          "lastSyncAt": { "type": "string", "format": "date-time" },
+          "lastError": { "type": "string" },
+          "localPath": { "type": "string" },
+          "localSkillsPath": { "type": "string" },
+          "revision": { "type": "string" }
+        }
+      }
+    },
     "skills": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name", "description", "category", "dependencies", "compatibleTargets", "resources", "sourcePath"],
+        "required": [
+          "skillId",
+          "sourceId",
+          "sourceName",
+          "sourceUrl",
+          "skillName",
+          "name",
+          "description",
+          "category",
+          "dependencies",
+          "compatibleTargets",
+          "resources",
+          "sourcePath"
+        ],
         "properties": {
+          "skillId": { "type": "string" },
+          "sourceId": { "type": "string" },
+          "sourceName": { "type": "string" },
+          "sourceUrl": { "type": "string" },
+          "skillName": { "type": "string" },
           "name": { "type": "string" },
           "description": { "type": "string" },
           "category": { "type": "string" },

@@ -2,17 +2,42 @@ import React, { useEffect, useMemo, useState } from "react";
 
 type Target = "claude" | "codex" | "cursor" | "gemini" | "antigravity";
 
+type Source = {
+  id: string;
+  name: string;
+  repoUrl: string;
+  transport: "https" | "ssh";
+  official: boolean;
+  enabled: boolean;
+  skillsRoot: string;
+  credentialRef?: string;
+  removable: boolean;
+  lastSyncAt?: string;
+  lastError?: string;
+  revision?: string;
+};
+
 type Skill = {
+  skillId: string;
+  sourceId: string;
+  sourceName: string;
+  sourceUrl: string;
+  skillName: string;
   name: string;
   description: string;
   category: string;
   resources: Array<{ type: string; path: string }>;
+  version?: string;
+  updatedAt?: string;
 };
 
 type InstallationSkill = {
   name: string;
+  skillId?: string;
+  sourceId?: string;
   installMode: string;
   effectiveMode: string;
+  orphaned?: boolean;
 };
 
 type InstallationRow = {
@@ -56,6 +81,7 @@ function asErrorMessage(payload: unknown, fallback: string): string {
 }
 
 export function InstallerDashboard(): JSX.Element {
+  const [sources, setSources] = useState<Source[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
   const [targets, setTargets] = useState<Set<Target>>(new Set(["codex"]));
@@ -68,10 +94,15 @@ export function InstallerDashboard(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [selectionCustomized, setSelectionCustomized] = useState(false);
+  const [sourceRepoUrl, setSourceRepoUrl] = useState("");
+  const [sourceName, setSourceName] = useState("");
+  const [sourceTransport, setSourceTransport] = useState<"https" | "ssh">("https");
+  const [sourceToken, setSourceToken] = useState("");
 
   const selectedTargetList = useMemo(() => Array.from(targets).sort(), [targets]);
   const trimmedProjectPath = projectPath.trim();
   const targetKey = selectedTargetList.join(",");
+  const skillById = useMemo(() => new Map(skills.map((skill) => [skill.skillId, skill])), [skills]);
 
   const categorized = useMemo(() => {
     const byCategory = new Map<string, Skill[]>();
@@ -88,12 +119,11 @@ export function InstallerDashboard(): JSX.Element {
     if (!normalizedQuery) {
       return categorized;
     }
-
     return categorized
       .map(([category, categorySkills]) => {
         const filtered = categorySkills.filter((skill) => {
           const resourceText = skill.resources.map((item) => `${item.type} ${item.path}`).join(" ");
-          const haystack = `${skill.name} ${skill.description} ${skill.category} ${resourceText}`.toLowerCase();
+          const haystack = `${skill.skillId} ${skill.description} ${skill.category} ${resourceText}`.toLowerCase();
           return haystack.includes(normalizedQuery);
         });
         return [category, filtered] as [string, Skill[]];
@@ -101,17 +131,47 @@ export function InstallerDashboard(): JSX.Element {
       .filter(([, categorySkills]) => categorySkills.length > 0);
   }, [categorized, normalizedQuery]);
 
-  const installedSkillNames = useMemo(() => {
+  const installedSkillIds = useMemo(() => {
     const names = new Set<string>();
     for (const row of installations) {
       for (const skill of row.managedSkills || []) {
-        names.add(skill.name);
+        if (skill.skillId) {
+          names.add(skill.skillId);
+        } else {
+          const match = skills.find((item) => item.skillName === skill.name);
+          if (match) names.add(match.skillId);
+        }
       }
     }
     return names;
-  }, [installations]);
+  }, [installations, skills]);
 
-  async function fetchSkills(): Promise<void> {
+  async function fetchSources(): Promise<void> {
+    const res = await fetch("/api/v1/sources");
+    const payload = (await res.json()) as { sources?: Source[]; error?: string };
+    if (!res.ok) {
+      throw new Error(asErrorMessage(payload, "Failed to load sources."));
+    }
+    setSources(Array.isArray(payload.sources) ? payload.sources : []);
+  }
+
+  async function refreshSources(runRefresh = false): Promise<void> {
+    if (runRefresh) {
+      await fetch("/api/v1/sources/refresh-all", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+    }
+    await fetchSources();
+  }
+
+  async function fetchSkills(runRefresh = false): Promise<void> {
+    if (runRefresh) {
+      await refreshSources(true);
+    }
     const res = await fetch("/api/v1/catalog/skills");
     const payload = (await res.json()) as { skills?: Skill[]; error?: string };
     if (!res.ok) {
@@ -155,30 +215,24 @@ export function InstallerDashboard(): JSX.Element {
     setInstallations(Array.isArray(payload.installations) ? payload.installations : []);
   }
 
-  function setSkillsSelection(skillNames: string[], shouldSelect: boolean): void {
+  function setSkillsSelection(skillIds: string[], shouldSelect: boolean): void {
     setSelectionCustomized(true);
     setSelectedSkills((current) => {
       const next = new Set(current);
-      for (const name of skillNames) {
-        if (shouldSelect) {
-          next.add(name);
-        } else {
-          next.delete(name);
-        }
+      for (const id of skillIds) {
+        if (shouldSelect) next.add(id);
+        else next.delete(id);
       }
       return next;
     });
   }
 
-  function toggleSkill(name: string): void {
+  function toggleSkill(skillId: string): void {
     setSelectionCustomized(true);
     setSelectedSkills((current) => {
       const next = new Set(current);
-      if (next.has(name)) {
-        next.delete(name);
-      } else {
-        next.add(name);
-      }
+      if (next.has(skillId)) next.delete(skillId);
+      else next.add(skillId);
       return next;
     });
   }
@@ -215,6 +269,18 @@ export function InstallerDashboard(): JSX.Element {
     }
 
     try {
+      const selections = Array.from(selectedSkills)
+        .map((skillId) => {
+          const skill = skillById.get(skillId);
+          if (!skill) return null;
+          return {
+            sourceId: skill.sourceId,
+            skillName: skill.skillName,
+            skillId: skill.skillId,
+          };
+        })
+        .filter((item): item is { sourceId: string; skillName: string; skillId: string } => Boolean(item));
+
       const res = await fetch(`/api/v1/${operation}/apply`, {
         method: "POST",
         headers: {
@@ -226,7 +292,8 @@ export function InstallerDashboard(): JSX.Element {
           scope,
           projectPath: scope === "project" ? trimmedProjectPath : undefined,
           mode,
-          skills: Array.from(selectedSkills),
+          skills: [],
+          skillSelections: selections,
           removeUnselected: operation === "sync",
           installClaudeIntegration: true,
         }),
@@ -245,9 +312,134 @@ export function InstallerDashboard(): JSX.Element {
     }
   }
 
+  async function addSourceFromForm(): Promise<void> {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/v1/sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: sourceName.trim() || undefined,
+          repoUrl: sourceRepoUrl.trim(),
+          transport: sourceTransport,
+          token: sourceToken.trim() || undefined,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(asErrorMessage(payload, "Failed to add source."));
+      }
+      setSourceRepoUrl("");
+      setSourceName("");
+      setSourceToken("");
+      await fetchSources();
+      await fetchSkills(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refreshSource(sourceId?: string): Promise<void> {
+    setBusy(true);
+    setError("");
+    try {
+      const endpoint = sourceId ? `/api/v1/sources/${sourceId}/refresh` : "/api/v1/sources/refresh-all";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(asErrorMessage(payload, "Source refresh failed."));
+      }
+      await fetchSources();
+      await fetchSkills();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteSource(source: Source): Promise<void> {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/v1/sources/${source.id}`, { method: "DELETE" });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(asErrorMessage(payload, "Source removal failed."));
+      }
+      await fetchSources();
+      await fetchSkills();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pickProjectPath(): Promise<void> {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/v1/projects/pick", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          initialPath: trimmedProjectPath || undefined,
+        }),
+      });
+      const payload = (await res.json()) as { path?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(asErrorMessage(payload, "Project picker failed."));
+      }
+      if (payload.path) {
+        setProjectPath(payload.path);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function mountProjectInContainer(): Promise<void> {
+    if (!trimmedProjectPath) {
+      setError("Set a project path first.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/v1/container/mount-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectPath: trimmedProjectPath,
+          confirm: true,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(asErrorMessage(payload, "Container mount failed."));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
     fetchDiscoveredTargets().catch((err) => setError(err instanceof Error ? err.message : String(err)));
-    fetchSkills().catch((err) => setError(err instanceof Error ? err.message : String(err)));
+    fetchSources()
+      .then(() => fetchSkills(true))
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, []);
 
   useEffect(() => {
@@ -256,38 +448,28 @@ export function InstallerDashboard(): JSX.Element {
   }, [scope, trimmedProjectPath, targetKey]);
 
   useEffect(() => {
-    if (selectionCustomized) {
-      return;
-    }
-    const next = new Set(Array.from(installedSkillNames));
-    setSelectedSkills((current) => {
-      if (current.size === next.size && Array.from(current).every((name) => next.has(name))) {
-        return current;
-      }
-      return next;
-    });
-  }, [installedSkillNames, selectionCustomized]);
+    if (selectionCustomized) return;
+    setSelectedSkills(new Set(installedSkillIds));
+  }, [installedSkillIds, selectionCustomized]);
 
   const totalSkills = skills.length;
   const filteredSkillsCount = filteredCategorized.reduce((sum, [, categorySkills]) => sum + categorySkills.length, 0);
   const selectedSkillCount = selectedSkills.size;
-  const installedSkillCount = installedSkillNames.size;
+  const installedSkillCount = installedSkillIds.size;
 
   return (
     <div className="shell">
       <header className="hero">
         <div className="hero-topline">
           <p className="eyebrow">ICA COMMAND CENTER</p>
-          <p className="stamp">Blue Theme</p>
+          <p className="stamp">Multi-source</p>
         </div>
         <h1>Skills Dashboard</h1>
-        <p>
-          Control installations across targets with one selection model. Tune once, install or sync everywhere.
-        </p>
+        <p>Manage source repositories, pick project paths natively, and install source-pinned skills across targets.</p>
         <div className="hero-stats">
           <article className="stat-card">
-            <span>Selected Targets</span>
-            <strong>{selectedTargetList.length}</strong>
+            <span>Sources</span>
+            <strong>{sources.length}</strong>
           </article>
           <article className="stat-card">
             <span>Installed Skills</span>
@@ -308,6 +490,63 @@ export function InstallerDashboard(): JSX.Element {
 
       <div className="workspace">
         <aside className="control-rail">
+          <section className="panel">
+            <h2>Sources</h2>
+            <div className="subtle">{sources.length} configured</div>
+            <div className="source-list">
+              {sources.map((source) => (
+                <article key={source.id} className="source-item">
+                  <strong>{source.id}</strong>
+                  <span>{source.repoUrl}</span>
+                  <span>{source.lastSyncAt ? `synced ${new Date(source.lastSyncAt).toLocaleString()}` : "never synced"}</span>
+                  {source.lastError && <span className="source-error">{source.lastError}</span>}
+                  <div className="source-actions">
+                    <button className="btn btn-inline" type="button" disabled={busy} onClick={() => refreshSource(source.id)}>
+                      Refresh
+                    </button>
+                    {source.removable && (
+                      <button className="btn btn-inline" type="button" disabled={busy} onClick={() => deleteSource(source)}>
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+            <input
+              className="input"
+              placeholder="Source name (optional)"
+              value={sourceName}
+              onChange={(event) => setSourceName(event.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="https://github.com/org/repo.git"
+              value={sourceRepoUrl}
+              onChange={(event) => setSourceRepoUrl(event.target.value)}
+            />
+            <label className="line">
+              <input type="radio" checked={sourceTransport === "https"} onChange={() => setSourceTransport("https")} /> HTTPS
+            </label>
+            <label className="line">
+              <input type="radio" checked={sourceTransport === "ssh"} onChange={() => setSourceTransport("ssh")} /> SSH
+            </label>
+            {sourceTransport === "https" && (
+              <input
+                className="input"
+                placeholder="PAT / API key (optional for public repos)"
+                value={sourceToken}
+                onChange={(event) => setSourceToken(event.target.value)}
+              />
+            )}
+            <button className="btn btn-secondary" type="button" disabled={busy || !sourceRepoUrl.trim()} onClick={addSourceFromForm}>
+              Add source
+            </button>
+            <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => refreshSource()}>
+              Refresh all sources
+            </button>
+          </section>
+
           <section className="panel">
             <h2>Targets</h2>
             <p className="subtle">Active: {selectedTargetList.join(", ")}</p>
@@ -335,12 +574,20 @@ export function InstallerDashboard(): JSX.Element {
               <input type="radio" checked={scope === "project"} onChange={() => setScope("project")} /> Project
             </label>
             {scope === "project" && (
-              <input
-                className="input"
-                placeholder="/path/to/project"
-                value={projectPath}
-                onChange={(event) => setProjectPath(event.target.value)}
-              />
+              <>
+                <input
+                  className="input"
+                  placeholder="/path/to/project"
+                  value={projectPath}
+                  onChange={(event) => setProjectPath(event.target.value)}
+                />
+                <button className="btn btn-inline" type="button" disabled={busy} onClick={pickProjectPath}>
+                  Pick project (native)
+                </button>
+                <button className="btn btn-inline" type="button" disabled={busy || !trimmedProjectPath} onClick={mountProjectInContainer}>
+                  Mount in container
+                </button>
+              </>
             )}
           </section>
 
@@ -379,18 +626,10 @@ export function InstallerDashboard(): JSX.Element {
                 </p>
               </div>
               <div className="bulk-actions">
-                <button
-                  className="btn btn-ghost"
-                  onClick={() => setSkillsSelection(skills.map((skill) => skill.name), true)}
-                  type="button"
-                >
+                <button className="btn btn-ghost" onClick={() => setSkillsSelection(skills.map((skill) => skill.skillId), true)} type="button">
                   Select all
                 </button>
-                <button
-                  className="btn btn-ghost"
-                  onClick={() => setSkillsSelection(skills.map((skill) => skill.name), false)}
-                  type="button"
-                >
+                <button className="btn btn-ghost" onClick={() => setSkillsSelection(skills.map((skill) => skill.skillId), false)} type="button">
                   Clear all
                 </button>
               </div>
@@ -398,31 +637,27 @@ export function InstallerDashboard(): JSX.Element {
 
             <input
               className="input input-search"
-              placeholder="Search skills, descriptions, resources..."
+              placeholder="Search source/skill, descriptions, resources..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
 
-            {filteredCategorized.length === 0 && (
-              <div className="empty-state">No skills match this search. Try a broader term.</div>
-            )}
+            {filteredCategorized.length === 0 && <div className="empty-state">No skills match this search. Try a broader term.</div>}
 
             {filteredCategorized.map(([category, categorySkills]) => {
-              const names = categorySkills.map((skill) => skill.name);
-              const selectedInCategory = names.filter((name) => selectedSkills.has(name)).length;
-              const allSelectedInCategory = selectedInCategory === names.length && names.length > 0;
+              const ids = categorySkills.map((skill) => skill.skillId);
+              const selectedInCategory = ids.filter((id) => selectedSkills.has(id)).length;
+              const allSelectedInCategory = selectedInCategory === ids.length && ids.length > 0;
 
               return (
                 <section key={category} className="category-block">
                   <header className="category-head">
                     <h3>{category}</h3>
                     <div className="category-actions">
-                      <span>{selectedInCategory}/{names.length}</span>
-                      <button
-                        className="btn btn-inline"
-                        onClick={() => setSkillsSelection(names, !allSelectedInCategory)}
-                        type="button"
-                      >
+                      <span>
+                        {selectedInCategory}/{ids.length}
+                      </span>
+                      <button className="btn btn-inline" onClick={() => setSkillsSelection(ids, !allSelectedInCategory)} type="button">
                         {allSelectedInCategory ? "Clear category" : "Select category"}
                       </button>
                     </div>
@@ -430,25 +665,21 @@ export function InstallerDashboard(): JSX.Element {
 
                   <div className="skill-grid">
                     {categorySkills.map((skill) => {
-                      const isSelected = selectedSkills.has(skill.name);
-                      const isInstalled = installedSkillNames.has(skill.name);
+                      const isSelected = selectedSkills.has(skill.skillId);
+                      const isInstalled = installedSkillIds.has(skill.skillId);
                       return (
-                        <article key={skill.name} className={`skill ${isSelected ? "selected" : ""}`}>
+                        <article key={skill.skillId} className={`skill ${isSelected ? "selected" : ""}`}>
                           <label className="skill-title">
-                            <input
-                              type="checkbox"
-                              name={skill.name}
-                              checked={isSelected}
-                              onChange={() => toggleSkill(skill.name)}
-                            />
-                            <strong>{skill.name}</strong>
+                            <input type="checkbox" checked={isSelected} onChange={() => toggleSkill(skill.skillId)} />
+                            <strong>{skill.skillId}</strong>
                             {isInstalled && <span className="badge">installed</span>}
                           </label>
                           <p>{skill.description}</p>
+                          <p className="subtle">{skill.skillName} <span className="resource-type">{skill.sourceId}</span></p>
                           {skill.resources.length > 0 && (
                             <ul>
                               {skill.resources.map((resource) => (
-                                <li key={`${skill.name}-${resource.path}`}>
+                                <li key={`${skill.skillId}-${resource.path}`}>
                                   <span className="resource-type">{resource.type}</span>
                                   <code>{resource.path}</code>
                                 </li>

@@ -1,8 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import { SkillCatalog, SkillCatalogEntry, SkillResource, TargetPlatform } from "./types";
+import { buildMultiSourceCatalog } from "./catalogMultiSource";
 
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
+interface LocalCatalogEntry {
+  name: string;
+  description: string;
+  category: string;
+  dependencies: string[];
+  compatibleTargets: TargetPlatform[];
+  resources: SkillResource[];
+  sourcePath: string;
+}
 
 function parseFrontmatter(content: string): Record<string, string> {
   const match = content.match(FRONTMATTER_RE);
@@ -74,7 +84,7 @@ function collectResources(skillDir: string): SkillResource[] {
   return resources;
 }
 
-function toCatalogEntry(skillDir: string, repoRoot: string): SkillCatalogEntry | null {
+function toCatalogEntry(skillDir: string, repoRoot: string): LocalCatalogEntry | null {
   const skillFile = path.join(skillDir, "SKILL.md");
   if (!fs.existsSync(skillFile)) {
     return null;
@@ -107,17 +117,28 @@ function resolveGeneratedAt(sourceDateEpoch?: string): string {
 
 export function buildLocalCatalog(repoRoot: string, version: string, sourceDateEpoch?: string): SkillCatalog {
   const skillsRoot = path.join(repoRoot, "src", "skills");
-  const skills = fs
-    .readdirSync(skillsRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => toCatalogEntry(path.join(skillsRoot, entry.name), repoRoot))
-    .filter((entry): entry is SkillCatalogEntry => Boolean(entry))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const skills = fs.existsSync(skillsRoot)
+    ? fs
+        .readdirSync(skillsRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => toCatalogEntry(path.join(skillsRoot, entry.name), repoRoot))
+        .filter((entry): entry is LocalCatalogEntry => Boolean(entry))
+        .map((entry) => ({
+          ...entry,
+          skillId: `local/${entry.name}`,
+          sourceId: "local",
+          sourceName: "local",
+          sourceUrl: "",
+          skillName: entry.name,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    : [];
 
   return {
     generatedAt: resolveGeneratedAt(sourceDateEpoch),
     source: "local-repo",
     version,
+    sources: [],
     skills,
   };
 }
@@ -131,18 +152,45 @@ export function loadCatalog(repoRoot: string, fallbackVersion = "0.0.0"): SkillC
   const catalogPath = path.join(repoRoot, "src", "catalog", "skills.catalog.json");
   if (fs.existsSync(catalogPath)) {
     const catalog = loadCatalogFromFile(catalogPath);
-    return {
+    const normalized: SkillCatalog = {
       ...catalog,
+      sources: catalog.sources || [],
       skills: catalog.skills.map((skill) => ({
         ...skill,
+        skillId: skill.skillId || `${skill.sourceId || "local"}/${skill.skillName || skill.name}`,
+        sourceId: skill.sourceId || "local",
+        sourceName: skill.sourceName || skill.sourceId || "local",
+        sourceUrl: skill.sourceUrl || "",
+        skillName: skill.skillName || skill.name,
         sourcePath: path.isAbsolute(skill.sourcePath) ? skill.sourcePath : path.resolve(repoRoot, skill.sourcePath),
       })),
     };
+    if (normalized.skills.length > 0) {
+      return normalized;
+    }
   }
 
   return buildLocalCatalog(repoRoot, fallbackVersion);
 }
 
-export function findSkill(catalog: SkillCatalog, skillName: string): SkillCatalogEntry | undefined {
-  return catalog.skills.find((skill) => skill.name === skillName);
+export async function loadCatalogFromSources(repoRoot: string, refresh = false): Promise<SkillCatalog> {
+  const versionFile = path.join(repoRoot, "VERSION");
+  const version = fs.existsSync(versionFile) ? fs.readFileSync(versionFile, "utf8").trim() : "0.0.0";
+  const multi = await buildMultiSourceCatalog({
+    repoVersion: version,
+    refresh,
+  });
+  if (multi.skills.length > 0) {
+    return multi;
+  }
+  const fallback = loadCatalog(repoRoot, version);
+  return {
+    ...fallback,
+    source: multi.sources.length > 0 ? "multi-source" : fallback.source,
+    sources: multi.sources.length > 0 ? multi.sources : fallback.sources,
+  };
+}
+
+export function findSkill(catalog: SkillCatalog, skillNameOrId: string): SkillCatalogEntry | undefined {
+  return catalog.skills.find((skill) => skill.skillId === skillNameOrId || skill.name === skillNameOrId);
 }

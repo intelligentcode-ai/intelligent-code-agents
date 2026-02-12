@@ -1,17 +1,19 @@
 import path from "node:path";
 import { BASELINE_DIRECTORIES, BASELINE_FILES, TARGET_HOME_DIR } from "./constants";
 import { applyClaudeIntegration } from "./claudeIntegration";
-import { findSkill, loadCatalog } from "./catalog";
+import { loadCatalogFromSources } from "./catalog";
+import { findSkillById, resolveInstallSelections } from "./catalogMultiSource";
 import { copyPath, ensureDir, pathExists, removePath, trySymlinkDirectory } from "./fs";
 import { mergeMcpConfig } from "./mcp";
 import { computePlannerDelta } from "./planner";
 import { assertPathWithin, redactSensitive } from "./security";
-import { appendHistory, createEmptyState, getStatePath, loadInstallState, saveInstallState } from "./state";
+import { appendHistory, createEmptyState, getStatePath, loadInstallState, reconcileLegacyManagedSkills, saveInstallState } from "./state";
 import {
   InstallRequest,
   InstallState,
   ManagedSkillState,
   OperationReport,
+  SkillCatalog,
   ResolvedTargetPath,
   TargetOperationReport,
   TargetPlatform,
@@ -66,27 +68,36 @@ async function removeTrackedPath(installPath: string, candidatePath: string): Pr
   await removePath(candidatePath);
 }
 
-async function uninstallTarget(request: InstallRequest, resolved: ResolvedTargetPath, report: TargetOperationReport): Promise<void> {
+async function uninstallTarget(
+  request: InstallRequest,
+  resolved: ResolvedTargetPath,
+  report: TargetOperationReport,
+  catalog: SkillCatalog,
+): Promise<void> {
   if (request.force) {
     await removePath(resolved.installPath);
     return;
   }
 
-  const state = await loadInstallState(resolved.installPath);
+  const existing = await loadInstallState(resolved.installPath);
+  const state = existing ? reconcileLegacyManagedSkills(existing, catalog) : null;
   if (!state) {
     return;
   }
 
-  const selected = new Set(request.skills);
-  const removeAll = request.skills.length === 0;
+  const selections = resolveInstallSelections(catalog, request.skillSelections, request.skills);
+  const selected = new Set(selections.map((selection) => selection.skillId));
+  const removeAll = selections.length === 0;
 
   for (const managed of state.managedSkills) {
-    if (!removeAll && !selected.has(managed.name)) continue;
+    const managedId = managed.skillId || managed.name;
+    if (!removeAll && !selected.has(managedId) && !selected.has(managed.name)) continue;
     await removeTrackedPath(resolved.installPath, managed.destinationPath);
-    report.removedSkills.push(managed.name);
+    report.removedSkills.push(managedId);
   }
 
-  const remainingSkills = state.managedSkills.filter((managed) => !report.removedSkills.includes(managed.name));
+  const removedSet = new Set(report.removedSkills);
+  const remainingSkills = state.managedSkills.filter((managed) => !removedSet.has(managed.skillId || managed.name));
 
   let updatedState: InstallState = {
     ...state,
@@ -118,42 +129,56 @@ async function installOrSyncTarget(
   request: InstallRequest,
   resolved: ResolvedTargetPath,
   report: TargetOperationReport,
+  catalog: SkillCatalog,
 ): Promise<void> {
   await installBaseline(repoRoot, resolved.installPath, request.configFile);
 
-  const catalog = loadCatalog(repoRoot);
-  const existingState =
-    (await loadInstallState(resolved.installPath)) ||
+  const rawState = (await loadInstallState(resolved.installPath)) ||
     createEmptyState({
       installerVersion: catalog.version,
       target: resolved.target,
       scope: resolved.scope,
       projectPath: resolved.projectPath,
     });
+  const existingState = reconcileLegacyManagedSkills(rawState, catalog);
+  const selections = resolveInstallSelections(catalog, request.skillSelections, request.skills);
+  const selectedSkillIds = selections.map((selection) => selection.skillId);
 
   const removeUnselected = request.operation === "sync" || Boolean(request.removeUnselected);
-  const delta = computePlannerDelta(request.skills, existingState, removeUnselected);
+  const delta = computePlannerDelta(selectedSkillIds, existingState, removeUnselected);
 
   const skillsDir = path.join(resolved.installPath, "skills");
   await ensureDir(skillsDir);
 
-  const nextManagedSkills = [...existingState.managedSkills].filter((item) => !delta.toRemove.includes(item.name));
+  const nextManagedSkills = [...existingState.managedSkills].filter((item) => !delta.toRemove.includes(item.skillId || item.name));
 
-  for (const skillName of delta.toRemove) {
-    const tracked = existingState.managedSkills.find((managed) => managed.name === skillName);
+  for (const skillId of delta.toRemove) {
+    const tracked = existingState.managedSkills.find((managed) => (managed.skillId || managed.name) === skillId);
     if (tracked) {
       await removeTrackedPath(resolved.installPath, tracked.destinationPath);
-      report.removedSkills.push(skillName);
+      report.removedSkills.push(skillId);
     }
   }
 
-  for (const skillName of delta.toInstall) {
-    const skill = findSkill(catalog, skillName);
+  const selectedNames = new Set<string>();
+  for (const skillId of delta.toInstall) {
+    const skill = findSkillById(catalog, skillId);
     if (!skill) {
-      report.skippedSkills.push(skillName);
-      pushWarning(report, "UNKNOWN_SKILL", `Unknown skill '${skillName}' was skipped.`);
+      report.skippedSkills.push(skillId);
+      pushWarning(report, "UNKNOWN_SKILL", `Unknown skill '${skillId}' was skipped.`);
       continue;
     }
+
+    if (selectedNames.has(skill.skillName)) {
+      report.skippedSkills.push(skill.skillId);
+      pushWarning(
+        report,
+        "DUPLICATE_SKILL_NAME",
+        `Skipped '${skill.skillId}' because skill name '${skill.skillName}' is already selected from another source.`,
+      );
+      continue;
+    }
+    selectedNames.add(skill.skillName);
 
     const destination = path.join(skillsDir, skill.name);
     await removePath(destination);
@@ -173,6 +198,12 @@ async function installOrSyncTarget(
 
     const managed: ManagedSkillState = {
       name: skill.name,
+      skillName: skill.skillName,
+      skillId: skill.skillId,
+      sourceId: skill.sourceId,
+      sourceUrl: skill.sourceUrl,
+      sourceRevision: catalog.sources.find((source) => source.id === skill.sourceId)?.revision,
+      orphaned: false,
       installMode: request.mode,
       effectiveMode,
       destinationPath: destination,
@@ -180,7 +211,7 @@ async function installOrSyncTarget(
     };
 
     nextManagedSkills.push(managed);
-    report.appliedSkills.push(skill.name);
+    report.appliedSkills.push(skill.skillId);
   }
 
   for (const already of delta.alreadyInstalled) {
@@ -216,7 +247,7 @@ async function installOrSyncTarget(
       target: resolved.target,
       scope: resolved.scope,
       projectPath: resolved.projectPath,
-      managedSkills: nextManagedSkills.sort((a, b) => a.name.localeCompare(b.name)),
+      managedSkills: nextManagedSkills.sort((a, b) => (a.skillId || a.name).localeCompare(b.skillId || b.name)),
       managedBaselinePaths: Array.from(new Set(managedBaselinePaths)),
     },
     request.operation,
@@ -241,6 +272,7 @@ function defaultTargetReport(target: TargetPlatform, installPath: string, operat
 
 export async function executeOperation(repoRoot: string, request: InstallRequest): Promise<OperationReport> {
   const startedAt = new Date().toISOString();
+  const catalog = await loadCatalogFromSources(repoRoot, true);
   const targets = request.targets.length > 0 ? request.targets : parseTargets(undefined);
   if (targets.length === 0) {
     throw new Error("No targets were specified or discovered");
@@ -256,9 +288,9 @@ export async function executeOperation(repoRoot: string, request: InstallRequest
 
     try {
       if (request.operation === "uninstall") {
-        await uninstallTarget(request, resolved, report);
+        await uninstallTarget(request, resolved, report, catalog);
       } else {
-        await installOrSyncTarget(repoRoot, request, resolved, report);
+        await installOrSyncTarget(repoRoot, request, resolved, report, catalog);
       }
     } catch (error) {
       pushError(report, "TARGET_OPERATION_FAILED", error instanceof Error ? error.message : String(error));

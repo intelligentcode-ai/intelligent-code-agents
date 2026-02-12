@@ -6,8 +6,8 @@ export function findRepoRoot(startDir: string): string {
 
   while (true) {
     const hasVersion = fs.existsSync(path.join(current, "VERSION"));
-    const hasSkills = fs.existsSync(path.join(current, "src", "skills"));
-    if (hasVersion && hasSkills) {
+    const hasInstallerCore = fs.existsSync(path.join(current, "src", "installer-core"));
+    if (hasVersion && hasInstallerCore) {
       return current;
     }
 

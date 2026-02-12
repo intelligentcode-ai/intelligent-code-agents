@@ -10,9 +10,13 @@ Claude Code support is optional and explicitly scoped under `src/targets/claude/
 
 ### Skills
 Skills are the primary interface for specialized capabilities. They are:
-- Defined in `src/skills/*/SKILL.md`
+- Primarily sourced from configured Git repositories (default official source: `https://github.com/intelligentcode-ai/skills.git`)
+- External source layout is required to be `<repo>/skills/<skill>/SKILL.md`
+- Local `src/skills/*/SKILL.md` fallback has been removed as part of the repo split
 - Installed to your agent home `skills/` directory (for example `~/.claude/skills/` or `~/.codex/skills/`)
-- Invoked by skill name and intent (tool-dependent)
+- Invoked by skill name and intent (tool-dependent), with source-qualified IDs available as `<source>/<skill>`
+
+If one repository references another inside Git metadata, the precise term is **Git submodule** (not "subrepo").
 
 **Categories:**
 - **Role Skills (14):** pm, architect, developer, system-engineer, devops-engineer, database-engineer, security-engineer, ai-engineer, web-designer, qa-engineer, backend-tester, requirements-engineer, user-tester, reviewer

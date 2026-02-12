@@ -231,6 +231,39 @@ body {
   gap: 0.5rem;
 }
 
+.source-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.55rem 0 0.65rem;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.source-item {
+  display: grid;
+  gap: 0.2rem;
+  border: 1px solid rgba(128, 177, 235, 0.3);
+  border-radius: 10px;
+  padding: 0.45rem 0.55rem;
+  background: rgba(8, 31, 62, 0.5);
+  font-size: 0.8rem;
+}
+
+.source-item span {
+  color: #c9dff9;
+  word-break: break-word;
+}
+
+.source-error {
+  color: #ffd4da !important;
+}
+
+.source-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
 .catalog-column {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
