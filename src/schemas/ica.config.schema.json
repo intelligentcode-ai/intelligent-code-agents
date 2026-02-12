@@ -321,22 +321,6 @@
         }
       }
     },
-    "harness": {
-      "type": "object",
-      "description": "Agent harness orchestration settings",
-      "properties": {
-        "enabled": { "type": "boolean" },
-        "db_path": { "type": "string" },
-        "uploads_path": { "type": "string" },
-        "artifacts_path": { "type": "string" },
-        "logs_path": { "type": "string" },
-        "auth_path": { "type": "string" },
-        "runtime_default": { "type": "string", "enum": ["host", "docker"] },
-        "prompt_injection_mode": { "type": "string", "enum": ["block", "warn", "off"] },
-        "dispatcher_poll_ms": { "type": "integer", "minimum": 250 },
-        "max_parallel_runs": { "type": "integer", "minimum": 1, "maximum": 20 }
-      }
-    },
     "auth_broker": {
       "type": "object",
       "description": "OAuth callback broker settings",

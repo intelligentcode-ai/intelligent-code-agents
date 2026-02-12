@@ -6,7 +6,6 @@
 3. [Workflow Guide](workflow-guide.md)
 4. [MCP Integration (Claude Code)](mcp-integration.md)
 5. [MCP Proxy (ICA-Owned)](mcp-proxy.md)
-6. [Harness Guide](harness-guide.md)
 
 ## Core Concepts
 - [Roles and Skills](skills-reference.md)

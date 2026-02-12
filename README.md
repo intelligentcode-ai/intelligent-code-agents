@@ -93,16 +93,12 @@ Open: `http://127.0.0.1:4173`
 
 ### GHCR Container
 
-Harness UX highlights:
+Dashboard highlights:
 
-- New `Harness` tab with work-item intake (`bug`, `finding`, `story`, `task`)
-- Markdown + lightweight WYSIWYG authoring with image paste support
-- Closed-loop dispatcher controls (`start/stop`, manual dispatch)
-- Agent discovery scan with capability visibility and ready-only filtering
-- Profile configuration for complexity/stage routing (`plan`, `execute`, `test`)
-- OAuth broker session launch flow for callback-based providers (Gemini plugin first)
-- Run logs, findings chain, and queue-compatible status projection
-- Prompt-injection guardrails enabled by default (`block` mode)
+- Install, uninstall, and sync skills across multiple targets
+- Target discovery plus user/project scope management
+- Skill catalog filtering with bulk selection controls
+- Installed-state and operation-report inspection in the UI
 
 Container image can be built from `src/installer-dashboard/Dockerfile` and published to GHCR via `.github/workflows/dashboard-ghcr.yml`.
 
