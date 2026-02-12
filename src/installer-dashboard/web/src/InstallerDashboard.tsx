@@ -68,6 +68,8 @@ type OperationReport = {
   targets: OperationTargetReport[];
 };
 
+type DashboardTab = "skills" | "settings" | "state";
+
 const allTargets: Target[] = ["claude", "codex", "cursor", "gemini", "antigravity"];
 
 function asErrorMessage(payload: unknown, fallback: string): string {
@@ -101,6 +103,7 @@ export function InstallerDashboard(): JSX.Element {
   const [sourceName, setSourceName] = useState("");
   const [sourceTransport, setSourceTransport] = useState<"https" | "ssh">("https");
   const [sourceToken, setSourceToken] = useState("");
+  const [activeTab, setActiveTab] = useState<DashboardTab>("skills");
 
   const selectedTargetList = useMemo(() => Array.from(targets).sort(), [targets]);
   const trimmedProjectPath = projectPath.trim();
@@ -519,10 +522,145 @@ export function InstallerDashboard(): JSX.Element {
         </section>
       )}
 
-      <div className="workspace">
-        <aside className="control-rail">
-          <section className="panel">
-            <h2>Sources</h2>
+      <nav className="tab-nav" role="tablist" aria-label="Dashboard sections">
+        <button
+          className={`tab-btn ${activeTab === "skills" ? "is-active" : ""}`}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "skills"}
+          onClick={() => setActiveTab("skills")}
+        >
+          Skills
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "settings" ? "is-active" : ""}`}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "settings"}
+          onClick={() => setActiveTab("settings")}
+        >
+          Settings
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "state" ? "is-active" : ""}`}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "state"}
+          onClick={() => setActiveTab("state")}
+        >
+          States & Reports
+        </button>
+      </nav>
+
+      {activeTab === "skills" && (
+        <div className="workspace tab-section">
+          <aside className="control-rail skills-rail">
+            <section className="panel action-panel">
+              <h2>Apply Selection</h2>
+              <p className="subtle">Targets: {selectedTargetList.join(", ")}</p>
+              <p className="subtle">Scope: {scope === "project" ? `project (${trimmedProjectPath || "missing path"})` : "user"}</p>
+              <p className="subtle">Mode: {mode}</p>
+              <button className="btn btn-primary" disabled={busy} onClick={() => runOperation("install")} type="button">
+                Install selected
+              </button>
+              <button className="btn btn-secondary" disabled={busy} onClick={() => runOperation("uninstall")} type="button">
+                Uninstall selected
+              </button>
+              <button className="btn btn-tertiary" disabled={busy} onClick={() => runOperation("sync")} type="button">
+                Sync to selection
+              </button>
+            </section>
+          </aside>
+
+          <main className="catalog-column">
+            <section className="panel panel-catalog">
+              <div className="catalog-head">
+                <div>
+                  <h2>Skill Catalog</h2>
+                  <p className="subtle">
+                    {selectedSkillCount}/{totalSkills} selected
+                    {normalizedQuery ? ` • ${filteredSkillsCount} shown` : ""}
+                  </p>
+                </div>
+                <div className="bulk-actions">
+                  <button className="btn btn-ghost" onClick={() => setSkillsSelection(skills.map((skill) => skill.skillId), true)} type="button">
+                    Select all
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => setSkillsSelection(skills.map((skill) => skill.skillId), false)} type="button">
+                    Clear all
+                  </button>
+                </div>
+              </div>
+
+              <input
+                className="input input-search"
+                placeholder="Search source/skill, descriptions, resources..."
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+
+              {filteredCategorized.length === 0 && <div className="empty-state">No skills match this search. Try a broader term.</div>}
+
+              {filteredCategorized.map(([category, categorySkills]) => {
+                const ids = categorySkills.map((skill) => skill.skillId);
+                const selectedInCategory = ids.filter((id) => selectedSkills.has(id)).length;
+                const allSelectedInCategory = selectedInCategory === ids.length && ids.length > 0;
+
+                return (
+                  <section key={category} className="category-block">
+                    <header className="category-head">
+                      <h3>{category}</h3>
+                      <div className="category-actions">
+                        <span>
+                          {selectedInCategory}/{ids.length}
+                        </span>
+                        <button className="btn btn-inline" onClick={() => setSkillsSelection(ids, !allSelectedInCategory)} type="button">
+                          {allSelectedInCategory ? "Clear category" : "Select category"}
+                        </button>
+                      </div>
+                    </header>
+
+                    <div className="skill-grid">
+                      {categorySkills.map((skill) => {
+                        const isSelected = selectedSkills.has(skill.skillId);
+                        const isInstalled = installedSkillIds.has(skill.skillId);
+                        return (
+                          <article key={skill.skillId} className={`skill ${isSelected ? "selected" : ""}`}>
+                            <label className="skill-title">
+                              <input type="checkbox" checked={isSelected} onChange={() => toggleSkill(skill.skillId)} />
+                              <strong>{skill.skillId}</strong>
+                              {isInstalled && <span className="badge">installed</span>}
+                            </label>
+                            <p>{skill.description}</p>
+                            <p className="subtle">
+                              {skill.skillName} <span className="resource-type">{skill.sourceId}</span>
+                            </p>
+                            {skill.resources.length > 0 && (
+                              <ul>
+                                {skill.resources.map((resource) => (
+                                  <li key={`${skill.skillId}-${resource.path}`}>
+                                    <span className="resource-type">{resource.type}</span>
+                                    <code>{resource.path}</code>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </section>
+          </main>
+        </div>
+      )}
+
+      {activeTab === "settings" && (
+        <section className="settings-grid tab-section">
+          <article className="panel">
+            <h2>Repository Management</h2>
             <div className="subtle">{sources.length} configured</div>
             <div className="source-list">
               {sources.map((source) => (
@@ -576,11 +714,11 @@ export function InstallerDashboard(): JSX.Element {
             <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => refreshSource()}>
               Refresh all sources
             </button>
-          </section>
+          </article>
 
-          <section className="panel">
-            <h2>Targets</h2>
-            <p className="subtle">Active: {selectedTargetList.join(", ")}</p>
+          <article className="panel">
+            <h2>Installer Settings</h2>
+            <p className="subtle">Targets: {selectedTargetList.join(", ")}</p>
             <div className="chip-grid">
               {allTargets.map((target) => (
                 <button
@@ -594,9 +732,7 @@ export function InstallerDashboard(): JSX.Element {
                 </button>
               ))}
             </div>
-          </section>
 
-          <section className="panel">
             <h2>Scope</h2>
             <label className="line">
               <input type="radio" checked={scope === "user"} onChange={() => setScope("user")} /> User
@@ -620,9 +756,7 @@ export function InstallerDashboard(): JSX.Element {
                 </button>
               </>
             )}
-          </section>
 
-          <section className="panel">
             <h2>Install Mode</h2>
             <label className="line">
               <input type="radio" checked={mode === "symlink"} onChange={() => setMode("symlink")} /> Symlink
@@ -630,103 +764,13 @@ export function InstallerDashboard(): JSX.Element {
             <label className="line">
               <input type="radio" checked={mode === "copy"} onChange={() => setMode("copy")} /> Full copy
             </label>
-          </section>
+          </article>
+        </section>
+      )}
 
-          <section className="panel action-panel">
-            <h2>Actions</h2>
-            <button className="btn btn-primary" disabled={busy} onClick={() => runOperation("install")} type="button">
-              Install selected
-            </button>
-            <button className="btn btn-secondary" disabled={busy} onClick={() => runOperation("uninstall")} type="button">
-              Uninstall selected
-            </button>
-            <button className="btn btn-tertiary" disabled={busy} onClick={() => runOperation("sync")} type="button">
-              Sync to selection
-            </button>
-          </section>
-        </aside>
-
-        <main className="catalog-column">
-          <section className="panel panel-catalog">
-            <div className="catalog-head">
-              <div>
-                <h2>Skill Catalog</h2>
-                <p className="subtle">
-                  {selectedSkillCount}/{totalSkills} selected
-                  {normalizedQuery ? ` • ${filteredSkillsCount} shown` : ""}
-                </p>
-              </div>
-              <div className="bulk-actions">
-                <button className="btn btn-ghost" onClick={() => setSkillsSelection(skills.map((skill) => skill.skillId), true)} type="button">
-                  Select all
-                </button>
-                <button className="btn btn-ghost" onClick={() => setSkillsSelection(skills.map((skill) => skill.skillId), false)} type="button">
-                  Clear all
-                </button>
-              </div>
-            </div>
-
-            <input
-              className="input input-search"
-              placeholder="Search source/skill, descriptions, resources..."
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
-
-            {filteredCategorized.length === 0 && <div className="empty-state">No skills match this search. Try a broader term.</div>}
-
-            {filteredCategorized.map(([category, categorySkills]) => {
-              const ids = categorySkills.map((skill) => skill.skillId);
-              const selectedInCategory = ids.filter((id) => selectedSkills.has(id)).length;
-              const allSelectedInCategory = selectedInCategory === ids.length && ids.length > 0;
-
-              return (
-                <section key={category} className="category-block">
-                  <header className="category-head">
-                    <h3>{category}</h3>
-                    <div className="category-actions">
-                      <span>
-                        {selectedInCategory}/{ids.length}
-                      </span>
-                      <button className="btn btn-inline" onClick={() => setSkillsSelection(ids, !allSelectedInCategory)} type="button">
-                        {allSelectedInCategory ? "Clear category" : "Select category"}
-                      </button>
-                    </div>
-                  </header>
-
-                  <div className="skill-grid">
-                    {categorySkills.map((skill) => {
-                      const isSelected = selectedSkills.has(skill.skillId);
-                      const isInstalled = installedSkillIds.has(skill.skillId);
-                      return (
-                        <article key={skill.skillId} className={`skill ${isSelected ? "selected" : ""}`}>
-                          <label className="skill-title">
-                            <input type="checkbox" checked={isSelected} onChange={() => toggleSkill(skill.skillId)} />
-                            <strong>{skill.skillId}</strong>
-                            {isInstalled && <span className="badge">installed</span>}
-                          </label>
-                          <p>{skill.description}</p>
-                          <p className="subtle">{skill.skillName} <span className="resource-type">{skill.sourceId}</span></p>
-                          {skill.resources.length > 0 && (
-                            <ul>
-                              {skill.resources.map((resource) => (
-                                <li key={`${skill.skillId}-${resource.path}`}>
-                                  <span className="resource-type">{resource.type}</span>
-                                  <code>{resource.path}</code>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </article>
-                      );
-                    })}
-                  </div>
-                </section>
-              );
-            })}
-          </section>
-
-          <details className="panel collapsible">
+      {activeTab === "state" && (
+        <section className="state-grid tab-section">
+          <details className="panel collapsible" open>
             <summary>
               <span>Installed State</span>
               <span className="subtle">{installations.length} target entries</span>
@@ -734,15 +778,15 @@ export function InstallerDashboard(): JSX.Element {
             <pre>{JSON.stringify(installations, null, 2)}</pre>
           </details>
 
-          <details className="panel collapsible">
+          <details className="panel collapsible" open>
             <summary>
               <span>Operation Report</span>
               <span className="subtle">{report ? "latest run available" : "no operation yet"}</span>
             </summary>
             <pre>{report ? JSON.stringify(report, null, 2) : "No operation run yet."}</pre>
           </details>
-        </main>
-      </div>
+        </section>
+      )}
     </div>
   );
 }

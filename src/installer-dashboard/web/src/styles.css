@@ -171,12 +171,70 @@ body {
   transition: width 160ms ease;
 }
 
+.tab-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0 0 0.9rem;
+}
+
+.tab-btn {
+  border: 1px solid rgba(145, 196, 255, 0.48);
+  border-radius: 12px;
+  background:
+    linear-gradient(150deg, rgba(59, 126, 214, 0.24) 0%, rgba(15, 52, 99, 0.65) 100%);
+  color: #d6e9ff;
+  padding: 0.62rem 0.8rem;
+  font-weight: 740;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.tab-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(0, 20, 52, 0.34);
+}
+
+.tab-btn.is-active {
+  border-color: rgba(186, 223, 255, 0.95);
+  color: #f4fbff;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(202, 231, 255, 0.45) 0%, transparent 46%),
+    linear-gradient(145deg, rgba(33, 106, 201, 0.9) 0%, rgba(19, 72, 147, 0.9) 100%);
+  box-shadow: 0 14px 24px rgba(11, 49, 109, 0.45);
+}
+
+.tab-btn:focus-visible {
+  outline: 2px solid rgba(175, 218, 255, 0.95);
+  outline-offset: 2px;
+}
+
+.tab-section {
+  animation: tabFadeIn 180ms ease;
+}
+
+@keyframes tabFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .workspace {
   display: grid;
   grid-template-columns: 330px minmax(0, 1fr);
   gap: 0.9rem;
   align-items: start;
   min-width: 0;
+}
+
+.skills-rail {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .control-rail {
@@ -305,6 +363,18 @@ body {
   grid-template-columns: minmax(0, 1fr);
   gap: 0.9rem;
   min-width: 0;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.state-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.9rem;
 }
 
 .panel-catalog {
@@ -560,6 +630,10 @@ pre {
 }
 
 @media (max-width: 1120px) {
+  .tab-nav {
+    grid-template-columns: 1fr;
+  }
+
   .workspace {
     grid-template-columns: 1fr;
   }
@@ -571,6 +645,10 @@ pre {
 
   .action-panel {
     grid-column: span 2;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
   }
 }
 
