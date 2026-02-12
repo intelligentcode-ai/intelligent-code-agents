@@ -93,6 +93,9 @@ export function InstallerDashboard(): JSX.Element {
   const [report, setReport] = useState<OperationReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogLoadingMessage, setCatalogLoadingMessage] = useState("");
+  const [catalogLoadingProgress, setCatalogLoadingProgress] = useState(0);
   const [selectionCustomized, setSelectionCustomized] = useState(false);
   const [sourceRepoUrl, setSourceRepoUrl] = useState("");
   const [sourceName, setSourceName] = useState("");
@@ -169,15 +172,31 @@ export function InstallerDashboard(): JSX.Element {
   }
 
   async function fetchSkills(runRefresh = false): Promise<void> {
-    if (runRefresh) {
-      await refreshSources(true);
+    setCatalogLoading(true);
+    setCatalogLoadingProgress(runRefresh ? 8 : 20);
+    setCatalogLoadingMessage(runRefresh ? "Refreshing sources..." : "Loading skills catalog...");
+    try {
+      if (runRefresh) {
+        await refreshSources(true);
+        setCatalogLoadingProgress(58);
+        setCatalogLoadingMessage("Loading refreshed skills catalog...");
+      }
+      const res = await fetch("/api/v1/catalog/skills");
+      const payload = (await res.json()) as { skills?: Skill[]; error?: string };
+      if (!res.ok) {
+        throw new Error(asErrorMessage(payload, "Failed to load skills catalog."));
+      }
+      setCatalogLoadingProgress(88);
+      setSkills(Array.isArray(payload.skills) ? payload.skills : []);
+      setCatalogLoadingProgress(100);
+      setCatalogLoadingMessage("Skills catalog is ready.");
+    } finally {
+      window.setTimeout(() => {
+        setCatalogLoading(false);
+        setCatalogLoadingProgress(0);
+        setCatalogLoadingMessage("");
+      }, 250);
     }
-    const res = await fetch("/api/v1/catalog/skills");
-    const payload = (await res.json()) as { skills?: Skill[]; error?: string };
-    if (!res.ok) {
-      throw new Error(asErrorMessage(payload, "Failed to load skills catalog."));
-    }
-    setSkills(Array.isArray(payload.skills) ? payload.skills : []);
   }
 
   async function fetchDiscoveredTargets(): Promise<void> {
@@ -485,6 +504,18 @@ export function InstallerDashboard(): JSX.Element {
       {error && (
         <section className="status status-error">
           <strong>Action needed:</strong> {error}
+        </section>
+      )}
+      {catalogLoading && (
+        <section className="status status-info" role="status" aria-live="polite">
+          <div className="status-head">
+            <strong>Loading skills catalog</strong>
+            <span>{Math.round(catalogLoadingProgress)}%</span>
+          </div>
+          <div className="status-subtle">{catalogLoadingMessage || "Working..."}</div>
+          <div className="status-progress" aria-hidden="true">
+            <div className="status-progress-bar" style={{ width: `${Math.max(5, Math.min(catalogLoadingProgress, 100))}%` }} />
+          </div>
         </section>
       )}
 
