@@ -1,14 +1,40 @@
 # Intelligent Code Agents (ICA)
 
-Skills-first agent workflows with a modern installer stack:
-- `ica` CLI for install/uninstall/sync/list/catalog/doctor
-- local-first dashboard for visual skill management
-- verified web bootstrap + signed, reproducible releases
-- multi-source skills registry with source-qualified selection (`<source>/<skill>`)
+ICA is a skills installer and manager for coding agents.
+
+It gives you one clean control plane for:
+- installing, uninstalling, syncing, and auditing skills
+- managing multiple skill sources with explicit source pinning (`<source>/<skill>`)
+- running from CLI or a local-first dashboard
+- using verified bootstrap installers and signed, reproducible releases
+
+## Install First (Verified Bootstrap)
+
+macOS/Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.sh | bash
+```
+
+Windows PowerShell:
+
+```powershell
+iwr https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.ps1 -UseBasicParsing | iex
+```
+
+## Multi-Source Skills (Clear + Explicit)
+
+ICA supports multiple skill repositories side-by-side.
+
+- Add official and custom repos (HTTPS/SSH)
+- Keep each source cached locally under `~/.ica/<source-id>/skills`
+- Select skills explicitly as `<source>/<skill>` to avoid ambiguity
+- Remove a source without deleting already installed skills (they are marked orphaned)
+- Use the same model in CLI and dashboard
 
 ## Dashboard Preview
 
-### Animated walkthrough (full flow)
+### Animated preview (appearance + layout)
 ![ICA Dashboard Animated Preview](docs/assets/dashboard/dashboard-preview.gif)
 
 ### 1) Start with current state
@@ -30,20 +56,6 @@ Post-install evidence with expanded `Installed State` and `Operation Report`.
 ### 5) Manage installed skills (uninstall/sync/report)
 ![ICA Dashboard Management](docs/assets/dashboard/dashboard-step-05-management.png)
 Management action example (`Uninstall selected`) with updated state/report.
-
-## Install (Verified Bootstrap)
-
-macOS/Linux:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.sh | bash
-```
-
-Windows PowerShell:
-
-```powershell
-iwr https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.ps1 -UseBasicParsing | iex
-```
 
 ## Build From Source
 
