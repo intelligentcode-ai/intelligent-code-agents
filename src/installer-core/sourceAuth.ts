@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { CredentialProvider } from "./credentials";
+import { safeErrorMessage, stripUrlCredentials } from "./security";
 import { SourceTransport } from "./types";
 
 const execFileAsync = promisify(execFile);
@@ -18,7 +19,7 @@ export interface AuthCheckSource {
 }
 
 export function withHttpsCredential(repoUrl: string, token: string): string {
-  const parsed = new URL(repoUrl);
+  const parsed = new URL(stripUrlCredentials(repoUrl));
   parsed.username = "oauth2";
   parsed.password = token;
   return parsed.toString();
@@ -48,8 +49,8 @@ export async function checkSourceAuth(source: AuthCheckSource, credentials: Cred
       await runGitLsRemote(candidate);
       return { ok: true, requiresCredential: false, message: "Repository access verified." };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const likelyAuth = /(authentication|auth|permission denied|could not read|terminal prompts disabled|access denied)/i.test(message);
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      const likelyAuth = /(authentication|auth|permission denied|could not read|terminal prompts disabled|access denied)/i.test(rawMessage);
       if (likelyAuth && source.transport === "https" && !token) {
         return { ok: false, requiresCredential: true, message: "Authentication required: provide a token/API key for this HTTPS source." };
       }
@@ -57,7 +58,7 @@ export async function checkSourceAuth(source: AuthCheckSource, credentials: Cred
         return {
           ok: false,
           requiresCredential: source.transport === "https" && !token,
-          message: `Repository access failed: ${message}`,
+          message: `Repository access failed: ${safeErrorMessage(error)}`,
         };
       }
     }

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createCredentialProvider } from "./credentials";
 import { ensureHookSourceRegistry, HookSource, setHookSourceSyncStatus } from "./hookSources";
+import { safeErrorMessage } from "./security";
 import { syncHookSource } from "./hookSync";
 import { TargetPlatform } from "./types";
 
@@ -155,7 +156,7 @@ async function buildMultiSourceHookCatalog(options: CatalogOptions): Promise<Hoo
         if (item) catalogHooks.push(item);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = safeErrorMessage(error, "Hook source refresh failed.");
       hydratedSources.push({
         ...source,
         lastError: message,

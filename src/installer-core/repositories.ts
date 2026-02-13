@@ -4,6 +4,7 @@ import { syncHookSource } from "./hookSync";
 import { addSource, loadSources, updateSource } from "./sources";
 import { SkillSource } from "./types";
 import { SourceTransport } from "./types";
+import { safeErrorMessage } from "./security";
 import { syncSource } from "./sourceSync";
 
 export interface RepositoryRegistrationInput {
@@ -133,7 +134,7 @@ export async function registerRepository(
   } catch (error) {
     skillSync = {
       ok: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: safeErrorMessage(error, "Skills sync failed."),
     };
   }
 
@@ -147,7 +148,7 @@ export async function registerRepository(
   } catch (error) {
     hookSync = {
       ok: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: safeErrorMessage(error, "Hooks sync failed."),
     };
   }
 
