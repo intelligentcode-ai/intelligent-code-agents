@@ -3,6 +3,7 @@ import path from "node:path";
 import { SkillCatalog, SkillCatalogEntry, SkillResource, TargetPlatform } from "./types";
 import { buildMultiSourceCatalog } from "./catalogMultiSource";
 import { isSkillBlocked } from "./skillBlocklist";
+import { DEFAULT_SKILLS_ROOT, OFFICIAL_SOURCE_ID, OFFICIAL_SOURCE_NAME, OFFICIAL_SOURCE_URL } from "./sources";
 
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
 interface LocalCatalogEntry {
@@ -116,6 +117,28 @@ function resolveGeneratedAt(sourceDateEpoch?: string): string {
 
   // Stable default to keep generated artifacts reproducible across rebuilds.
   return "1970-01-01T00:00:00.000Z";
+}
+
+export function buildDefaultSourceCatalog(version: string, sourceDateEpoch?: string): SkillCatalog {
+  return {
+    generatedAt: resolveGeneratedAt(sourceDateEpoch),
+    source: "multi-source",
+    version,
+    sources: [
+      {
+        id: OFFICIAL_SOURCE_ID,
+        name: OFFICIAL_SOURCE_NAME,
+        repoUrl: OFFICIAL_SOURCE_URL,
+        transport: "https",
+        official: true,
+        enabled: true,
+        skillsRoot: DEFAULT_SKILLS_ROOT,
+        removable: true,
+      },
+    ],
+    // Skills are discovered at runtime from configured sources.
+    skills: [],
+  };
 }
 
 export function buildLocalCatalog(repoRoot: string, version: string, sourceDateEpoch?: string): SkillCatalog {

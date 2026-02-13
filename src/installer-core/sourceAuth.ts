@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { CredentialProvider } from "./credentials";
-import { SkillSource } from "./types";
+import { SourceTransport } from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -9,6 +9,12 @@ export interface SourceAuthCheckResult {
   ok: boolean;
   requiresCredential: boolean;
   message: string;
+}
+
+export interface AuthCheckSource {
+  id: string;
+  repoUrl: string;
+  transport: SourceTransport;
 }
 
 export function withHttpsCredential(repoUrl: string, token: string): string {
@@ -29,7 +35,7 @@ async function runGitLsRemote(repoUrl: string): Promise<void> {
   });
 }
 
-export async function checkSourceAuth(source: SkillSource, credentials: CredentialProvider): Promise<SourceAuthCheckResult> {
+export async function checkSourceAuth(source: AuthCheckSource, credentials: CredentialProvider): Promise<SourceAuthCheckResult> {
   let token: string | null = null;
   if (source.transport === "https") {
     token = await credentials.get(source.id);
