@@ -3,13 +3,38 @@ export type TargetPlatform = "claude" | "codex" | "cursor" | "gemini" | "antigra
 export type InstallScope = "user" | "project";
 export type InstallMode = "symlink" | "copy";
 export type OperationKind = "install" | "uninstall" | "sync";
+export type SourceTransport = "https" | "ssh";
+export type SkillIdentifier = string;
 
 export interface SkillResource {
   type: "references" | "scripts" | "assets";
   path: string;
 }
 
-export interface SkillCatalogEntry {
+export interface SkillSource {
+  id: string;
+  name: string;
+  repoUrl: string;
+  transport: SourceTransport;
+  official: boolean;
+  enabled: boolean;
+  skillsRoot: string;
+  credentialRef?: string;
+  removable: boolean;
+  lastSyncAt?: string;
+  lastError?: string;
+  localPath?: string;
+  localSkillsPath?: string;
+  revision?: string;
+}
+
+export interface CatalogSkill {
+  skillId: SkillIdentifier;
+  sourceId: string;
+  sourceName: string;
+  sourceUrl: string;
+  skillName: string;
+  // Backward-compatible field used by existing CLI/UI code.
   name: string;
   description: string;
   category: string;
@@ -17,13 +42,24 @@ export interface SkillCatalogEntry {
   compatibleTargets: TargetPlatform[];
   resources: SkillResource[];
   sourcePath: string;
+  version?: string;
+  updatedAt?: string;
 }
 
 export interface SkillCatalog {
   generatedAt: string;
-  source: "local-repo" | "github-release";
+  source: "local-repo" | "github-release" | "multi-source";
   version: string;
-  skills: SkillCatalogEntry[];
+  sources: SkillSource[];
+  skills: CatalogSkill[];
+}
+
+export type SkillCatalogEntry = CatalogSkill;
+
+export interface InstallSelection {
+  sourceId: string;
+  skillName: string;
+  skillId: SkillIdentifier;
 }
 
 export interface InstallRequest {
@@ -33,7 +69,10 @@ export interface InstallRequest {
   projectPath?: string;
   agentDirName?: string;
   mode: InstallMode;
+  // Legacy selector, still supported for compatibility.
   skills: string[];
+  // Preferred source-pinned selector.
+  skillSelections?: InstallSelection[];
   removeUnselected?: boolean;
   installClaudeIntegration?: boolean;
   force?: boolean;
@@ -44,6 +83,12 @@ export interface InstallRequest {
 
 export interface ManagedSkillState {
   name: string;
+  skillName?: string;
+  skillId: SkillIdentifier;
+  sourceId: string;
+  sourceUrl: string;
+  sourceRevision?: string;
+  orphaned?: boolean;
   installMode: InstallMode;
   effectiveMode: InstallMode;
   destinationPath: string;

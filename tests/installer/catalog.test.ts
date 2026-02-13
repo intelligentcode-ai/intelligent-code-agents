@@ -36,3 +36,19 @@ test("buildLocalCatalog resource discovery ignores directories and sorts files",
     { type: "scripts", path: "skills/demo/scripts/zeta.py" },
   ]);
 });
+
+test("buildLocalCatalog excludes blocked ICA command skills", () => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-catalog-test-"));
+  const skillsRoot = path.join(tmpRoot, "src", "skills");
+  const blockedSkill = path.join(skillsRoot, "ica-version");
+  const normalSkill = path.join(skillsRoot, "reviewer");
+
+  fs.mkdirSync(blockedSkill, { recursive: true });
+  fs.mkdirSync(normalSkill, { recursive: true });
+  fs.writeFileSync(path.join(blockedSkill, "SKILL.md"), "---\nname: ica-version\n---\n", "utf8");
+  fs.writeFileSync(path.join(normalSkill, "SKILL.md"), "---\nname: reviewer\n---\n", "utf8");
+
+  const catalog = buildLocalCatalog(tmpRoot, "1.0.0");
+  assert.equal(catalog.skills.length, 1);
+  assert.equal(catalog.skills[0].name, "reviewer");
+});

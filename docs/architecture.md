@@ -10,16 +10,24 @@ Claude Code support is optional and explicitly scoped under `src/targets/claude/
 
 ### Skills
 Skills are the primary interface for specialized capabilities. They are:
-- Defined in `src/skills/*/SKILL.md`
+- Primarily sourced from configured Git repositories (default official source: `https://github.com/intelligentcode-ai/skills.git`)
+- External source layout is required to be `<repo>/skills/<skill>/SKILL.md`
+- Local `src/skills/*/SKILL.md` fallback has been removed as part of the repo split
 - Installed to your agent home `skills/` directory (for example `~/.claude/skills/` or `~/.codex/skills/`)
-- Invoked by skill name and intent (tool-dependent)
+- Invoked by skill name and intent (tool-dependent), with source-qualified IDs available as `<source>/<skill>`
+
+If one repository references another inside Git metadata, the precise term is **Git submodule** (not "subrepo").
 
 **Categories:**
 - **Role Skills (14):** pm, architect, developer, system-engineer, devops-engineer, database-engineer, security-engineer, ai-engineer, web-designer, qa-engineer, backend-tester, requirements-engineer, user-tester, reviewer
-- **Command Skills (2):** ica-version, ica-get-setting
 - **Process Skills:** thinking, work-queue, process, best-practices, validate, autonomy, parallel-execution, workflow, mcp-config, story-breakdown, git-privacy, commit-pr, pr-automerge, release, suggest, tdd
 - **Enforcement Companion Skills (3):** file-placement, branch-protection, infrastructure-protection
 - **Meta Skills (2):** skill-creator, skill-writer
+
+**Category resolution (catalog):**
+- Preferred: `category:` in `SKILL.md` frontmatter.
+- Fallback: ICA infers category by skill name using built-in role/enforcement/meta sets.
+- Final fallback: `process`.
 
 ### Behaviors (4 foundational)
 Portable, always-available structural guidance:
