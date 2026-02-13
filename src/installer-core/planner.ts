@@ -1,12 +1,12 @@
 import { InstallState, PlannerDelta } from "./types";
 
 export function computePlannerDelta(
-  selectedSkills: string[],
+  selectedSkillIds: string[],
   state: InstallState | null,
   removeUnselected = false,
 ): PlannerDelta {
-  const selected = new Set(selectedSkills);
-  const installed = new Set((state?.managedSkills || []).map((skill) => skill.name));
+  const selected = new Set(selectedSkillIds);
+  const installed = new Set((state?.managedSkills || []).map((skill) => skill.skillId || skill.name));
 
   const toInstall = Array.from(selected).filter((skill) => !installed.has(skill));
   const alreadyInstalled = Array.from(selected).filter((skill) => installed.has(skill));

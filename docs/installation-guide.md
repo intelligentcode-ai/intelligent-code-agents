@@ -34,6 +34,10 @@ node dist/src/installer-cli/index.js sync
 node dist/src/installer-cli/index.js list
 node dist/src/installer-cli/index.js doctor
 node dist/src/installer-cli/index.js catalog
+node dist/src/installer-cli/index.js sources list
+node dist/src/installer-cli/index.js sources add --repo-url=https://github.com/intelligentcode-ai/skills.git
+node dist/src/installer-cli/index.js sources add --repo-path=.   # uses current directory as local source
+node dist/src/installer-cli/index.js sources refresh
 ```
 
 Non-interactive example:
@@ -63,6 +67,8 @@ npm run start:dashboard
 
 - User scope: `~/.claude`, `~/.codex`, `~/.cursor`, `~/.gemini`, `~/.antigravity`
 - Project scope: `<project>/.claude`, `<project>/.codex`, ...
+
+CLI default: for `--scope=project`, if `--project-path` is omitted, ICA uses the current working directory.
 
 ## Install Mode
 

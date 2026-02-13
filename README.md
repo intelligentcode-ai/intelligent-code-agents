@@ -4,6 +4,7 @@ Skills-first agent workflows with a modern installer stack:
 - `ica` CLI for install/uninstall/sync/list/catalog/doctor
 - local-first dashboard for visual skill management
 - verified web bootstrap + signed, reproducible releases
+- multi-source skills registry with source-qualified selection (`<source>/<skill>`)
 
 ## Dashboard Preview
 
@@ -78,6 +79,29 @@ Commands:
 - `ica list`
 - `ica doctor`
 - `ica catalog`
+- `ica sources list`
+- `ica sources add --repo-url=...` (or `--repo-path=...`; defaults to current directory when omitted)
+- `ica sources remove --id=...`
+- `ica sources auth --id=... --token=...`
+- `ica sources refresh [--id=...]`
+- `ica sources update --id=... --name=... --repo-url=...`
+- `ica container mount-project --project-path=/path --confirm`
+
+Source-qualified example:
+
+```bash
+node dist/src/installer-cli/index.js install --yes \
+  --targets=codex \
+  --scope=user \
+  --skills=official-skills/reviewer,official-skills/developer
+```
+
+Legacy `--skills=<name>` is still accepted and resolves against the official source.
+
+Custom repositories are persisted in `~/.ica/sources.json` (or `$ICA_STATE_HOME/sources.json` when set).
+
+Downloaded source skills are materialized under `~/.ica/<source-id>/skills` (or `$ICA_STATE_HOME/<source-id>/skills`).
+When install mode is `symlink`, ICA links installed skills from that local skills snapshot.
 
 ## Dashboard
 
@@ -92,6 +116,17 @@ npm run start:dashboard
 Open: `http://127.0.0.1:4173`
 
 ### GHCR Container
+
+Dashboard highlights:
+
+- Install, uninstall, and sync skills across multiple targets
+- Add/remove/auth/refresh skill sources (HTTPS + SSH)
+- Target discovery plus user/project scope management
+- Native project directory picker (host helper) plus container mount orchestration endpoint
+- Skill catalog filtering with bulk selection controls
+- Installed-state and operation-report inspection in the UI
+
+Container image can be built from `src/installer-dashboard/Dockerfile` and published to GHCR via `.github/workflows/dashboard-ghcr.yml`.
 
 Build from source:
 
@@ -124,6 +159,8 @@ If symlink creation fails, ICA falls back to `copy` and records the effective mo
 
 - `user` scope: installs into tool home (`~/.claude`, `~/.codex`, ...)
 - `project` scope: installs into `<project>/<agent-home-dir>`
+
+CLI default for project scope: when `--scope=project` is used without `--project-path`, ICA uses the current working directory.
 
 ## Managed State
 

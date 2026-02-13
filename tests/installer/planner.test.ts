@@ -4,7 +4,7 @@ import { computePlannerDelta } from "../../src/installer-core/planner";
 
 test("planner computes install/remove delta", () => {
   const delta = computePlannerDelta(
-    ["developer", "architect"],
+    ["official-skills/developer", "official-skills/architect"],
     {
       schemaVersion: "1.0.0",
       installerVersion: "0.0.0",
@@ -16,6 +16,9 @@ test("planner computes install/remove delta", () => {
       managedSkills: [
         {
           name: "developer",
+          skillId: "official-skills/developer",
+          sourceId: "official-skills",
+          sourceUrl: "https://github.com/intelligentcode-ai/skills.git",
           installMode: "copy",
           effectiveMode: "copy",
           destinationPath: "/tmp/proj/.codex/skills/developer",
@@ -23,6 +26,9 @@ test("planner computes install/remove delta", () => {
         },
         {
           name: "reviewer",
+          skillId: "official-skills/reviewer",
+          sourceId: "official-skills",
+          sourceUrl: "https://github.com/intelligentcode-ai/skills.git",
           installMode: "copy",
           effectiveMode: "copy",
           destinationPath: "/tmp/proj/.codex/skills/reviewer",
@@ -35,7 +41,7 @@ test("planner computes install/remove delta", () => {
     true,
   );
 
-  assert.deepEqual(delta.toInstall, ["architect"]);
-  assert.deepEqual(delta.toRemove, ["reviewer"]);
-  assert.deepEqual(delta.alreadyInstalled, ["developer"]);
+  assert.deepEqual(delta.toInstall, ["official-skills/architect"]);
+  assert.deepEqual(delta.toRemove, ["official-skills/reviewer"]);
+  assert.deepEqual(delta.alreadyInstalled, ["official-skills/developer"]);
 });

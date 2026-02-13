@@ -321,6 +321,39 @@
         }
       }
     },
+    "auth_broker": {
+      "type": "object",
+      "description": "OAuth callback broker settings",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "callback_host": { "type": "string" },
+        "callback_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "encryption_key_env": { "type": "string" },
+        "providers": {
+          "type": "object",
+          "properties": {
+            "gemini": {
+              "type": "object",
+              "properties": {
+                "oauth_proxy_required": { "type": "boolean" }
+              }
+            },
+            "codex": {
+              "type": "object",
+              "properties": {
+                "oauth_proxy_required": { "type": "boolean" }
+              }
+            },
+            "claude": {
+              "type": "object",
+              "properties": {
+                "oauth_proxy_required": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    },
     "cache": {
       "type": "object",
       "description": "Cache settings",

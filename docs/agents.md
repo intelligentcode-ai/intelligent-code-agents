@@ -5,7 +5,7 @@ Terminology can be confusing because different tools use different words.
 ## What ICA Ships
 
 ICA primarily ships **Skills**:
-- source of truth: `src/skills/*/SKILL.md`
+- source of truth: external skills repositories using `<repo>/skills/*/SKILL.md` (default official source: `intelligentcode-ai/skills`)
 - installed to: your agent home `skills/` directory (for example `~/.claude/skills/`)
 
 Role skills like `pm` or `reviewer` are skills with well-defined responsibilities.
