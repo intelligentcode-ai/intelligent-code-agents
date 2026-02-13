@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.0] - 2026-02-13
+
+### Added
+- Multi-source skills system with persisted source registry, source-aware catalog entries, and source-qualified skill selection (`<source>/<skill>`).
+- Source lifecycle support in CLI and dashboard (`list/add/remove/auth/refresh/update`) including local source cache materialization under `~/.ica/<source>/skills`.
+- Native installer helper support for local project path selection and container mount orchestration endpoints.
+- Trigger-precision validation tooling for skills via `scripts/skill-trigger-check.mjs` with automated tests and JSON reporting support.
+
+### Changed
+- ICA runtime now treats external source repositories as the primary skill source; release catalog generation and installer flows are source-aware.
+- Dashboard UX refreshed with split sections, improved loading/progress behavior, and updated visual documentation assets in README.
+- Install state and planner/executor flow now preserve source metadata (`skillId`, `sourceId`, orphan handling, source revision tracking).
+- Versioning is normalized to `11.0.0` across `VERSION`, `src/VERSION`, and `package.json`.
+
+### Removed
+- In-repo bundled skill distribution under `src/skills` from ICA runtime usage (skills are source-driven).
+- Unusable command skills `ica-get-setting` and `ica-version` from active ICA catalog selection/runtime.
+- Legacy deployment surfaces (Makefile/Ansible/root install script) from the maintained release path.
+
 ## [10.2.14] - 2026-02-11
 
 ### Added
