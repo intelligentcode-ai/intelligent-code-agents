@@ -20,8 +20,6 @@
 
 ## Legacy (Read Only)
 - [AgentTask System Guide](agenttask-system-guide.md) (legacy)
-- [AgentTask Templates Guide](agenttask-templates-guide.md) (legacy)
-- [Template Extensions](template-extensions.md) (legacy)
 
 ## Troubleshooting
 - [Troubleshooting](troubleshooting.md)
