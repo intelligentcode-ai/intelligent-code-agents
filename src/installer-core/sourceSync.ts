@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { CredentialProvider } from "./credentials";
 import { copyPath, ensureDir, pathExists, removePath } from "./fs";
+import { safeErrorMessage } from "./security";
 import { withHttpsCredential } from "./sourceAuth";
 import { getSourceRepoPath, getSourceSkillsPath, setSourceSyncStatus } from "./sources";
 import { SkillSource } from "./types";
@@ -182,11 +183,12 @@ export async function syncSource(source: SkillSource, credentials: CredentialPro
         revision,
       };
     } catch (error) {
+      const message = safeErrorMessage(error, "Source sync failed.");
       await setSourceSyncStatus(source.id, {
-        lastError: error instanceof Error ? error.message : String(error),
+        lastError: message,
         localPath: repoPath,
       });
-      throw error;
+      throw new Error(message);
     } finally {
       if (hasGitRepo) {
         try {

@@ -11,6 +11,7 @@ import {
   getHookSourceHooksPath,
   getHookSourcesFilePath,
   loadHookSources,
+  setHookSourceSyncStatus,
 } from "../../src/installer-core/hookSources";
 import { createCredentialProvider } from "../../src/installer-core/credentials";
 import { syncHookSource } from "../../src/installer-core/hookSync";
@@ -68,6 +69,49 @@ test("custom hook repositories are stored and reloaded from disk", async () => {
     const match = loaded.find((source) => source.id === "custom-hooks");
     assert.ok(match);
     assert.equal(match?.hooksRoot, "/hooks");
+  });
+});
+
+test("hook source sync status redacts credential leaks in lastError", async () => {
+  const stateHome = fs.mkdtempSync(path.join(os.tmpdir(), "ica-hooks-state-"));
+  await withStateHome(stateHome, async () => {
+    await addHookSource({
+      id: "sanitized-hooks",
+      name: "sanitized-hooks",
+      repoUrl: "https://github.com/example/sanitized-hooks.git",
+      transport: "https",
+      hooksRoot: "/hooks",
+      enabled: true,
+      removable: true,
+    });
+
+    await setHookSourceSyncStatus("sanitized-hooks", {
+      lastError: "fatal: could not read from https://oauth2:mySecretCredential@github.com/example/sanitized-hooks.git",
+    });
+
+    const reloaded = await loadHookSources();
+    const match = reloaded.find((source) => source.id === "sanitized-hooks");
+    assert.ok(match?.lastError);
+    assert.equal(match?.lastError?.includes("mySecretCredential"), false);
+    assert.equal(match?.lastError?.includes("<redacted>"), true);
+  });
+});
+
+test("hook source registry strips credentials from repo URL before persistence", async () => {
+  const stateHome = fs.mkdtempSync(path.join(os.tmpdir(), "ica-hooks-state-"));
+  await withStateHome(stateHome, async () => {
+    await addHookSource({
+      id: "credential-url-hooks",
+      name: "credential-url-hooks",
+      repoUrl: "https://oauth2:myCredential1234567890@github.com/example/private-hooks.git",
+      transport: "https",
+      hooksRoot: "/hooks",
+      enabled: true,
+      removable: true,
+    });
+    const loaded = await loadHookSources();
+    const match = loaded.find((source) => source.id === "credential-url-hooks");
+    assert.equal(match?.repoUrl, "https://github.com/example/private-hooks.git");
   });
 });
 

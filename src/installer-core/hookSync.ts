@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { CredentialProvider } from "./credentials";
 import { copyPath, ensureDir, pathExists, removePath } from "./fs";
+import { safeErrorMessage } from "./security";
 import { withHttpsCredential } from "./sourceAuth";
 import { getHookSourceHooksPath, getHookSourceRepoPath, HookSource, setHookSourceSyncStatus } from "./hookSources";
 
@@ -189,11 +190,12 @@ export async function syncHookSource(source: HookSource, credentials: Credential
         revision,
       };
     } catch (error) {
+      const message = safeErrorMessage(error, "Hook source sync failed.");
       await setHookSourceSyncStatus(source.id, {
-        lastError: error instanceof Error ? error.message : String(error),
+        lastError: message,
         localPath: repoPath,
       });
-      throw error;
+      throw new Error(message);
     } finally {
       if (hasGitRepo) {
         try {
