@@ -822,6 +822,12 @@ input[type="radio"]:focus-visible {
   line-height: 1.55;
 }
 
+.hook-support-warning {
+  border-color: var(--status-info-border);
+  background: var(--status-info-bg);
+  color: var(--status-info-text);
+}
+
 .action-row {
   display: grid;
   gap: var(--space-2);

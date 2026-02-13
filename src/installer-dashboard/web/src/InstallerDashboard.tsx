@@ -10,6 +10,7 @@ type Source = {
   official: boolean;
   enabled: boolean;
   skillsRoot: string;
+  hooksRoot?: string;
   credentialRef?: string;
   removable: boolean;
   lastSyncAt?: string;
@@ -50,6 +51,37 @@ type InstallationRow = {
   updatedAt?: string;
 };
 
+type Hook = {
+  hookId: string;
+  sourceId: string;
+  sourceName: string;
+  sourceUrl: string;
+  hookName: string;
+  name: string;
+  description: string;
+  version?: string;
+  updatedAt?: string;
+};
+
+type HookInstallation = {
+  name: string;
+  hookId?: string;
+  sourceId?: string;
+  installMode: string;
+  effectiveMode: string;
+  orphaned?: boolean;
+};
+
+type HookInstallationRow = {
+  target: "claude" | "gemini";
+  installPath: string;
+  scope: "user" | "project";
+  projectPath?: string;
+  installed: boolean;
+  managedHooks: HookInstallation[];
+  updatedAt?: string;
+};
+
 type OperationTargetReport = {
   target: string;
   installPath: string;
@@ -68,7 +100,25 @@ type OperationReport = {
   targets: OperationTargetReport[];
 };
 
-type DashboardTab = "skills" | "settings" | "state";
+type HookOperationTargetReport = {
+  target: "claude" | "gemini";
+  installPath: string;
+  operation: "install" | "uninstall" | "sync";
+  appliedHooks: string[];
+  removedHooks: string[];
+  skippedHooks: string[];
+  warnings: Array<{ code: string; message: string }>;
+  errors: Array<{ code: string; message: string }>;
+};
+
+type HookOperationReport = {
+  startedAt: string;
+  completedAt: string;
+  request?: unknown;
+  targets: HookOperationTargetReport[];
+};
+
+type DashboardTab = "skills" | "hooks" | "settings" | "state";
 type DashboardMode = "light" | "dark";
 type DashboardAccent = "slate" | "blue" | "red" | "green" | "amber";
 type DashboardBackground = "slate" | "ocean" | "sand" | "forest" | "wine";
@@ -174,13 +224,18 @@ export function InstallerDashboard(): JSX.Element {
   const [sources, setSources] = useState<Source[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
+  const [hooks, setHooks] = useState<Hook[]>([]);
+  const [selectedHooks, setSelectedHooks] = useState<Set<string>>(new Set());
   const [targets, setTargets] = useState<Set<Target>>(new Set(["codex"]));
   const [searchQuery, setSearchQuery] = useState("");
+  const [hookSearchQuery, setHookSearchQuery] = useState("");
   const [scope, setScope] = useState<"user" | "project">("user");
   const [projectPath, setProjectPath] = useState("");
   const [mode, setMode] = useState<"symlink" | "copy">("symlink");
   const [installations, setInstallations] = useState<InstallationRow[]>([]);
+  const [hookInstallations, setHookInstallations] = useState<HookInstallationRow[]>([]);
   const [report, setReport] = useState<OperationReport | null>(null);
+  const [hookReport, setHookReport] = useState<HookOperationReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -198,13 +253,21 @@ export function InstallerDashboard(): JSX.Element {
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [installedOnly, setInstalledOnly] = useState(false);
+  const [hookSourceFilter, setHookSourceFilter] = useState<string>("all");
+  const [hooksInstalledOnly, setHooksInstalledOnly] = useState(false);
+  const [hookSelectionCustomized, setHookSelectionCustomized] = useState(false);
   const appearancePanelRef = useRef<HTMLElement | null>(null);
   const appearanceTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const selectedTargetList = useMemo(() => Array.from(targets).sort(), [targets]);
+  const selectedHookTargetList = useMemo(
+    () => selectedTargetList.filter((target): target is "claude" | "gemini" => target === "claude" || target === "gemini"),
+    [selectedTargetList],
+  );
   const trimmedProjectPath = projectPath.trim();
   const targetKey = selectedTargetList.join(",");
   const skillById = useMemo(() => new Map(skills.map((skill) => [skill.skillId, skill])), [skills]);
+  const hookById = useMemo(() => new Map(hooks.map((hook) => [hook.hookId, hook])), [hooks]);
   const sourceNameById = useMemo(() => new Map(sources.map((source) => [source.id, source.name || source.id])), [sources]);
 
   const installedSkillIds = useMemo(() => {
@@ -222,10 +285,29 @@ export function InstallerDashboard(): JSX.Element {
     return names;
   }, [installations, skills]);
 
+  const installedHookIds = useMemo(() => {
+    const names = new Set<string>();
+    for (const row of hookInstallations) {
+      for (const hook of row.managedHooks || []) {
+        if (hook.hookId) {
+          names.add(hook.hookId);
+        } else {
+          const match = hooks.find((item) => item.hookName === hook.name);
+          if (match) names.add(match.hookId);
+        }
+      }
+    }
+    return names;
+  }, [hookInstallations, hooks]);
+
   const normalizedQuery = searchQuery.trim().toLowerCase();
+  const normalizedHookQuery = hookSearchQuery.trim().toLowerCase();
   const sourceFilterOptions = useMemo(() => {
     return Array.from(new Set(skills.map((skill) => skill.sourceId))).sort((a, b) => a.localeCompare(b));
   }, [skills]);
+  const hookSourceFilterOptions = useMemo(() => {
+    return Array.from(new Set(hooks.map((hook) => hook.sourceId))).sort((a, b) => a.localeCompare(b));
+  }, [hooks]);
 
   const visibleSkills = useMemo(() => {
     return skills.filter((skill) => {
@@ -253,6 +335,22 @@ export function InstallerDashboard(): JSX.Element {
     }
     return Array.from(byCategory.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [visibleSkills]);
+
+  const visibleHooks = useMemo(() => {
+    return hooks.filter((hook) => {
+      if (hookSourceFilter !== "all" && hook.sourceId !== hookSourceFilter) {
+        return false;
+      }
+      if (hooksInstalledOnly && !installedHookIds.has(hook.hookId)) {
+        return false;
+      }
+      if (!normalizedHookQuery) {
+        return true;
+      }
+      const haystack = `${hook.hookId} ${hook.description}`.toLowerCase();
+      return haystack.includes(normalizedHookQuery);
+    });
+  }, [hooks, hookSourceFilter, hooksInstalledOnly, installedHookIds, normalizedHookQuery]);
 
   async function fetchSources(): Promise<void> {
     const res = await fetch("/api/v1/sources");
@@ -304,6 +402,15 @@ export function InstallerDashboard(): JSX.Element {
     }
   }
 
+  async function fetchHooks(): Promise<void> {
+    const res = await fetch("/api/v1/catalog/hooks");
+    const payload = (await res.json()) as { hooks?: Hook[]; error?: string };
+    if (!res.ok) {
+      throw new Error(asErrorMessage(payload, "Failed to load hooks catalog."));
+    }
+    setHooks(Array.isArray(payload.hooks) ? payload.hooks : []);
+  }
+
   async function fetchDiscoveredTargets(): Promise<void> {
     const res = await fetch("/api/v1/targets/discovered");
     const payload = (await res.json()) as { targets?: Target[]; error?: string };
@@ -339,11 +446,48 @@ export function InstallerDashboard(): JSX.Element {
     setInstallations(Array.isArray(payload.installations) ? payload.installations : []);
   }
 
+  async function fetchHookInstallations(): Promise<void> {
+    if (scope === "project" && !trimmedProjectPath) {
+      setHookInstallations([]);
+      return;
+    }
+
+    if (selectedHookTargetList.length === 0) {
+      setHookInstallations([]);
+      return;
+    }
+
+    const query = new URLSearchParams({
+      scope,
+      ...(scope === "project" ? { projectPath: trimmedProjectPath } : {}),
+      targets: selectedHookTargetList.join(","),
+    });
+
+    const res = await fetch(`/api/v1/hooks/installations?${query.toString()}`);
+    const payload = (await res.json()) as { installations?: HookInstallationRow[]; error?: string };
+    if (!res.ok) {
+      throw new Error(asErrorMessage(payload, "Failed to load installed hook state."));
+    }
+    setHookInstallations(Array.isArray(payload.installations) ? payload.installations : []);
+  }
+
   function setSkillsSelection(skillIds: string[], shouldSelect: boolean): void {
     setSelectionCustomized(true);
     setSelectedSkills((current) => {
       const next = new Set(current);
       for (const id of skillIds) {
+        if (shouldSelect) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+
+  function setHooksSelection(hookIds: string[], shouldSelect: boolean): void {
+    setHookSelectionCustomized(true);
+    setSelectedHooks((current) => {
+      const next = new Set(current);
+      for (const id of hookIds) {
         if (shouldSelect) next.add(id);
         else next.delete(id);
       }
@@ -357,6 +501,16 @@ export function InstallerDashboard(): JSX.Element {
       const next = new Set(current);
       if (next.has(skillId)) next.delete(skillId);
       else next.add(skillId);
+      return next;
+    });
+  }
+
+  function toggleHook(hookId: string): void {
+    setHookSelectionCustomized(true);
+    setSelectedHooks((current) => {
+      const next = new Set(current);
+      if (next.has(hookId)) next.delete(hookId);
+      else next.add(hookId);
       return next;
     });
   }
@@ -436,6 +590,65 @@ export function InstallerDashboard(): JSX.Element {
     }
   }
 
+  async function runHookOperation(operation: "install" | "uninstall" | "sync"): Promise<void> {
+    setBusy(true);
+    setError("");
+    setHookReport(null);
+
+    if (selectedHookTargetList.length === 0) {
+      setBusy(false);
+      setError("Hooks are supported only for Claude and Gemini targets. Select at least one of those.");
+      return;
+    }
+    if (scope === "project" && !trimmedProjectPath) {
+      setBusy(false);
+      setError("Project scope requires a project path.");
+      return;
+    }
+
+    try {
+      const selections = Array.from(selectedHooks)
+        .map((hookId) => {
+          const hook = hookById.get(hookId);
+          if (!hook) return null;
+          return {
+            sourceId: hook.sourceId,
+            hookName: hook.hookName,
+            hookId: hook.hookId,
+          };
+        })
+        .filter((item): item is { sourceId: string; hookName: string; hookId: string } => Boolean(item));
+
+      const res = await fetch(`/api/v1/hooks/${operation}/apply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          operation,
+          targets: selectedHookTargetList,
+          scope,
+          projectPath: scope === "project" ? trimmedProjectPath : undefined,
+          mode,
+          hooks: [],
+          hookSelections: selections,
+          removeUnselected: operation === "sync",
+        }),
+      });
+
+      const payload = (await res.json()) as HookOperationReport | { error?: string };
+      if (!res.ok) {
+        throw new Error(asErrorMessage(payload, "Hook operation failed."));
+      }
+      setHookReport(payload as HookOperationReport);
+      await fetchHookInstallations();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function addSourceFromForm(): Promise<void> {
     setBusy(true);
     setError("");
@@ -459,6 +672,7 @@ export function InstallerDashboard(): JSX.Element {
       setSourceToken("");
       await fetchSources();
       await fetchSkills(true);
+      await fetchHooks();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -482,6 +696,7 @@ export function InstallerDashboard(): JSX.Element {
       }
       await fetchSources();
       await fetchSkills();
+      await fetchHooks();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -500,6 +715,7 @@ export function InstallerDashboard(): JSX.Element {
       }
       await fetchSources();
       await fetchSkills();
+      await fetchHooks();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -562,14 +778,18 @@ export function InstallerDashboard(): JSX.Element {
   useEffect(() => {
     fetchDiscoveredTargets().catch((err) => setError(err instanceof Error ? err.message : String(err)));
     fetchSources()
-      .then(() => fetchSkills(true))
+      .then(async () => {
+        await fetchSkills(true);
+        await fetchHooks();
+      })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, []);
 
   useEffect(() => {
     setSelectionCustomized(false);
-    fetchInstallations().catch((err) => setError(err instanceof Error ? err.message : String(err)));
-  }, [scope, trimmedProjectPath, targetKey]);
+    setHookSelectionCustomized(false);
+    Promise.all([fetchInstallations(), fetchHookInstallations()]).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [scope, trimmedProjectPath, targetKey, selectedHookTargetList.join(",")]);
 
   useEffect(() => {
     if (selectionCustomized) return;
@@ -577,11 +797,23 @@ export function InstallerDashboard(): JSX.Element {
   }, [installedSkillIds, selectionCustomized]);
 
   useEffect(() => {
+    if (hookSelectionCustomized) return;
+    setSelectedHooks(new Set(installedHookIds));
+  }, [installedHookIds, hookSelectionCustomized]);
+
+  useEffect(() => {
     if (sourceFilter === "all") return;
     if (!sourceFilterOptions.includes(sourceFilter)) {
       setSourceFilter("all");
     }
   }, [sourceFilter, sourceFilterOptions]);
+
+  useEffect(() => {
+    if (hookSourceFilter === "all") return;
+    if (!hookSourceFilterOptions.includes(hookSourceFilter)) {
+      setHookSourceFilter("all");
+    }
+  }, [hookSourceFilter, hookSourceFilterOptions]);
 
   useEffect(() => {
     if (catalogLoading || skills.length === 0) return;
@@ -598,6 +830,22 @@ export function InstallerDashboard(): JSX.Element {
       return changed ? next : current;
     });
   }, [catalogLoading, skills.length, skillById]);
+
+  useEffect(() => {
+    if (hooks.length === 0) return;
+    setSelectedHooks((current) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const hookId of current) {
+        if (hookById.has(hookId)) {
+          next.add(hookId);
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [hooks.length, hookById]);
 
   useEffect(() => {
     document.body.dataset.mode = appearanceMode;
@@ -649,6 +897,17 @@ export function InstallerDashboard(): JSX.Element {
   }, [selectedSkills, skillById]);
   const selectedUnknownSkillCount = Math.max(0, selectedSkillCount - selectedKnownSkillCount);
   const installedSkillCount = installedSkillIds.size;
+  const totalHooks = hooks.length;
+  const filteredHooksCount = visibleHooks.length;
+  const selectedKnownHookCount = useMemo(() => {
+    let count = 0;
+    for (const hookId of selectedHooks) {
+      if (hookById.has(hookId)) count += 1;
+    }
+    return count;
+  }, [selectedHooks, hookById]);
+  const selectedUnknownHookCount = Math.max(0, selectedHooks.size - selectedKnownHookCount);
+  const installedHookCount = installedHookIds.size;
 
   return (
     <div className="shell">
@@ -657,12 +916,12 @@ export function InstallerDashboard(): JSX.Element {
           <p className="eyebrow">ICA COMMAND CENTER</p>
           <p className="stamp">Multi-source</p>
         </div>
-        <h1>Skills Dashboard</h1>
-        <p>Manage source repositories, pick project paths natively, and install source-pinned skills across targets.</p>
+        <h1>Skills & Hooks Dashboard</h1>
+        <p>Manage repositories once, then install source-pinned skills and hooks across targets.</p>
         <div className="hero-meta">
           <span>{sources.length} sources</span>
-          <span>{installedSkillCount} installed</span>
-          <span>{selectedKnownSkillCount} selected</span>
+          <span>{installedSkillCount} skills installed</span>
+          <span>{installedHookCount} hooks installed</span>
         </div>
       </header>
 
@@ -703,6 +962,15 @@ export function InstallerDashboard(): JSX.Element {
             onClick={() => setActiveTab("settings")}
           >
             Settings
+          </button>
+          <button
+            className={`tab-btn ${activeTab === "hooks" ? "is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "hooks"}
+            onClick={() => setActiveTab("hooks")}
+          >
+            Hooks
           </button>
           <button
             className={`tab-btn ${activeTab === "state" ? "is-active" : ""}`}
@@ -962,17 +1230,153 @@ export function InstallerDashboard(): JSX.Element {
         </div>
       )}
 
+      {activeTab === "hooks" && (
+        <div className="workspace tab-section">
+          <aside className="control-rail skills-rail">
+            <section className="panel action-panel panel-spacious">
+              <h2>Hook Actions</h2>
+              <p className="subtle">Apply source-pinned hook selections across supported targets.</p>
+              <p className="operation-hint hook-support-warning">Hooks are currently supported only for Claude Code and Gemini CLI.</p>
+              <dl className="action-meta">
+                <div>
+                  <dt>Targets</dt>
+                  <dd>{selectedHookTargetList.length}</dd>
+                </div>
+                <div>
+                  <dt>Selection</dt>
+                  <dd>{selectedKnownHookCount}</dd>
+                </div>
+                <div>
+                  <dt>Scope</dt>
+                  <dd>{scope === "project" ? "Project" : "User"}</dd>
+                </div>
+                <div>
+                  <dt>Mode</dt>
+                  <dd>{mode}</dd>
+                </div>
+              </dl>
+              {scope === "project" && <p className="operation-hint">Project path: {trimmedProjectPath || "not set"}</p>}
+              <div className="action-row">
+                <button className="btn btn-primary" disabled={busy} onClick={() => runHookOperation("install")} type="button">
+                  Install selected hooks
+                </button>
+                <button className="btn btn-secondary" disabled={busy} onClick={() => runHookOperation("uninstall")} type="button">
+                  Uninstall selected hooks
+                </button>
+                <button className="btn btn-tertiary" disabled={busy} onClick={() => runHookOperation("sync")} type="button">
+                  Sync hooks to selection
+                </button>
+              </div>
+            </section>
+          </aside>
+
+          <main className="catalog-column">
+            <section className="panel panel-catalog panel-spacious">
+              <div className="catalog-head">
+                <div>
+                  <h2>Hook Catalog</h2>
+                  <p className="subtle">
+                    {totalHooks > 0 ? `${selectedKnownHookCount}/${totalHooks} selected` : `${selectedKnownHookCount} selected`}
+                    {selectedUnknownHookCount > 0 ? ` • ${selectedUnknownHookCount} unavailable` : ""}
+                    {normalizedHookQuery ? ` • ${filteredHooksCount} shown` : ""}
+                  </p>
+                </div>
+                <div className="bulk-actions">
+                  <button className="btn btn-ghost" onClick={() => setHooksSelection(hooks.map((hook) => hook.hookId), true)} type="button">
+                    Select all
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => setHooksSelection(hooks.map((hook) => hook.hookId), false)} type="button">
+                    Clear all
+                  </button>
+                </div>
+              </div>
+
+              <div className="catalog-controls">
+                <input
+                  className="input input-search"
+                  placeholder="Search source/hook, descriptions…"
+                  value={hookSearchQuery}
+                  onChange={(event) => setHookSearchQuery(event.target.value)}
+                />
+                <div className="catalog-filters">
+                  <div className="source-filter">
+                    <span className="filter-label">Source</span>
+                    <div className="source-chip-row">
+                      <button
+                        className={`chip chip-filter ${hookSourceFilter === "all" ? "is-active" : ""}`}
+                        type="button"
+                        onClick={() => setHookSourceFilter("all")}
+                      >
+                        all
+                      </button>
+                      {hookSourceFilterOptions.map((sourceId) => (
+                        <button
+                          key={sourceId}
+                          className={`chip chip-filter ${hookSourceFilter === sourceId ? "is-active" : ""}`}
+                          type="button"
+                          onClick={() => setHookSourceFilter(sourceId)}
+                        >
+                          {sourceNameById.get(sourceId) || sourceId}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <label className="toggle">
+                    <input type="checkbox" checked={hooksInstalledOnly} onChange={(event) => setHooksInstalledOnly(event.target.checked)} />
+                    Installed only
+                  </label>
+                </div>
+              </div>
+
+              {visibleHooks.length === 0 && <div className="empty-state">No hooks match this search. Try a broader term.</div>}
+
+              <div className="skill-grid">
+                {visibleHooks.map((hook) => {
+                  const isSelected = selectedHooks.has(hook.hookId);
+                  const isInstalled = installedHookIds.has(hook.hookId);
+                  return (
+                    <article key={hook.hookId} className={`skill ${isSelected ? "selected" : ""}`}>
+                      <div className="skill-top">
+                        <label className="skill-title">
+                          <input type="checkbox" checked={isSelected} onChange={() => toggleHook(hook.hookId)} />
+                          <span className="skill-title-copy">
+                            <strong>{hook.hookName}</strong>
+                            <code className="skill-id">{hook.hookId}</code>
+                          </span>
+                        </label>
+                        <div className="skill-badges">
+                          <span className="badge badge-source">{sourceNameById.get(hook.sourceId) || hook.sourceId}</span>
+                          {isInstalled && <span className="badge">installed</span>}
+                        </div>
+                      </div>
+                      <p className="skill-description">{hook.description || "No description provided."}</p>
+                      <div className="skill-foot">
+                        {hook.version && <span className="subtle">v{hook.version}</span>}
+                        {hook.updatedAt && <span className="subtle">Updated {new Date(hook.updatedAt).toLocaleDateString()}</span>}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          </main>
+        </div>
+      )}
+
       {activeTab === "settings" && (
         <section className="settings-grid tab-section">
           <article className="panel panel-settings panel-spacious">
             <h2>Repository Management</h2>
-            <p className="subtle">Attach skill sources, validate access, and keep local mirrors fresh.</p>
+            <p className="subtle">Attach repositories once; ICA syncs skills and hooks mirrors automatically.</p>
             <div className="subtle">{sources.length} configured</div>
             <div className="source-list">
               {sources.map((source) => (
                 <article key={source.id} className="source-item">
                   <strong>{source.id}</strong>
                   <span>{source.repoUrl}</span>
+                  <span>
+                    roots: {source.skillsRoot || "(no /skills)"} / {source.hooksRoot || "(no /hooks)"}
+                  </span>
                   <span>{source.lastSyncAt ? `synced ${new Date(source.lastSyncAt).toLocaleString()}` : "never synced"}</span>
                   {source.lastError && <span className="source-error">{source.lastError}</span>}
                   <div className="source-actions">
@@ -1022,10 +1426,10 @@ export function InstallerDashboard(): JSX.Element {
               </>
             )}
             <button className="btn btn-secondary" type="button" disabled={busy || !sourceRepoUrl.trim()} onClick={addSourceFromForm}>
-              Add source
+              Add repository
             </button>
             <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => refreshSource()}>
-              Refresh all sources
+              Refresh all repositories
             </button>
           </article>
 
@@ -1090,7 +1494,7 @@ export function InstallerDashboard(): JSX.Element {
         <section className="state-grid tab-section">
           <article className="panel state-intro panel-spacious">
             <h2>States & Reports</h2>
-            <p className="subtle">Inspect installed skill state per target and review the last operation payload.</p>
+            <p className="subtle">Inspect installed skill/hook state per target and review the latest operation payloads.</p>
           </article>
 
           <details className="panel collapsible panel-state panel-spacious" open>
@@ -1107,6 +1511,22 @@ export function InstallerDashboard(): JSX.Element {
               <span className="subtle">{report ? "latest run available" : "no operation yet"}</span>
             </summary>
             <pre>{report ? JSON.stringify(report, null, 2) : "No operation run yet."}</pre>
+          </details>
+
+          <details className="panel collapsible panel-state panel-spacious" open>
+            <summary>
+              <span>Installed Hooks State</span>
+              <span className="subtle">{hookInstallations.length} target entries</span>
+            </summary>
+            <pre>{JSON.stringify(hookInstallations, null, 2)}</pre>
+          </details>
+
+          <details className="panel collapsible panel-state panel-spacious" open>
+            <summary>
+              <span>Hook Operation Report</span>
+              <span className="subtle">{hookReport ? "latest run available" : "no operation yet"}</span>
+            </summary>
+            <pre>{hookReport ? JSON.stringify(hookReport, null, 2) : "No hook operation run yet."}</pre>
           </details>
         </section>
       )}

@@ -11,7 +11,13 @@ import { loadCatalogFromSources } from "../installer-core/catalog";
 import { createCredentialProvider } from "../installer-core/credentials";
 import { checkSourceAuth } from "../installer-core/sourceAuth";
 import { syncSource } from "../installer-core/sourceSync";
-import { addSource, ensureSourceRegistry, loadSources, removeSource, updateSource } from "../installer-core/sources";
+import { ensureSourceRegistry, loadSources, removeSource, updateSource } from "../installer-core/sources";
+import { loadHookSources, removeHookSource, updateHookSource } from "../installer-core/hookSources";
+import { syncHookSource } from "../installer-core/hookSync";
+import { loadHookCatalogFromSources, HookInstallSelection } from "../installer-core/hookCatalog";
+import { executeHookOperation, HookInstallRequest, HookTargetPlatform } from "../installer-core/hookExecutor";
+import { loadHookInstallState } from "../installer-core/hookState";
+import { registerRepository } from "../installer-core/repositories";
 import { loadInstallState } from "../installer-core/state";
 import { parseTargets, resolveTargetPaths } from "../installer-core/targets";
 import { findRepoRoot } from "../installer-core/repo";
@@ -106,12 +112,47 @@ function parseSkillSelectors(tokens: string[]): { legacySkills: string[]; select
   return { legacySkills, selections };
 }
 
+function parseHookSelectors(tokens: string[]): { legacyHooks: string[]; selections: HookInstallSelection[] } {
+  const legacyHooks: string[] = [];
+  const selections: HookInstallSelection[] = [];
+
+  for (const token of tokens) {
+    const idx = token.indexOf("/");
+    if (idx > 0) {
+      const sourceId = token.slice(0, idx);
+      const hookName = token.slice(idx + 1);
+      if (!sourceId || !hookName) {
+        legacyHooks.push(token);
+        continue;
+      }
+      selections.push({
+        sourceId,
+        hookName,
+        hookId: `${sourceId}/${hookName}`,
+      });
+      continue;
+    }
+    legacyHooks.push(token);
+  }
+
+  return { legacyHooks, selections };
+}
+
 function parseTargetsStrict(rawValue: string): TargetPlatform[] {
   const parsed = parseTargets(rawValue);
   if (rawValue.trim().length > 0 && parsed.length === 0) {
     throw new Error(`No valid targets were parsed from '${rawValue}'. Supported: claude,codex,cursor,gemini,antigravity`);
   }
   return parsed;
+}
+
+function parseHookTargetsStrict(rawValue: string): HookTargetPlatform[] {
+  const parsed = parseTargets(rawValue).filter((target): target is HookTargetPlatform => target === "claude" || target === "gemini");
+  if (rawValue.trim().length > 0 && parsed.length === 0) {
+    throw new Error(`No valid hook-capable targets were parsed from '${rawValue}'. Supported: claude,gemini`);
+  }
+  if (parsed.length > 0) return parsed;
+  return ["claude"];
 }
 
 async function helperRequest(pathname: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -189,9 +230,17 @@ function printHelp(): void {
   output.write(`  ica sources list\n`);
   output.write(`  ica sources add [--repo-url=<url> | --repo-path=<path>] [--name=<name>] [--id=<id>] [--transport=https|ssh]\n`);
   output.write(`  ica sources remove --id=<source-id>\n`);
-  output.write(`  ica sources update --id=<source-id> [--name=<name>] [--repo-url=<url>] [--transport=https|ssh] [--skills-root=/skills] [--enabled=true|false]\n`);
+  output.write(
+    `  ica sources update --id=<source-id> [--name=<name>] [--repo-url=<url>] [--transport=https|ssh] [--skills-root=/skills] [--hooks-root=/hooks] [--enabled=true|false]\n`,
+  );
   output.write(`  ica sources auth --id=<source-id> [--token=<pat-or-api-key>]\n`);
   output.write(`  ica sources refresh [--id=<source-id>]\n\n`);
+  output.write(`  ica hooks list [--targets=claude,gemini] [--scope=user|project] [--project-path=/path]\n`);
+  output.write(`  ica hooks catalog [--json]\n`);
+  output.write(`  ica hooks install [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
+  output.write(`  ica hooks uninstall [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
+  output.write(`  ica hooks sync [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n\n`);
+  output.write(`  Note: repository registration is unified. Adding one source auto-registers both skills and hooks mirrors.\n\n`);
   output.write(`  ica container mount-project --project-path=<path> --confirm [--container-name=<name>] [--image=<image>] [--port=<host:container>] [--json]\n\n`);
   output.write(`Common flags:\n`);
   output.write(`  --targets=claude,codex\n`);
@@ -425,20 +474,81 @@ async function runSources(positionals: string[], options: Record<string, string 
   const json = boolOption(options, "json", false);
   const credentialProvider = createCredentialProvider();
 
+  const loadRepositoryRows = async (): Promise<
+    Array<{
+      id: string;
+      repoUrl: string;
+      transport: "https" | "ssh";
+      name: string;
+      skills?: Awaited<ReturnType<typeof loadSources>>[number];
+      hooks?: Awaited<ReturnType<typeof loadHookSources>>[number];
+    }>
+  > => {
+    const skillSources = await ensureSourceRegistry();
+    const hookSources = await loadHookSources();
+    const byId = new Map<
+      string,
+      {
+        id: string;
+        repoUrl: string;
+        transport: "https" | "ssh";
+        name: string;
+        skills?: Awaited<ReturnType<typeof loadSources>>[number];
+        hooks?: Awaited<ReturnType<typeof loadHookSources>>[number];
+      }
+    >();
+
+    for (const source of skillSources) {
+      byId.set(source.id, {
+        ...(byId.get(source.id) || {
+          id: source.id,
+          repoUrl: source.repoUrl,
+          transport: source.transport,
+          name: source.name,
+        }),
+        repoUrl: source.repoUrl,
+        transport: source.transport,
+        name: source.name,
+        skills: source,
+      });
+    }
+    for (const source of hookSources) {
+      byId.set(source.id, {
+        ...(byId.get(source.id) || {
+          id: source.id,
+          repoUrl: source.repoUrl,
+          transport: source.transport,
+          name: source.name,
+        }),
+        repoUrl: source.repoUrl,
+        transport: source.transport,
+        name: source.name,
+        hooks: source,
+      });
+    }
+    return Array.from(byId.values()).sort((a, b) => a.id.localeCompare(b.id));
+  };
+
   if (action === "list") {
-    const sources = await ensureSourceRegistry();
+    const repositories = await loadRepositoryRows();
     if (json) {
-      output.write(`${JSON.stringify(sources, null, 2)}\n`);
+      output.write(`${JSON.stringify(repositories, null, 2)}\n`);
       return;
     }
-    for (const source of sources) {
-      output.write(`${source.id} (${source.transport}) ${source.enabled ? "enabled" : "disabled"}\n`);
-      output.write(`  name: ${source.name}\n`);
-      output.write(`  repo: ${source.repoUrl}\n`);
-      output.write(`  root: ${source.skillsRoot}\n`);
-      output.write(`  synced: ${source.lastSyncAt || "(never)"}\n`);
-      if (source.lastError) {
-        output.write(`  lastError: ${source.lastError}\n`);
+    for (const repo of repositories) {
+      const enabled = repo.skills?.enabled !== false || repo.hooks?.enabled !== false;
+      output.write(`${repo.id} (${repo.transport}) ${enabled ? "enabled" : "disabled"}\n`);
+      output.write(`  name: ${repo.name}\n`);
+      output.write(`  repo: ${repo.repoUrl}\n`);
+      if (repo.skills) {
+        output.write(`  skillsRoot: ${repo.skills.skillsRoot}\n`);
+        output.write(`  skillsSynced: ${repo.skills.lastSyncAt || "(never)"}\n`);
+        if (repo.skills.lastError) output.write(`  skillsError: ${repo.skills.lastError}\n`);
+      }
+      if (repo.hooks) {
+        output.write(`  hooksRoot: ${repo.hooks.hooksRoot}\n`);
+        output.write(`  hooksSynced: ${repo.hooks.lastSyncAt || "(never)"}\n`);
+        if (repo.hooks.lastError) output.write(`  hooksError: ${repo.hooks.lastError}\n`);
       }
     }
     return;
@@ -452,31 +562,46 @@ async function runSources(positionals: string[], options: Record<string, string 
       throw new Error(`Local repository path does not exist: ${localRepoPath}`);
     }
     const repoUrl = repoUrlOption || `file://${localRepoPath}`;
-
-    const source = await addSource({
-      id: stringOption(options, "id", "") || undefined,
-      name: stringOption(options, "name", "") || undefined,
-      repoUrl,
-      transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
-      skillsRoot: stringOption(options, "skills-root", "") || undefined,
-      enabled: !stringOption(options, "enabled", "true").toLowerCase().startsWith("f"),
-      removable: true,
-    });
     const token = stringOption(options, "token", stringOption(options, "api-key", "")).trim();
-    if (token) {
-      await credentialProvider.store(source.id, token);
-    }
-
-    const auth = await checkSourceAuth(source, credentialProvider);
+    const registration = await registerRepository(
+      {
+        id: stringOption(options, "id", "") || undefined,
+        name: stringOption(options, "name", "") || undefined,
+        repoUrl,
+        transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
+        skillsRoot: stringOption(options, "skills-root", "") || undefined,
+        hooksRoot: stringOption(options, "hooks-root", "") || undefined,
+        enabled: !stringOption(options, "enabled", "true").toLowerCase().startsWith("f"),
+        removable: true,
+        token,
+      },
+      credentialProvider,
+    );
+    const source = registration.skillSource;
+    const auth = await checkSourceAuth(
+      {
+        id: source.id,
+        repoUrl: source.repoUrl,
+        transport: source.transport,
+      },
+      credentialProvider,
+    );
     if (!auth.ok) {
-      throw new Error(`Source added but auth check failed: ${auth.message}`);
-    }
-    const sync = await syncSource(source, credentialProvider);
-    if (!fs.existsSync(sync.skillsPath) || !fs.statSync(sync.skillsPath).isDirectory()) {
-      throw new Error(`Source '${source.id}' is invalid: missing required skills root '${source.skillsRoot}'.`);
+      throw new Error(`Repository added but auth check failed: ${auth.message}`);
     }
 
-    output.write(json ? `${JSON.stringify(source, null, 2)}\n` : `Added source '${source.id}' and completed initial sync.\n`);
+    if (json) {
+      output.write(`${JSON.stringify(registration, null, 2)}\n`);
+    } else {
+      output.write(`Added repository '${source.id}'. Skills sync: ${registration.sync.skills.ok ? "OK" : "FAILED"}.\n`);
+      output.write(`Hooks sync: ${registration.sync.hooks.ok ? "OK" : "FAILED"}.\n`);
+      if (!registration.sync.skills.ok && registration.sync.skills.error) {
+        output.write(`  skills error: ${registration.sync.skills.error}\n`);
+      }
+      if (!registration.sync.hooks.ok && registration.sync.hooks.error) {
+        output.write(`  hooks error: ${registration.sync.hooks.error}\n`);
+      }
+    }
     return;
   }
 
@@ -485,9 +610,19 @@ async function runSources(positionals: string[], options: Record<string, string 
     if (!sourceId) {
       throw new Error("Missing required option --id");
     }
-    const removed = await removeSource(sourceId);
+    let removed: unknown = null;
+    try {
+      removed = await removeSource(sourceId);
+    } catch {
+      // allow hook-only removals in older setups
+    }
+    try {
+      await removeHookSource(sourceId);
+    } catch {
+      // ignore missing hook mirror
+    }
     await credentialProvider.delete(sourceId);
-    output.write(json ? `${JSON.stringify(removed, null, 2)}\n` : `Removed source '${sourceId}'.\n`);
+    output.write(json ? `${JSON.stringify(removed || { id: sourceId }, null, 2)}\n` : `Removed repository '${sourceId}'.\n`);
     return;
   }
 
@@ -509,14 +644,33 @@ async function runSources(positionals: string[], options: Record<string, string 
           ? !stringOption(options, "enabled", "true").toLowerCase().startsWith("f")
           : undefined,
     });
+    try {
+      await updateHookSource(sourceId, {
+        name: stringOption(options, "name", "") || undefined,
+        repoUrl,
+        transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
+        hooksRoot: stringOption(options, "hooks-root", "") || undefined,
+        enabled:
+          options.enabled !== undefined
+            ? !stringOption(options, "enabled", "true").toLowerCase().startsWith("f")
+            : undefined,
+      });
+    } catch {
+      // Older environments may still have only skill sources configured.
+    }
 
     const token = stringOption(options, "token", stringOption(options, "api-key", "")).trim();
     if (token) {
       await credentialProvider.store(sourceId, token);
       await updateSource(sourceId, { credentialRef: `${sourceId}:stored` });
+      try {
+        await updateHookSource(sourceId, { credentialRef: `${sourceId}:stored` });
+      } catch {
+        // ignore missing hook mirror
+      }
     }
 
-    output.write(json ? `${JSON.stringify(source, null, 2)}\n` : `Updated source '${sourceId}'.\n`);
+    output.write(json ? `${JSON.stringify(source, null, 2)}\n` : `Updated repository '${sourceId}'.\n`);
     return;
   }
 
@@ -528,13 +682,29 @@ async function runSources(positionals: string[], options: Record<string, string 
     const token = stringOption(options, "token", stringOption(options, "api-key", "")).trim();
     if (token) {
       await credentialProvider.store(sourceId, token);
-      await updateSource(sourceId, { credentialRef: `${sourceId}:stored` });
+      try {
+        await updateSource(sourceId, { credentialRef: `${sourceId}:stored` });
+      } catch {
+        // ignore missing skill mirror
+      }
+      try {
+        await updateHookSource(sourceId, { credentialRef: `${sourceId}:stored` });
+      } catch {
+        // ignore missing hook mirror
+      }
     }
-    const source = (await loadSources()).find((item) => item.id === sourceId);
+    const source = (await loadSources()).find((item) => item.id === sourceId) || (await loadHookSources()).find((item) => item.id === sourceId);
     if (!source) {
       throw new Error(`Unknown source '${sourceId}'`);
     }
-    const result = await checkSourceAuth(source, credentialProvider);
+    const result = await checkSourceAuth(
+      {
+        id: source.id,
+        repoUrl: source.repoUrl,
+        transport: source.transport,
+      },
+      credentialProvider,
+    );
     if (json) {
       output.write(`${JSON.stringify(result, null, 2)}\n`);
     } else {
@@ -545,22 +715,159 @@ async function runSources(positionals: string[], options: Record<string, string 
 
   if (action === "refresh") {
     const sourceId = stringOption(options, "id", "").trim();
-    const sources = await loadSources();
-    const targets = sourceId ? sources.filter((source) => source.id === sourceId) : sources.filter((source) => source.enabled);
+    const repositories = await loadRepositoryRows();
+    const targets = sourceId
+      ? repositories.filter((repo) => repo.id === sourceId)
+      : repositories.filter((repo) => repo.skills?.enabled !== false || repo.hooks?.enabled !== false);
     if (targets.length === 0) {
       throw new Error(sourceId ? `Unknown source '${sourceId}'` : "No enabled sources found.");
     }
 
-    const refreshed: Array<{ id: string; revision: string; localPath: string }> = [];
-    for (const source of targets) {
-      const result = await syncSource(source, credentialProvider);
-      refreshed.push({ id: source.id, revision: result.revision, localPath: result.localPath });
+    const refreshed: Array<{
+      id: string;
+      skills?: { revision?: string; localPath?: string; error?: string };
+      hooks?: { revision?: string; localPath?: string; error?: string };
+    }> = [];
+    for (const repo of targets) {
+      const item: {
+        id: string;
+        skills?: { revision?: string; localPath?: string; error?: string };
+        hooks?: { revision?: string; localPath?: string; error?: string };
+      } = { id: repo.id };
+
+      if (repo.skills) {
+        try {
+          const result = await syncSource(repo.skills, credentialProvider);
+          item.skills = { revision: result.revision, localPath: result.localPath };
+        } catch (error) {
+          item.skills = { error: error instanceof Error ? error.message : String(error) };
+        }
+      }
+      if (repo.hooks) {
+        try {
+          const result = await syncHookSource(repo.hooks, credentialProvider);
+          item.hooks = { revision: result.revision, localPath: result.localPath };
+        } catch (error) {
+          item.hooks = { error: error instanceof Error ? error.message : String(error) };
+        }
+      }
+      refreshed.push(item);
     }
-    output.write(json ? `${JSON.stringify(refreshed, null, 2)}\n` : `Refreshed ${refreshed.length} source(s).\n`);
+    output.write(json ? `${JSON.stringify(refreshed, null, 2)}\n` : `Refreshed ${refreshed.length} repositories.\n`);
     return;
   }
 
   throw new Error(`Unknown sources action '${action}'. Supported: list|add|remove|update|auth|refresh`);
+}
+
+async function runHooks(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
+  const action = (positionals[0] || "list").toLowerCase();
+  const json = boolOption(options, "json", false);
+  const repoRoot = findRepoRoot(__dirname);
+
+  if (action === "catalog") {
+    const catalog = await loadHookCatalogFromSources(repoRoot, false);
+    if (json) {
+      output.write(`${JSON.stringify(catalog, null, 2)}\n`);
+      return;
+    }
+    output.write(`Hook catalog version: ${catalog.version}\n`);
+    output.write(`Generated at: ${catalog.generatedAt}\n`);
+    for (const hook of catalog.hooks) {
+      output.write(`- ${hook.hookId}\n`);
+      if (hook.description) {
+        output.write(`  ${hook.description}\n`);
+      }
+    }
+    return;
+  }
+
+  if (action === "list") {
+    const scope = (stringOption(options, "scope", "user") === "project" ? "project" : "user") as "user" | "project";
+    const projectPath = stringOption(options, "project-path", "").trim() || (scope === "project" ? process.cwd() : undefined);
+    const targets = parseHookTargetsStrict(stringOption(options, "targets", ""));
+    const resolved = resolveTargetPaths(targets, scope, projectPath, stringOption(options, "agent-dir-name", "") || undefined);
+
+    const rows: Array<{ target: HookTargetPlatform; installPath: string; managedHooks: string[]; updatedAt?: string }> = [];
+    for (const target of resolved) {
+      const state = await loadHookInstallState(target.installPath);
+      rows.push({
+        target: target.target as HookTargetPlatform,
+        installPath: target.installPath,
+        managedHooks: (state?.managedHooks || []).map((hook) => hook.hookId || hook.name),
+        updatedAt: state?.updatedAt,
+      });
+    }
+
+    if (json) {
+      output.write(`${JSON.stringify(rows, null, 2)}\n`);
+      return;
+    }
+    for (const row of rows) {
+      output.write(`${row.target}: ${row.installPath}\n`);
+      output.write(`  Hooks: ${row.managedHooks.length > 0 ? row.managedHooks.join(", ") : "(none)"}\n`);
+      if (row.updatedAt) {
+        output.write(`  Updated: ${row.updatedAt}\n`);
+      }
+    }
+    return;
+  }
+
+  if (!["install", "uninstall", "sync"].includes(action)) {
+    throw new Error(`Unknown hooks action '${action}'. Supported: list|catalog|install|uninstall|sync`);
+  }
+
+  const catalog = await loadHookCatalogFromSources(repoRoot, false);
+  const targets = parseHookTargetsStrict(stringOption(options, "targets", ""));
+  const scope = (stringOption(options, "scope", "user") === "project" ? "project" : "user") as "user" | "project";
+  const projectPath = scope === "project" ? stringOption(options, "project-path", "").trim() || process.cwd() : undefined;
+  const mode = (stringOption(options, "mode", "symlink") === "copy" ? "copy" : "symlink") as "symlink" | "copy";
+
+  const hooksRaw = stringOption(options, "hooks", "");
+  const selectedTokens =
+    hooksRaw.trim().length > 0
+      ? splitCsv(hooksRaw)
+      : action === "install" || action === "sync"
+        ? catalog.hooks.map((hook) => hook.hookId)
+        : [];
+  const parsedHooks = parseHookSelectors(selectedTokens);
+
+  const request: HookInstallRequest = {
+    operation: action as "install" | "uninstall" | "sync",
+    targets,
+    scope,
+    projectPath,
+    agentDirName: stringOption(options, "agent-dir-name", "") || undefined,
+    mode,
+    hooks: parsedHooks.legacyHooks,
+    hookSelections: parsedHooks.selections.length > 0 ? parsedHooks.selections : undefined,
+    removeUnselected: action === "sync" ? true : boolOption(options, "remove-unselected", false),
+    force: boolOption(options, "force", false),
+  };
+
+  const report = await executeHookOperation(repoRoot, request);
+  if (json) {
+    output.write(`${JSON.stringify(report, null, 2)}\n`);
+    return;
+  }
+
+  for (const target of report.targets) {
+    output.write(`\n[${target.target}] ${target.operation} -> ${target.installPath}\n`);
+    output.write(`  applied: ${target.appliedHooks.join(", ") || "(none)"}\n`);
+    output.write(`  removed: ${target.removedHooks.join(", ") || "(none)"}\n`);
+    output.write(`  skipped: ${target.skippedHooks.join(", ") || "(none)"}\n`);
+
+    if (target.warnings.length > 0) {
+      for (const warning of target.warnings) {
+        output.write(`  warning(${warning.code}): ${warning.message}\n`);
+      }
+    }
+    if (target.errors.length > 0) {
+      for (const error of target.errors) {
+        output.write(`  error(${error.code}): ${error.message}\n`);
+      }
+    }
+  }
 }
 
 async function runContainer(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
@@ -621,6 +928,11 @@ async function main(): Promise<void> {
 
   if (normalized === "sources") {
     await runSources(positionals, options);
+    return;
+  }
+
+  if (normalized === "hooks") {
+    await runHooks(positionals, options);
     return;
   }
 
