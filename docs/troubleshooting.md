@@ -9,6 +9,17 @@ npm ci
 npm run build
 ```
 
+## `ica launch` not found
+
+If bootstrap finished but `ica` is not recognized, ensure `~/.local/bin` is in your `PATH`, then restart the shell.
+
+Quick check:
+
+```bash
+ica --help
+ica launch --open=true
+```
+
 ## Permissions Errors
 
 If install cannot write to target paths, ensure the current user owns and can write the target directory.

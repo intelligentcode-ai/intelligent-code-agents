@@ -19,6 +19,8 @@ ICA installs `SKILL.md` assets and supporting defaults into agent home directori
 
 ### 1) Verified bootstrap (recommended)
 
+Bootstrap downloads the latest source artifact (`ica-<tag>-source.tar.gz`) and verifies it against `SHA256SUMS.txt`.
+
 macOS/Linux:
 
 ```bash
@@ -29,6 +31,13 @@ Windows PowerShell:
 
 ```powershell
 iwr https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.ps1 -UseBasicParsing | iex
+```
+
+Then run:
+
+```bash
+ica install
+ica launch --open=true
 ```
 
 ### 2) Local CLI build + run
