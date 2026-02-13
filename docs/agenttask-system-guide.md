@@ -158,13 +158,8 @@ agenttask_configuration:
 
 ## Essential Skills
 
-Note: The system provides 3 essential skills for system operations. Most interaction is through role skills:
-
-- **ica-init-system** - Initialize virtual team system
-- **ica-get-setting** - Get configuration values
-- **ica-search-memory** - Search learning patterns
-
-Primary interaction: role skills (pm, developer, ai-engineer, etc.)
+Primary interaction is through role and process skills (pm, developer, reviewer, process, validate, etc.).
+System configuration values are read from the config hierarchy (`ica.config.json`, user-level config, defaults).
 
 ## Example
 

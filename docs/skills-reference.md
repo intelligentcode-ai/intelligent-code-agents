@@ -42,10 +42,6 @@ pm, architect, developer, system-engineer, devops-engineer,
 database-engineer, security-engineer, ai-engineer, web-designer,
 qa-engineer, backend-tester, requirements-engineer, user-tester, reviewer
 
-### Command Skills (2)
-- `ica-version`: show current ICA version / install status
-- `ica-get-setting`: read config values from the config hierarchy
-
 ### Tooling Skills (1)
 - `agent-browser`: reproduce/debug web UI flows via Agent Browser CLI (snapshots, screenshots, redirects, console/network/errors)
 

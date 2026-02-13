@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 type Target = "claude" | "codex" | "cursor" | "gemini" | "antigravity";
 
@@ -69,8 +69,88 @@ type OperationReport = {
 };
 
 type DashboardTab = "skills" | "settings" | "state";
+type DashboardMode = "light" | "dark";
+type DashboardAccent = "slate" | "blue" | "red" | "green" | "amber";
+type DashboardBackground = "slate" | "ocean" | "sand" | "forest" | "wine";
+type LegacyDashboardTheme = "light" | "dark" | "blue" | "red" | "green";
 
 const allTargets: Target[] = ["claude", "codex", "cursor", "gemini", "antigravity"];
+const modeStorageKey = "ica.dashboard.mode";
+const accentStorageKey = "ica.dashboard.accent";
+const backgroundStorageKey = "ica.dashboard.background";
+const legacyThemeStorageKey = "ica.dashboard.theme";
+const modeOptions: Array<{ id: DashboardMode; label: string }> = [
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+];
+const accentOptions: Array<{ id: DashboardAccent; label: string }> = [
+  { id: "slate", label: "Slate" },
+  { id: "blue", label: "Blue" },
+  { id: "red", label: "Red" },
+  { id: "green", label: "Green" },
+  { id: "amber", label: "Amber" },
+];
+const backgroundOptions: Array<{ id: DashboardBackground; label: string }> = [
+  { id: "slate", label: "Slate" },
+  { id: "ocean", label: "Ocean" },
+  { id: "sand", label: "Sand" },
+  { id: "forest", label: "Forest" },
+  { id: "wine", label: "Wine" },
+];
+
+function isDashboardMode(value: string | null): value is DashboardMode {
+  return value === "light" || value === "dark";
+}
+
+function isDashboardAccent(value: string | null): value is DashboardAccent {
+  return value === "slate" || value === "blue" || value === "red" || value === "green" || value === "amber";
+}
+
+function isDashboardBackground(value: string | null): value is DashboardBackground {
+  return value === "slate" || value === "ocean" || value === "sand" || value === "forest" || value === "wine";
+}
+
+function isLegacyTheme(value: string | null): value is LegacyDashboardTheme {
+  return value === "light" || value === "dark" || value === "blue" || value === "red" || value === "green";
+}
+
+function mapLegacyTheme(theme: LegacyDashboardTheme): {
+  mode: DashboardMode;
+  accent: DashboardAccent;
+  background: DashboardBackground;
+} {
+  switch (theme) {
+    case "light":
+      return { mode: "light", accent: "slate", background: "slate" };
+    case "dark":
+      return { mode: "dark", accent: "slate", background: "slate" };
+    case "blue":
+      return { mode: "dark", accent: "blue", background: "ocean" };
+    case "red":
+      return { mode: "dark", accent: "red", background: "wine" };
+    case "green":
+      return { mode: "dark", accent: "green", background: "forest" };
+  }
+}
+
+function readStoredAppearance(): { mode: DashboardMode; accent: DashboardAccent; background: DashboardBackground } {
+  if (typeof window === "undefined") return { mode: "light", accent: "slate", background: "slate" };
+  try {
+    const storedMode = window.localStorage.getItem(modeStorageKey);
+    const storedAccent = window.localStorage.getItem(accentStorageKey);
+    const storedBackground = window.localStorage.getItem(backgroundStorageKey);
+    if (isDashboardMode(storedMode) && isDashboardAccent(storedAccent) && isDashboardBackground(storedBackground)) {
+      return { mode: storedMode, accent: storedAccent, background: storedBackground };
+    }
+    const legacyTheme = window.localStorage.getItem(legacyThemeStorageKey);
+    if (isLegacyTheme(legacyTheme)) {
+      return mapLegacyTheme(legacyTheme);
+    }
+  } catch {
+    // ignore storage access errors
+  }
+  return { mode: "light", accent: "slate", background: "slate" };
+}
 
 function asErrorMessage(payload: unknown, fallback: string): string {
   if (payload && typeof payload === "object" && "error" in payload) {
@@ -80,6 +160,14 @@ function asErrorMessage(payload: unknown, fallback: string): string {
     }
   }
   return fallback;
+}
+
+function titleCase(value: string): string {
+  return value
+    .replace(/[-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b[a-z]/g, (match) => match.toUpperCase());
 }
 
 export function InstallerDashboard(): JSX.Element {
@@ -104,38 +192,20 @@ export function InstallerDashboard(): JSX.Element {
   const [sourceTransport, setSourceTransport] = useState<"https" | "ssh">("https");
   const [sourceToken, setSourceToken] = useState("");
   const [activeTab, setActiveTab] = useState<DashboardTab>("skills");
+  const [appearanceMode, setAppearanceMode] = useState<DashboardMode>(() => readStoredAppearance().mode);
+  const [appearanceAccent, setAppearanceAccent] = useState<DashboardAccent>(() => readStoredAppearance().accent);
+  const [appearanceBackground, setAppearanceBackground] = useState<DashboardBackground>(() => readStoredAppearance().background);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [installedOnly, setInstalledOnly] = useState(false);
+  const appearancePanelRef = useRef<HTMLElement | null>(null);
+  const appearanceTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const selectedTargetList = useMemo(() => Array.from(targets).sort(), [targets]);
   const trimmedProjectPath = projectPath.trim();
   const targetKey = selectedTargetList.join(",");
   const skillById = useMemo(() => new Map(skills.map((skill) => [skill.skillId, skill])), [skills]);
-
-  const categorized = useMemo(() => {
-    const byCategory = new Map<string, Skill[]>();
-    for (const skill of skills) {
-      const current = byCategory.get(skill.category) || [];
-      current.push(skill);
-      byCategory.set(skill.category, current);
-    }
-    return Array.from(byCategory.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [skills]);
-
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredCategorized = useMemo(() => {
-    if (!normalizedQuery) {
-      return categorized;
-    }
-    return categorized
-      .map(([category, categorySkills]) => {
-        const filtered = categorySkills.filter((skill) => {
-          const resourceText = skill.resources.map((item) => `${item.type} ${item.path}`).join(" ");
-          const haystack = `${skill.skillId} ${skill.description} ${skill.category} ${resourceText}`.toLowerCase();
-          return haystack.includes(normalizedQuery);
-        });
-        return [category, filtered] as [string, Skill[]];
-      })
-      .filter(([, categorySkills]) => categorySkills.length > 0);
-  }, [categorized, normalizedQuery]);
+  const sourceNameById = useMemo(() => new Map(sources.map((source) => [source.id, source.name || source.id])), [sources]);
 
   const installedSkillIds = useMemo(() => {
     const names = new Set<string>();
@@ -151,6 +221,38 @@ export function InstallerDashboard(): JSX.Element {
     }
     return names;
   }, [installations, skills]);
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const sourceFilterOptions = useMemo(() => {
+    return Array.from(new Set(skills.map((skill) => skill.sourceId))).sort((a, b) => a.localeCompare(b));
+  }, [skills]);
+
+  const visibleSkills = useMemo(() => {
+    return skills.filter((skill) => {
+      if (sourceFilter !== "all" && skill.sourceId !== sourceFilter) {
+        return false;
+      }
+      if (installedOnly && !installedSkillIds.has(skill.skillId)) {
+        return false;
+      }
+      if (!normalizedQuery) {
+        return true;
+      }
+      const resourceText = skill.resources.map((item) => `${item.type} ${item.path}`).join(" ");
+      const haystack = `${skill.skillId} ${skill.description} ${skill.category} ${resourceText}`.toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [skills, sourceFilter, installedOnly, installedSkillIds, normalizedQuery]);
+
+  const filteredCategorized = useMemo(() => {
+    const byCategory = new Map<string, Skill[]>();
+    for (const skill of visibleSkills) {
+      const current = byCategory.get(skill.category) || [];
+      current.push(skill);
+      byCategory.set(skill.category, current);
+    }
+    return Array.from(byCategory.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [visibleSkills]);
 
   async function fetchSources(): Promise<void> {
     const res = await fetch("/api/v1/sources");
@@ -177,12 +279,12 @@ export function InstallerDashboard(): JSX.Element {
   async function fetchSkills(runRefresh = false): Promise<void> {
     setCatalogLoading(true);
     setCatalogLoadingProgress(runRefresh ? 8 : 20);
-    setCatalogLoadingMessage(runRefresh ? "Refreshing sources..." : "Loading skills catalog...");
+    setCatalogLoadingMessage(runRefresh ? "Refreshing sources…" : "Loading skills catalog…");
     try {
       if (runRefresh) {
         await refreshSources(true);
         setCatalogLoadingProgress(58);
-        setCatalogLoadingMessage("Loading refreshed skills catalog...");
+        setCatalogLoadingMessage("Loading refreshed skills catalog…");
       }
       const res = await fetch("/api/v1/catalog/skills");
       const payload = (await res.json()) as { skills?: Skill[]; error?: string };
@@ -474,9 +576,78 @@ export function InstallerDashboard(): JSX.Element {
     setSelectedSkills(new Set(installedSkillIds));
   }, [installedSkillIds, selectionCustomized]);
 
+  useEffect(() => {
+    if (sourceFilter === "all") return;
+    if (!sourceFilterOptions.includes(sourceFilter)) {
+      setSourceFilter("all");
+    }
+  }, [sourceFilter, sourceFilterOptions]);
+
+  useEffect(() => {
+    if (catalogLoading || skills.length === 0) return;
+    setSelectedSkills((current) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const skillId of current) {
+        if (skillById.has(skillId)) {
+          next.add(skillId);
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [catalogLoading, skills.length, skillById]);
+
+  useEffect(() => {
+    document.body.dataset.mode = appearanceMode;
+    document.body.dataset.accent = appearanceAccent;
+    document.body.dataset.background = appearanceBackground;
+    document.documentElement.dataset.mode = appearanceMode;
+    document.documentElement.dataset.accent = appearanceAccent;
+    document.documentElement.dataset.background = appearanceBackground;
+    try {
+      window.localStorage.setItem(modeStorageKey, appearanceMode);
+      window.localStorage.setItem(accentStorageKey, appearanceAccent);
+      window.localStorage.setItem(backgroundStorageKey, appearanceBackground);
+    } catch {
+      // ignore storage access errors
+    }
+  }, [appearanceMode, appearanceAccent, appearanceBackground]);
+
+  useEffect(() => {
+    if (!appearanceOpen) return;
+    const onPointerDown = (event: MouseEvent): void => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (appearancePanelRef.current?.contains(target)) return;
+      if (appearanceTriggerRef.current?.contains(target)) return;
+      setAppearanceOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setAppearanceOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [appearanceOpen]);
+
   const totalSkills = skills.length;
-  const filteredSkillsCount = filteredCategorized.reduce((sum, [, categorySkills]) => sum + categorySkills.length, 0);
+  const filteredSkillsCount = visibleSkills.length;
   const selectedSkillCount = selectedSkills.size;
+  const selectedKnownSkillCount = useMemo(() => {
+    let count = 0;
+    for (const skillId of selectedSkills) {
+      if (skillById.has(skillId)) count += 1;
+    }
+    return count;
+  }, [selectedSkills, skillById]);
+  const selectedUnknownSkillCount = Math.max(0, selectedSkillCount - selectedKnownSkillCount);
   const installedSkillCount = installedSkillIds.size;
 
   return (
@@ -488,19 +659,10 @@ export function InstallerDashboard(): JSX.Element {
         </div>
         <h1>Skills Dashboard</h1>
         <p>Manage source repositories, pick project paths natively, and install source-pinned skills across targets.</p>
-        <div className="hero-stats">
-          <article className="stat-card">
-            <span>Sources</span>
-            <strong>{sources.length}</strong>
-          </article>
-          <article className="stat-card">
-            <span>Installed Skills</span>
-            <strong>{installedSkillCount}</strong>
-          </article>
-          <article className="stat-card">
-            <span>Selected Skills</span>
-            <strong>{selectedSkillCount}</strong>
-          </article>
+        <div className="hero-meta">
+          <span>{sources.length} sources</span>
+          <span>{installedSkillCount} installed</span>
+          <span>{selectedKnownSkillCount} selected</span>
         </div>
       </header>
 
@@ -515,71 +677,172 @@ export function InstallerDashboard(): JSX.Element {
             <strong>Loading skills catalog</strong>
             <span>{Math.round(catalogLoadingProgress)}%</span>
           </div>
-          <div className="status-subtle">{catalogLoadingMessage || "Working..."}</div>
+          <div className="status-subtle">{catalogLoadingMessage || "Working…"}</div>
           <div className="status-progress" aria-hidden="true">
             <div className="status-progress-bar" style={{ width: `${Math.max(5, Math.min(catalogLoadingProgress, 100))}%` }} />
           </div>
         </section>
       )}
 
-      <nav className="tab-nav" role="tablist" aria-label="Dashboard sections">
-        <button
-          className={`tab-btn ${activeTab === "skills" ? "is-active" : ""}`}
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "skills"}
-          onClick={() => setActiveTab("skills")}
-        >
-          Skills
-        </button>
-        <button
-          className={`tab-btn ${activeTab === "settings" ? "is-active" : ""}`}
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "settings"}
-          onClick={() => setActiveTab("settings")}
-        >
-          Settings
-        </button>
-        <button
-          className={`tab-btn ${activeTab === "state" ? "is-active" : ""}`}
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "state"}
-          onClick={() => setActiveTab("state")}
-        >
-          States & Reports
-        </button>
-      </nav>
+      <div className="toolbar">
+        <nav className="tab-nav" role="tablist" aria-label="Dashboard sections">
+          <button
+            className={`tab-btn ${activeTab === "skills" ? "is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "skills"}
+            onClick={() => setActiveTab("skills")}
+          >
+            Skills
+          </button>
+          <button
+            className={`tab-btn ${activeTab === "settings" ? "is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "settings"}
+            onClick={() => setActiveTab("settings")}
+          >
+            Settings
+          </button>
+          <button
+            className={`tab-btn ${activeTab === "state" ? "is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "state"}
+            onClick={() => setActiveTab("state")}
+          >
+            States & Reports
+          </button>
+        </nav>
+        <div className="toolbar-actions">
+          <button
+            ref={appearanceTriggerRef}
+            className={`btn btn-ghost appearance-toggle ${appearanceOpen ? "is-active" : ""}`}
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={appearanceOpen}
+            aria-controls="appearance-panel"
+            onClick={() => setAppearanceOpen((value) => !value)}
+          >
+            <svg className="appearance-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm9 3.5c0-.4-.3-.8-.7-.9l-1.6-.4a7 7 0 0 0-.6-1.4l.9-1.4c.2-.3.2-.8 0-1.1l-1.3-1.3a1 1 0 0 0-1.1 0l-1.4.9c-.5-.2-1-.5-1.5-.6l-.3-1.6a1 1 0 0 0-1-.7h-1.8c-.4 0-.8.3-.9.7l-.4 1.6c-.5.1-1 .4-1.5.6L6.4 4.9a1 1 0 0 0-1.1 0L4 6.2a1 1 0 0 0 0 1.1l.9 1.4c-.3.5-.5 1-.7 1.4l-1.5.4a1 1 0 0 0-.7 1V13c0 .4.3.8.7.9l1.6.4c.1.5.4 1 .6 1.5l-.9 1.4a1 1 0 0 0 0 1.1L5.3 20a1 1 0 0 0 1.1 0l1.4-.9c.5.3 1 .5 1.4.6l.4 1.6c.1.4.5.7.9.7h1.8c.4 0 .8-.3.9-.7l.4-1.6c.5-.1 1-.3 1.4-.6l1.4.9a1 1 0 0 0 1.1 0l1.3-1.3a1 1 0 0 0 0-1.1l-.9-1.4c.3-.5.5-1 .6-1.5l1.6-.4c.4-.1.7-.5.7-.9V12Z"
+                fill="currentColor"
+              />
+            </svg>
+            Appearance
+          </button>
+          {appearanceOpen && (
+            <section ref={appearancePanelRef} id="appearance-panel" className="appearance-popover" aria-label="Appearance panel">
+              <div className="theme-row">
+                <div className="theme-group">
+                  <span className="theme-label">Theme</span>
+                  <div className="theme-buttons">
+                    {modeOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        className={`theme-btn ${appearanceMode === option.id ? "is-active" : ""}`}
+                        type="button"
+                        onClick={() => setAppearanceMode(option.id)}
+                        aria-pressed={appearanceMode === option.id}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="theme-group theme-group-accent">
+                  <span className="theme-label">Accent</span>
+                  <div className="theme-buttons">
+                    {accentOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        className={`theme-btn theme-btn-accent ${appearanceAccent === option.id ? "is-active" : ""}`}
+                        type="button"
+                        onClick={() => setAppearanceAccent(option.id)}
+                        aria-pressed={appearanceAccent === option.id}
+                        data-accent={option.id}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="theme-group theme-group-wide">
+                <span className="theme-label">Background</span>
+                <div className="theme-buttons">
+                  {backgroundOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      className={`theme-btn theme-btn-background ${appearanceBackground === option.id ? "is-active" : ""}`}
+                      type="button"
+                      onClick={() => setAppearanceBackground(option.id)}
+                      aria-pressed={appearanceBackground === option.id}
+                      data-background={option.id}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
 
       {activeTab === "skills" && (
         <div className="workspace tab-section">
           <aside className="control-rail skills-rail">
-            <section className="panel action-panel">
-              <h2>Apply Selection</h2>
-              <p className="subtle">Targets: {selectedTargetList.join(", ")}</p>
-              <p className="subtle">Scope: {scope === "project" ? `project (${trimmedProjectPath || "missing path"})` : "user"}</p>
-              <p className="subtle">Mode: {mode}</p>
-              <button className="btn btn-primary" disabled={busy} onClick={() => runOperation("install")} type="button">
-                Install selected
-              </button>
-              <button className="btn btn-secondary" disabled={busy} onClick={() => runOperation("uninstall")} type="button">
-                Uninstall selected
-              </button>
-              <button className="btn btn-tertiary" disabled={busy} onClick={() => runOperation("sync")} type="button">
-                Sync to selection
-              </button>
+            <section className="panel action-panel panel-spacious">
+              <h2>Actions</h2>
+              <p className="subtle">Apply source-pinned selections across your active targets.</p>
+              <dl className="action-meta">
+                <div>
+                  <dt>Targets</dt>
+                  <dd>{selectedTargetList.length}</dd>
+                </div>
+                <div>
+                  <dt>Selection</dt>
+                  <dd>{selectedKnownSkillCount}</dd>
+                </div>
+                <div>
+                  <dt>Scope</dt>
+                  <dd>{scope === "project" ? "Project" : "User"}</dd>
+                </div>
+                <div>
+                  <dt>Mode</dt>
+                  <dd>{mode}</dd>
+                </div>
+              </dl>
+              {scope === "project" && <p className="operation-hint">Project path: {trimmedProjectPath || "not set"}</p>}
+              <div className="action-row">
+                <button className="btn btn-primary" disabled={busy} onClick={() => runOperation("install")} type="button">
+                  Install selected
+                </button>
+                <button className="btn btn-secondary" disabled={busy} onClick={() => runOperation("uninstall")} type="button">
+                  Uninstall selected
+                </button>
+                <button className="btn btn-tertiary" disabled={busy} onClick={() => runOperation("sync")} type="button">
+                  Sync to selection
+                </button>
+              </div>
             </section>
           </aside>
 
           <main className="catalog-column">
-            <section className="panel panel-catalog">
+            <section className="panel panel-catalog panel-spacious">
               <div className="catalog-head">
                 <div>
                   <h2>Skill Catalog</h2>
                   <p className="subtle">
-                    {selectedSkillCount}/{totalSkills} selected
-                    {normalizedQuery ? ` • ${filteredSkillsCount} shown` : ""}
+                    {catalogLoading
+                      ? "Refreshing catalog…"
+                      : totalSkills > 0
+                        ? `${selectedKnownSkillCount}/${totalSkills} selected`
+                        : `${selectedKnownSkillCount} selected`}
+                    {!catalogLoading && selectedUnknownSkillCount > 0 ? ` • ${selectedUnknownSkillCount} unavailable` : ""}
+                    {!catalogLoading && normalizedQuery ? ` • ${filteredSkillsCount} shown` : ""}
                   </p>
                 </div>
                 <div className="bulk-actions">
@@ -592,12 +855,42 @@ export function InstallerDashboard(): JSX.Element {
                 </div>
               </div>
 
-              <input
-                className="input input-search"
-                placeholder="Search source/skill, descriptions, resources..."
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-              />
+              <div className="catalog-controls">
+                <input
+                  className="input input-search"
+                  placeholder="Search source/skill, descriptions, resources…"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
+                <div className="catalog-filters">
+                  <div className="source-filter">
+                    <span className="filter-label">Source</span>
+                    <div className="source-chip-row">
+                      <button
+                        className={`chip chip-filter ${sourceFilter === "all" ? "is-active" : ""}`}
+                        type="button"
+                        onClick={() => setSourceFilter("all")}
+                      >
+                        all
+                      </button>
+                      {sourceFilterOptions.map((sourceId) => (
+                        <button
+                          key={sourceId}
+                          className={`chip chip-filter ${sourceFilter === sourceId ? "is-active" : ""}`}
+                          type="button"
+                          onClick={() => setSourceFilter(sourceId)}
+                        >
+                          {sourceNameById.get(sourceId) || sourceId}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <label className="toggle">
+                    <input type="checkbox" checked={installedOnly} onChange={(event) => setInstalledOnly(event.target.checked)} />
+                    Installed only
+                  </label>
+                </div>
+              </div>
 
               {filteredCategorized.length === 0 && <div className="empty-state">No skills match this search. Try a broader term.</div>}
 
@@ -609,7 +902,7 @@ export function InstallerDashboard(): JSX.Element {
                 return (
                   <section key={category} className="category-block">
                     <header className="category-head">
-                      <h3>{category}</h3>
+                      <h3>{titleCase(category)}</h3>
                       <div className="category-actions">
                         <span>
                           {selectedInCategory}/{ids.length}
@@ -626,25 +919,37 @@ export function InstallerDashboard(): JSX.Element {
                         const isInstalled = installedSkillIds.has(skill.skillId);
                         return (
                           <article key={skill.skillId} className={`skill ${isSelected ? "selected" : ""}`}>
-                            <label className="skill-title">
-                              <input type="checkbox" checked={isSelected} onChange={() => toggleSkill(skill.skillId)} />
-                              <strong>{skill.skillId}</strong>
-                              {isInstalled && <span className="badge">installed</span>}
-                            </label>
-                            <p>{skill.description}</p>
-                            <p className="subtle">
-                              {skill.skillName} <span className="resource-type">{skill.sourceId}</span>
-                            </p>
+                            <div className="skill-top">
+                              <label className="skill-title">
+                                <input type="checkbox" checked={isSelected} onChange={() => toggleSkill(skill.skillId)} />
+                                <span className="skill-title-copy">
+                                  <strong>{skill.skillName}</strong>
+                                  <code className="skill-id">{skill.skillId}</code>
+                                </span>
+                              </label>
+                              <div className="skill-badges">
+                                <span className="badge badge-source">{sourceNameById.get(skill.sourceId) || skill.sourceId}</span>
+                                {isInstalled && <span className="badge">installed</span>}
+                              </div>
+                            </div>
+                            <p className="skill-description">{skill.description}</p>
                             {skill.resources.length > 0 && (
-                              <ul>
-                                {skill.resources.map((resource) => (
-                                  <li key={`${skill.skillId}-${resource.path}`}>
-                                    <span className="resource-type">{resource.type}</span>
-                                    <code>{resource.path}</code>
-                                  </li>
-                                ))}
-                              </ul>
+                              <details className="skill-resources">
+                                <summary>Resources ({skill.resources.length})</summary>
+                                <ul>
+                                  {skill.resources.map((resource) => (
+                                    <li key={`${skill.skillId}-${resource.path}`}>
+                                      <span className="resource-type">{resource.type}</span>
+                                      <code>{resource.path}</code>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </details>
                             )}
+                            <div className="skill-foot">
+                              {skill.version && <span className="subtle">v{skill.version}</span>}
+                              {skill.updatedAt && <span className="subtle">Updated {new Date(skill.updatedAt).toLocaleDateString()}</span>}
+                            </div>
                           </article>
                         );
                       })}
@@ -659,8 +964,9 @@ export function InstallerDashboard(): JSX.Element {
 
       {activeTab === "settings" && (
         <section className="settings-grid tab-section">
-          <article className="panel">
+          <article className="panel panel-settings panel-spacious">
             <h2>Repository Management</h2>
+            <p className="subtle">Attach skill sources, validate access, and keep local mirrors fresh.</p>
             <div className="subtle">{sources.length} configured</div>
             <div className="source-list">
               {sources.map((source) => (
@@ -682,31 +988,38 @@ export function InstallerDashboard(): JSX.Element {
                 </article>
               ))}
             </div>
+            <span className="field-label">Source Name</span>
             <input
               className="input"
               placeholder="Source name (optional)"
               value={sourceName}
               onChange={(event) => setSourceName(event.target.value)}
             />
+            <span className="field-label">Repository URL</span>
             <input
               className="input"
               placeholder="https://github.com/org/repo.git"
               value={sourceRepoUrl}
               onChange={(event) => setSourceRepoUrl(event.target.value)}
             />
-            <label className="line">
-              <input type="radio" checked={sourceTransport === "https"} onChange={() => setSourceTransport("https")} /> HTTPS
-            </label>
-            <label className="line">
-              <input type="radio" checked={sourceTransport === "ssh"} onChange={() => setSourceTransport("ssh")} /> SSH
-            </label>
+            <div className="source-transport-group" role="radiogroup" aria-label="Source transport">
+              <label className="source-transport-option">
+                <input type="radio" checked={sourceTransport === "https"} onChange={() => setSourceTransport("https")} /> HTTPS
+              </label>
+              <label className="source-transport-option">
+                <input type="radio" checked={sourceTransport === "ssh"} onChange={() => setSourceTransport("ssh")} /> SSH
+              </label>
+            </div>
             {sourceTransport === "https" && (
-              <input
-                className="input"
-                placeholder="PAT / API key (optional for public repos)"
-                value={sourceToken}
-                onChange={(event) => setSourceToken(event.target.value)}
-              />
+              <>
+                <span className="field-label">PAT / API key</span>
+                <input
+                  className="input"
+                  placeholder="PAT / API key (optional for public repos)"
+                  value={sourceToken}
+                  onChange={(event) => setSourceToken(event.target.value)}
+                />
+              </>
             )}
             <button className="btn btn-secondary" type="button" disabled={busy || !sourceRepoUrl.trim()} onClick={addSourceFromForm}>
               Add source
@@ -716,8 +1029,9 @@ export function InstallerDashboard(): JSX.Element {
             </button>
           </article>
 
-          <article className="panel">
+          <article className="panel panel-settings panel-spacious">
             <h2>Installer Settings</h2>
+            <p className="subtle">Tune targets, scope, and install mode for each operation.</p>
             <p className="subtle">Targets: {selectedTargetList.join(", ")}</p>
             <div className="chip-grid">
               {allTargets.map((target) => (
@@ -734,12 +1048,14 @@ export function InstallerDashboard(): JSX.Element {
             </div>
 
             <h2>Scope</h2>
-            <label className="line">
-              <input type="radio" checked={scope === "user"} onChange={() => setScope("user")} /> User
-            </label>
-            <label className="line">
-              <input type="radio" checked={scope === "project"} onChange={() => setScope("project")} /> Project
-            </label>
+            <div className="radio-pair-group" role="radiogroup" aria-label="Install scope">
+              <label className="line radio-pair-option">
+                <input type="radio" checked={scope === "user"} onChange={() => setScope("user")} /> User
+              </label>
+              <label className="line radio-pair-option">
+                <input type="radio" checked={scope === "project"} onChange={() => setScope("project")} /> Project
+              </label>
+            </div>
             {scope === "project" && (
               <>
                 <input
@@ -758,19 +1074,26 @@ export function InstallerDashboard(): JSX.Element {
             )}
 
             <h2>Install Mode</h2>
-            <label className="line">
-              <input type="radio" checked={mode === "symlink"} onChange={() => setMode("symlink")} /> Symlink
-            </label>
-            <label className="line">
-              <input type="radio" checked={mode === "copy"} onChange={() => setMode("copy")} /> Full copy
-            </label>
+            <div className="radio-pair-group" role="radiogroup" aria-label="Install mode">
+              <label className="line radio-pair-option">
+                <input type="radio" checked={mode === "symlink"} onChange={() => setMode("symlink")} /> Symlink
+              </label>
+              <label className="line radio-pair-option">
+                <input type="radio" checked={mode === "copy"} onChange={() => setMode("copy")} /> Full copy
+              </label>
+            </div>
           </article>
         </section>
       )}
 
       {activeTab === "state" && (
         <section className="state-grid tab-section">
-          <details className="panel collapsible" open>
+          <article className="panel state-intro panel-spacious">
+            <h2>States & Reports</h2>
+            <p className="subtle">Inspect installed skill state per target and review the last operation payload.</p>
+          </article>
+
+          <details className="panel collapsible panel-state panel-spacious" open>
             <summary>
               <span>Installed State</span>
               <span className="subtle">{installations.length} target entries</span>
@@ -778,7 +1101,7 @@ export function InstallerDashboard(): JSX.Element {
             <pre>{JSON.stringify(installations, null, 2)}</pre>
           </details>
 
-          <details className="panel collapsible" open>
+          <details className="panel collapsible panel-state panel-spacious" open>
             <summary>
               <span>Operation Report</span>
               <span className="subtle">{report ? "latest run available" : "no operation yet"}</span>

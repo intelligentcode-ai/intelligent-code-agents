@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { SkillCatalog, SkillCatalogEntry, SkillResource, TargetPlatform } from "./types";
 import { buildMultiSourceCatalog } from "./catalogMultiSource";
+import { isSkillBlocked } from "./skillBlocklist";
 
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
 interface LocalCatalogEntry {
@@ -51,12 +52,10 @@ function inferCategory(skillName: string): string {
     "reviewer",
   ]);
 
-  const commandSkills = new Set(["ica-version", "ica-get-setting"]);
   const enforcement = new Set(["file-placement", "branch-protection", "infrastructure-protection"]);
   const meta = new Set(["skill-creator", "skill-writer"]);
 
   if (roleSkills.has(skillName)) return "role";
-  if (commandSkills.has(skillName)) return "command";
   if (enforcement.has(skillName)) return "enforcement";
   if (meta.has(skillName)) return "meta";
   return "process";
@@ -93,6 +92,9 @@ function toCatalogEntry(skillDir: string, repoRoot: string): LocalCatalogEntry |
   const content = fs.readFileSync(skillFile, "utf8");
   const frontmatter = parseFrontmatter(content);
   const name = frontmatter.name || path.basename(skillDir);
+  if (isSkillBlocked(name)) {
+    return null;
+  }
   const description = frontmatter.description || "";
   const explicitCategory = (frontmatter.category || "").trim().toLowerCase();
 

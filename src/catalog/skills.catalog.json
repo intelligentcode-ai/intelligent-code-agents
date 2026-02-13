@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-02-12T15:34:30.421Z",
+  "generatedAt": "2026-02-13T07:01:14.469Z",
   "source": "multi-source",
   "version": "10.2.14",
   "sources": [
@@ -12,9 +12,9 @@
       "enabled": true,
       "skillsRoot": "/skills",
       "removable": true,
-      "lastSyncAt": "2026-02-12T15:32:06.032Z",
+      "lastSyncAt": "2026-02-13T06:50:21.610Z",
       "localPath": "/Users/karsten/.ica/source-cache/official-skills/repo",
-      "revision": "16fcf0d9d0e7a8e50811f5d2770b8016a3552788",
+      "revision": "4c16ceff30a9ee0b72b521fa302b41e1acc02400",
       "localSkillsPath": "/Users/karsten/.ica/official-skills/skills"
     },
     {
@@ -26,7 +26,7 @@
       "enabled": true,
       "skillsRoot": "/skills",
       "removable": true,
-      "lastSyncAt": "2026-02-12T15:27:16.919Z",
+      "lastSyncAt": "2026-02-13T06:50:22.177Z",
       "localPath": "/Users/karsten/.ica/source-cache/local-demo/repo",
       "revision": "f0b690b1f2366872d9ca3bda3fe46beb7c9ac244",
       "localSkillsPath": "/Users/karsten/.ica/local-demo/skills"
@@ -53,7 +53,161 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/local-demo/skills/demo-skill",
       "version": "1.0.0",
-      "updatedAt": "2026-02-12T15:27:16.920Z"
+      "updatedAt": "2026-02-13T06:50:22.177Z"
+    },
+    {
+      "skillId": "official-skills/agent-browser",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "agent-browser",
+      "name": "agent-browser",
+      "description": "Use when you need to reproduce or debug web UI flows (especially auth/OIDC) via the Agent Browser CLI, capture snapshots/screenshots, and extract redirect URLs and on-page errors deterministically. Includes install/setup guidance when the CLI is missing.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/agent-browser",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.536Z"
+    },
+    {
+      "skillId": "official-skills/ai-engineer",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "ai-engineer",
+      "name": "ai-engineer",
+      "description": "Activate when user needs AI/ML work - model integration, behavioral frameworks, intelligent automation. Activate when the ai-engineer skill is requested or work involves machine learning, agentic systems, or AI-driven features.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/ai-engineer",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.537Z"
+    },
+    {
+      "skillId": "official-skills/architect",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "architect",
+      "name": "architect",
+      "description": "Activate when user needs architectural decisions, system design, technology selection, or design reviews. Activate when the architect skill is requested or work requires structural decisions. Provides design patterns and architectural guidance.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/architect",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.538Z"
+    },
+    {
+      "skillId": "official-skills/autonomy",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "autonomy",
+      "name": "autonomy",
+      "description": "Activate when a subagent completes work and needs continuation check. Activate when a task finishes to determine next steps or when detecting work patterns in user messages. Governs automatic work continuation and queue management.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/autonomy",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.539Z"
+    },
+    {
+      "skillId": "official-skills/backend-tester",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "backend-tester",
+      "name": "backend-tester",
+      "description": "Activate when user needs API or backend testing - REST/GraphQL validation, integration tests, database verification. Activate when the backend-tester skill is requested or work requires backend quality assurance.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/backend-tester",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.540Z"
+    },
+    {
+      "skillId": "official-skills/best-practices",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "best-practices",
+      "name": "best-practices",
+      "description": "Activate when starting new work to check for established patterns. Activate when ensuring consistency with team standards or when promoting successful memory patterns. Searches and applies best practices before implementation.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/best-practices",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.541Z"
+    },
+    {
+      "skillId": "official-skills/branch-protection",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "branch-protection",
+      "name": "branch-protection",
+      "description": "Activate when performing git operations. MANDATORY by default - prevents direct commits to main/master, blocks destructive operations (force push, reset --hard). Enforces dev-first workflow where all changes go to dev before main. Assumes branch protection enabled unless disabled in settings.",
+      "category": "enforcement",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/branch-protection",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.542Z"
     },
     {
       "skillId": "official-skills/commit-pr",
@@ -62,7 +216,7 @@
       "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
       "skillName": "commit-pr",
       "name": "commit-pr",
-      "description": "Use this skill when the user asks to commit changes, create a git commit, make a PR, create a pull request, push changes, or any git commit/PR related task. This skill overrides default commit behavior.",
+      "description": "Activate when user asks to commit, push changes, create a PR, open a pull request, or submit changes for review. Activate when process skill reaches commit or PR phase. Provides commit message formatting and PR structure. PRs default to dev branch, not main. Works with git-privacy skill.",
       "category": "process",
       "dependencies": [],
       "compatibleTargets": [
@@ -74,7 +228,52 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/commit-pr",
-      "updatedAt": "2026-02-12T15:32:06.030Z"
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.543Z"
+    },
+    {
+      "skillId": "official-skills/database-engineer",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "database-engineer",
+      "name": "database-engineer",
+      "description": "Activate when user needs database work - schema design, query optimization, migrations, data modeling. Activate when the database-engineer skill is requested or work involves database design or performance tuning.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/database-engineer",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.544Z"
+    },
+    {
+      "skillId": "official-skills/developer",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "developer",
+      "name": "developer",
+      "description": "Activate when user asks to code, build, implement, create, fix bugs, refactor, or write software. Activate when the developer skill is requested. Provides implementation patterns and coding standards for hands-on development work.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/developer",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.546Z"
     },
     {
       "skillId": "official-skills/devops-board",
@@ -95,7 +294,29 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/devops-board",
-      "updatedAt": "2026-02-12T15:32:06.030Z"
+      "updatedAt": "2026-02-13T06:50:21.547Z"
+    },
+    {
+      "skillId": "official-skills/devops-engineer",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "devops-engineer",
+      "name": "devops-engineer",
+      "description": "Activate when user needs CI/CD or deployment work - pipeline design, deployment automation, release management. Activate when the devops-engineer skill is requested or work involves build systems or infrastructure automation.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/devops-engineer",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.548Z"
     },
     {
       "skillId": "official-skills/engineering-docs",
@@ -116,7 +337,51 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/engineering-docs",
-      "updatedAt": "2026-02-12T15:32:06.031Z"
+      "updatedAt": "2026-02-13T06:50:21.549Z"
+    },
+    {
+      "skillId": "official-skills/file-placement",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "file-placement",
+      "name": "file-placement",
+      "description": "Activate when creating any summary, report, or output file. Ensures files go to correct directories (summaries/, memory/, stories/, bugs/). Mirrors what summary-file-enforcement hook enforces.",
+      "category": "enforcement",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/file-placement",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.551Z"
+    },
+    {
+      "skillId": "official-skills/git-privacy",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "git-privacy",
+      "name": "git-privacy",
+      "description": "Activate when performing git commits, creating pull requests, or any git operation. MANDATORY by default - prevents AI attribution (Co-Authored-By, \"Generated with\" footers). Does NOT block legitimate AI feature descriptions.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/git-privacy",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.552Z"
     },
     {
       "skillId": "official-skills/hww-proposal",
@@ -137,7 +402,236 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/hww-proposal",
-      "updatedAt": "2026-02-12T15:32:06.031Z"
+      "updatedAt": "2026-02-13T06:50:21.553Z"
+    },
+    {
+      "skillId": "official-skills/infrastructure-protection",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "infrastructure-protection",
+      "name": "infrastructure-protection",
+      "description": "Activate when performing infrastructure, VM, container, or cloud operations. Ensures safety protocols are followed and blocks destructive operations by default. Mirrors agent-infrastructure-protection hook.",
+      "category": "enforcement",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/infrastructure-protection",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.557Z"
+    },
+    {
+      "skillId": "official-skills/mcp-client",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "mcp-client",
+      "name": "mcp-client",
+      "description": "Universal MCP client for connecting to MCP servers with progressive disclosure. Use when you need to list MCP servers/tools or call an MCP tool against a server that is not already wired into the current agent runtime.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [
+        {
+          "type": "references",
+          "path": "skills/mcp-client/references/example-mcp-config.json"
+        },
+        {
+          "type": "references",
+          "path": "skills/mcp-client/references/mcp-servers.md"
+        },
+        {
+          "type": "references",
+          "path": "skills/mcp-client/references/python-mcp-sdk.md"
+        },
+        {
+          "type": "scripts",
+          "path": "skills/mcp-client/scripts/mcp_client.py"
+        }
+      ],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/mcp-client",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.558Z"
+    },
+    {
+      "skillId": "official-skills/mcp-common",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "mcp-common",
+      "name": "mcp-common",
+      "description": "Internal shared helpers for ICA MCP tooling (client/proxy). Not intended to be invoked directly by users.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [
+        {
+          "type": "scripts",
+          "path": "skills/mcp-common/scripts/ica_mcp_core.py"
+        }
+      ],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/mcp-common",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.568Z"
+    },
+    {
+      "skillId": "official-skills/mcp-config",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "mcp-config",
+      "name": "mcp-config",
+      "description": "Activate when setting up MCP servers, resolving MCP tool availability, or configuring fallbacks for MCP-dependent features. Configures and troubleshoots MCP (Model Context Protocol) integrations.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/mcp-config",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.573Z"
+    },
+    {
+      "skillId": "official-skills/mcp-proxy",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "mcp-proxy",
+      "name": "mcp-proxy",
+      "description": "Local stdio MCP proxy server that mirrors upstream MCP servers/tools and centralizes authentication (OAuth, headers/env). Register one server in your agent runtime, manage upstreams via .mcp.json and/or $ICA_HOME/mcp-servers.json.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [
+        {
+          "type": "scripts",
+          "path": "skills/mcp-proxy/scripts/mcp_proxy_cli.py"
+        },
+        {
+          "type": "scripts",
+          "path": "skills/mcp-proxy/scripts/mcp_proxy_server.py"
+        }
+      ],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/mcp-proxy",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.574Z"
+    },
+    {
+      "skillId": "official-skills/memory",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "memory",
+      "name": "memory",
+      "description": "Activate when user wants to save knowledge, search past decisions, or manage persistent memories. Handles architecture patterns, implementation logic, issues/fixes, and past implementations. Uses local SQLite + FTS5 + vector embeddings for fast hybrid search. Supports write, search, update, archive, and list operations.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/memory",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.578Z"
+    },
+    {
+      "skillId": "official-skills/parallel-execution",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "parallel-execution",
+      "name": "parallel-execution",
+      "description": "Activate when multiple independent work items can execute concurrently. Activate when coordinating non-blocking task patterns in L3 autonomy mode. Manages parallel execution from .agent/queue/.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/parallel-execution",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.585Z"
+    },
+    {
+      "skillId": "official-skills/pm",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "pm",
+      "name": "pm",
+      "description": "Activate when user needs coordination, story breakdown, task delegation, or progress tracking. Activate when the pm skill is requested or work requires planning before implementation. PM coordinates specialists but does not implement.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/pm",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.586Z"
+    },
+    {
+      "skillId": "official-skills/pr-automerge",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "pr-automerge",
+      "name": "pr-automerge",
+      "description": "Activate when asked to auto-review and merge a PR. Runs a closed-loop workflow: subagent Stage 3 review -> fix findings -> re-review -> post ICA-REVIEW receipt -> merge (optional via workflow.auto_merge).",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/pr-automerge",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.587Z"
     },
     {
       "skillId": "official-skills/pr-comments",
@@ -158,7 +652,117 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/pr-comments",
-      "updatedAt": "2026-02-12T15:32:06.032Z"
+      "updatedAt": "2026-02-13T06:50:21.589Z"
+    },
+    {
+      "skillId": "official-skills/process",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "process",
+      "name": "process",
+      "description": "Activate when user explicitly requests the development workflow process, asks about workflow phases, or says \"start work\", \"begin development\", \"follow the process\". Activate when creating PRs or deploying to production. NOT for simple questions or minor fixes. Enforces TDD by default for implementation work and executes AUTONOMOUSLY - only pauses when human decision is genuinely required.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/process",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.589Z"
+    },
+    {
+      "skillId": "official-skills/qa-engineer",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "qa-engineer",
+      "name": "qa-engineer",
+      "description": "Activate when user needs test planning or QA strategy - test frameworks, quality metrics, test automation. Activate when the qa-engineer skill is requested or work requires a comprehensive quality assurance approach.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/qa-engineer",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.591Z"
+    },
+    {
+      "skillId": "official-skills/release",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "release",
+      "name": "release",
+      "description": "Activate when user asks to release, bump version, cut a release, merge to main, or tag a version. Handles version bumping (semver), CHANGELOG updates, PR merging, git tagging, and GitHub release creation.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/release",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.591Z"
+    },
+    {
+      "skillId": "official-skills/requirements-engineer",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "requirements-engineer",
+      "name": "requirements-engineer",
+      "description": "Activate when user needs requirements gathering - business analysis, specification development, user stories. Activate when the requirements-engineer skill is requested or work requires bridging business and technical understanding.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/requirements-engineer",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.592Z"
+    },
+    {
+      "skillId": "official-skills/reviewer",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "reviewer",
+      "name": "reviewer",
+      "description": "Activate when reviewing code, before committing, after committing, or before merging a PR. Activate when user asks to review, audit, check for security issues, or find regressions. Analyzes code for logic errors, regressions, edge cases, security issues, and test gaps. Fixes findings AUTOMATICALLY. Required at process skill quality gates.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/reviewer",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.596Z"
     },
     {
       "skillId": "official-skills/search",
@@ -179,7 +783,139 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/search",
-      "updatedAt": "2026-02-12T15:32:06.032Z"
+      "updatedAt": "2026-02-13T06:50:21.597Z"
+    },
+    {
+      "skillId": "official-skills/security-engineer",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "security-engineer",
+      "name": "security-engineer",
+      "description": "Activate when user needs security work - vulnerability assessment, security architecture, compliance audits, penetration testing. Activate when the security-engineer skill is requested or work requires security review.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/security-engineer",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.598Z"
+    },
+    {
+      "skillId": "official-skills/skill-creator",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "skill-creator",
+      "name": "skill-creator",
+      "description": "Activate when user wants to create a new skill or update an existing skill. Activate when extending capabilities with specialized knowledge, workflows, or tool integrations. Provides guidance for effective skill design.",
+      "category": "meta",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/skill-creator",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.598Z"
+    },
+    {
+      "skillId": "official-skills/skill-writer",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "skill-writer",
+      "name": "skill-writer",
+      "description": "Activate when users want to create or update an Agent Skill and want a Test-Driven Development approach. Defines a red-green-refactor workflow for SKILL.md authoring, trigger quality, validation, and iterative refinement.",
+      "category": "meta",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/skill-writer",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.599Z"
+    },
+    {
+      "skillId": "official-skills/story-breakdown",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "story-breakdown",
+      "name": "story-breakdown",
+      "description": "Activate when user presents a large story or epic that needs decomposition. Activate when a task spans multiple components or requires coordination across specialists. Creates work items in .agent/queue/ for execution.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/story-breakdown",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.600Z"
+    },
+    {
+      "skillId": "official-skills/suggest",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "suggest",
+      "name": "suggest",
+      "description": "Activate when user asks for improvement suggestions, refactoring ideas, or \"what could be better\". Analyzes code and provides realistic, context-aware proposals. Implements safe improvements AUTOMATICALLY. Separate from reviewer (which finds problems).",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/suggest",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.601Z"
+    },
+    {
+      "skillId": "official-skills/system-engineer",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "system-engineer",
+      "name": "system-engineer",
+      "description": "Activate when user needs infrastructure or system operations work - system reliability, monitoring, capacity planning. Activate when the system-engineer skill is requested or work involves configuration management or operational excellence.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/system-engineer",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.602Z"
     },
     {
       "skillId": "official-skills/taskboard",
@@ -200,7 +936,161 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/taskboard",
-      "updatedAt": "2026-02-12T15:32:06.033Z"
+      "updatedAt": "2026-02-13T06:50:21.603Z"
+    },
+    {
+      "skillId": "official-skills/tdd",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "tdd",
+      "name": "tdd",
+      "description": "Activate when user asks for Test-Driven Development, test-first implementation, red-green-refactor, or enforcing tests before code. Use for feature work, bug fixes, and refactors; treat TDD as the default rule unless the user explicitly waives it.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/tdd",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.604Z"
+    },
+    {
+      "skillId": "official-skills/thinking",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "thinking",
+      "name": "thinking",
+      "description": "Activate when facing complex problems, multi-step decisions, high-risk changes, complex debugging, or architectural decisions. Activate when careful analysis is needed before taking action. Provides explicit step-by-step validation.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/thinking",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.605Z"
+    },
+    {
+      "skillId": "official-skills/user-tester",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "user-tester",
+      "name": "user-tester",
+      "description": "Activate when user needs E2E or user journey testing - browser automation, Puppeteer/Playwright, cross-browser testing. Activate when the user-tester skill is requested or work requires user flow validation or experience verification.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/user-tester",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.606Z"
+    },
+    {
+      "skillId": "official-skills/validate",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "validate",
+      "name": "validate",
+      "description": "Activate when checking if work meets requirements, verifying completion criteria, validating file placement, or ensuring quality standards. Use before marking work complete to verify success criteria are met.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/validate",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.607Z"
+    },
+    {
+      "skillId": "official-skills/web-designer",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "web-designer",
+      "name": "web-designer",
+      "description": "Activate when user needs UI/UX design work - interface design, user research, design systems, accessibility. Activate when the web-designer skill is requested or work requires visual design or user experience expertise.",
+      "category": "role",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/web-designer",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.608Z"
+    },
+    {
+      "skillId": "official-skills/work-queue",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "work-queue",
+      "name": "work-queue",
+      "description": "Activate when user has a large task to break into smaller work items. Activate when user asks about work queue status or what remains to do. Activate when managing sequential or parallel execution. Creates and manages .agent/queue/ for cross-platform work tracking.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/work-queue",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.609Z"
+    },
+    {
+      "skillId": "official-skills/workflow",
+      "sourceId": "official-skills",
+      "sourceName": "official",
+      "sourceUrl": "https://github.com/intelligentcode-ai/skills.git",
+      "skillName": "workflow",
+      "name": "workflow",
+      "description": "Activate when checking workflow step requirements, resolving workflow conflicts, or ensuring proper execution sequence. Applies workflow enforcement patterns and validates compliance.",
+      "category": "process",
+      "dependencies": [],
+      "compatibleTargets": [
+        "claude",
+        "codex",
+        "cursor",
+        "gemini",
+        "antigravity"
+      ],
+      "resources": [],
+      "sourcePath": "/Users/karsten/.ica/official-skills/skills/workflow",
+      "version": "10.2.14",
+      "updatedAt": "2026-02-13T06:50:21.610Z"
     }
   ]
 }

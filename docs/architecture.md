@@ -20,14 +20,13 @@ If one repository references another inside Git metadata, the precise term is **
 
 **Categories:**
 - **Role Skills (14):** pm, architect, developer, system-engineer, devops-engineer, database-engineer, security-engineer, ai-engineer, web-designer, qa-engineer, backend-tester, requirements-engineer, user-tester, reviewer
-- **Command Skills (2):** ica-version, ica-get-setting
 - **Process Skills:** thinking, work-queue, process, best-practices, validate, autonomy, parallel-execution, workflow, mcp-config, story-breakdown, git-privacy, commit-pr, pr-automerge, release, suggest, tdd
 - **Enforcement Companion Skills (3):** file-placement, branch-protection, infrastructure-protection
 - **Meta Skills (2):** skill-creator, skill-writer
 
 **Category resolution (catalog):**
 - Preferred: `category:` in `SKILL.md` frontmatter.
-- Fallback: ICA infers category by skill name using built-in role/command/enforcement/meta sets.
+- Fallback: ICA infers category by skill name using built-in role/enforcement/meta sets.
 - Final fallback: `process`.
 
 ### Behaviors (4 foundational)

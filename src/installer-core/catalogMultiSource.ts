@@ -4,6 +4,7 @@ import { createCredentialProvider } from "./credentials";
 import { setSourceSyncStatus, ensureSourceRegistry, OFFICIAL_SOURCE_ID } from "./sources";
 import { syncSource } from "./sourceSync";
 import { CatalogSkill, InstallSelection, SkillCatalog, SkillResource, SkillSource, TargetPlatform } from "./types";
+import { isSkillBlocked } from "./skillBlocklist";
 
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
 
@@ -44,12 +45,10 @@ function inferCategory(skillName: string): string {
     "reviewer",
   ]);
 
-  const commandSkills = new Set(["ica-version", "ica-get-setting"]);
   const enforcement = new Set(["file-placement", "branch-protection", "infrastructure-protection"]);
   const meta = new Set(["skill-creator", "skill-writer"]);
 
   if (roleSkills.has(skillName)) return "role";
-  if (commandSkills.has(skillName)) return "command";
   if (enforcement.has(skillName)) return "enforcement";
   if (meta.has(skillName)) return "meta";
   return "process";
@@ -91,6 +90,9 @@ function toCatalogSkill(source: SkillSource, skillDir: string): CatalogSkill | n
   const content = fs.readFileSync(skillFile, "utf8");
   const frontmatter = parseFrontmatter(content);
   const skillName = frontmatter.name || path.basename(skillDir);
+  if (isSkillBlocked(skillName)) {
+    return null;
+  }
   const skillId = `${source.id}/${skillName}`;
   const stat = fs.statSync(skillFile);
   const explicitCategory = (frontmatter.category || "").trim().toLowerCase();
