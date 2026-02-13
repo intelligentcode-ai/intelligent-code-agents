@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.0] - 2026-02-13
+
+### Added
+- Unified repository registration that auto-discovers and syncs both skills and hooks from the same source registration flow.
+- First-class hooks lifecycle support across CLI and dashboard: catalog, list, install, uninstall, and sync operations.
+- Dedicated Hooks dashboard section with compatibility guidance and per-hook install state/reporting.
+- Official hooks source bootstrap support targeting `https://github.com/intelligentcode-ai/hooks.git`.
+
+### Changed
+- Dashboard/server plugin architecture now composes source-aware diagnostics and hooks management with clearer separation.
+- Source refresh and sync flows now persist hooks under `~/.ica/<source>/hooks` while skills remain under `~/.ica/<source>/skills`.
+- Multi-source cataloging and executor paths now treat hooks and skills as parallel, source-qualified artifacts.
+
 ## [11.0.1] - 2026-02-13
 
 ### Changed

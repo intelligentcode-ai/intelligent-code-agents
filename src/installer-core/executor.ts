@@ -20,6 +20,25 @@ import {
 } from "./types";
 import { parseTargets, resolveTargetPaths } from "./targets";
 
+export interface InstallHookContext {
+  repoRoot: string;
+  request: InstallRequest;
+  resolvedTarget: ResolvedTargetPath;
+}
+
+export interface PostInstallHookContext extends InstallHookContext {
+  report: TargetOperationReport;
+}
+
+export interface ExecuteOperationHooks {
+  onBeforeInstall?(context: InstallHookContext): Promise<void> | void;
+  onAfterInstall?(context: PostInstallHookContext): Promise<void> | void;
+}
+
+export interface ExecuteOperationOptions {
+  hooks?: ExecuteOperationHooks;
+}
+
 function buildBaselinePaths(installPath: string): string[] {
   const dirs = BASELINE_DIRECTORIES.map((dirName) => path.join(installPath, dirName));
   const files = BASELINE_FILES.map((fileName) => path.join(installPath, fileName));
@@ -270,7 +289,7 @@ function defaultTargetReport(target: TargetPlatform, installPath: string, operat
   };
 }
 
-export async function executeOperation(repoRoot: string, request: InstallRequest): Promise<OperationReport> {
+export async function executeOperation(repoRoot: string, request: InstallRequest, options: ExecuteOperationOptions = {}): Promise<OperationReport> {
   const startedAt = new Date().toISOString();
   const catalog = await loadCatalogFromSources(repoRoot, true);
   const targets = request.targets.length > 0 ? request.targets : parseTargets(undefined);
@@ -290,7 +309,18 @@ export async function executeOperation(repoRoot: string, request: InstallRequest
       if (request.operation === "uninstall") {
         await uninstallTarget(request, resolved, report, catalog);
       } else {
+        await options.hooks?.onBeforeInstall?.({
+          repoRoot,
+          request,
+          resolvedTarget: resolved,
+        });
         await installOrSyncTarget(repoRoot, request, resolved, report, catalog);
+        await options.hooks?.onAfterInstall?.({
+          repoRoot,
+          request,
+          resolvedTarget: resolved,
+          report,
+        });
       }
     } catch (error) {
       pushError(report, "TARGET_OPERATION_FAILED", error instanceof Error ? error.message : String(error));
