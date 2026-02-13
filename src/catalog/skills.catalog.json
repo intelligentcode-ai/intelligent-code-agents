@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-02-13T07:27:09.106Z",
+  "generatedAt": "2026-02-13T08:40:33.904Z",
   "source": "multi-source",
-  "version": "11.0.0",
+  "version": "11.0.1",
   "sources": [
     {
       "id": "official-skills",
@@ -12,7 +12,7 @@
       "enabled": true,
       "skillsRoot": "/skills",
       "removable": true,
-      "lastSyncAt": "2026-02-13T06:50:21.610Z",
+      "lastSyncAt": "2026-02-13T08:20:25.139Z",
       "localPath": "/Users/karsten/.ica/source-cache/official-skills/repo",
       "revision": "4c16ceff30a9ee0b72b521fa302b41e1acc02400",
       "localSkillsPath": "/Users/karsten/.ica/official-skills/skills"
@@ -26,7 +26,7 @@
       "enabled": true,
       "skillsRoot": "/skills",
       "removable": true,
-      "lastSyncAt": "2026-02-13T06:50:22.177Z",
+      "lastSyncAt": "2026-02-13T08:20:25.430Z",
       "localPath": "/Users/karsten/.ica/source-cache/local-demo/repo",
       "revision": "f0b690b1f2366872d9ca3bda3fe46beb7c9ac244",
       "localSkillsPath": "/Users/karsten/.ica/local-demo/skills"
@@ -53,7 +53,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/local-demo/skills/demo-skill",
       "version": "1.0.0",
-      "updatedAt": "2026-02-13T06:50:22.177Z"
+      "updatedAt": "2026-02-13T08:20:25.430Z"
     },
     {
       "skillId": "official-skills/agent-browser",
@@ -75,7 +75,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/agent-browser",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.536Z"
+      "updatedAt": "2026-02-13T08:20:25.085Z"
     },
     {
       "skillId": "official-skills/ai-engineer",
@@ -97,7 +97,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/ai-engineer",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.537Z"
+      "updatedAt": "2026-02-13T08:20:25.087Z"
     },
     {
       "skillId": "official-skills/architect",
@@ -119,7 +119,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/architect",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.538Z"
+      "updatedAt": "2026-02-13T08:20:25.087Z"
     },
     {
       "skillId": "official-skills/autonomy",
@@ -141,7 +141,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/autonomy",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.539Z"
+      "updatedAt": "2026-02-13T08:20:25.088Z"
     },
     {
       "skillId": "official-skills/backend-tester",
@@ -163,7 +163,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/backend-tester",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.540Z"
+      "updatedAt": "2026-02-13T08:20:25.089Z"
     },
     {
       "skillId": "official-skills/best-practices",
@@ -185,7 +185,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/best-practices",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.541Z"
+      "updatedAt": "2026-02-13T08:20:25.090Z"
     },
     {
       "skillId": "official-skills/branch-protection",
@@ -207,7 +207,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/branch-protection",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.542Z"
+      "updatedAt": "2026-02-13T08:20:25.091Z"
     },
     {
       "skillId": "official-skills/commit-pr",
@@ -229,7 +229,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/commit-pr",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.543Z"
+      "updatedAt": "2026-02-13T08:20:25.092Z"
     },
     {
       "skillId": "official-skills/database-engineer",
@@ -251,7 +251,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/database-engineer",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.544Z"
+      "updatedAt": "2026-02-13T08:20:25.093Z"
     },
     {
       "skillId": "official-skills/developer",
@@ -273,7 +273,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/developer",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.546Z"
+      "updatedAt": "2026-02-13T08:20:25.094Z"
     },
     {
       "skillId": "official-skills/devops-board",
@@ -294,7 +294,7 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/devops-board",
-      "updatedAt": "2026-02-13T06:50:21.547Z"
+      "updatedAt": "2026-02-13T08:20:25.095Z"
     },
     {
       "skillId": "official-skills/devops-engineer",
@@ -316,7 +316,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/devops-engineer",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.548Z"
+      "updatedAt": "2026-02-13T08:20:25.096Z"
     },
     {
       "skillId": "official-skills/engineering-docs",
@@ -337,7 +337,7 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/engineering-docs",
-      "updatedAt": "2026-02-13T06:50:21.549Z"
+      "updatedAt": "2026-02-13T08:20:25.097Z"
     },
     {
       "skillId": "official-skills/file-placement",
@@ -359,7 +359,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/file-placement",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.551Z"
+      "updatedAt": "2026-02-13T08:20:25.098Z"
     },
     {
       "skillId": "official-skills/git-privacy",
@@ -381,7 +381,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/git-privacy",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.552Z"
+      "updatedAt": "2026-02-13T08:20:25.098Z"
     },
     {
       "skillId": "official-skills/hww-proposal",
@@ -402,7 +402,7 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/hww-proposal",
-      "updatedAt": "2026-02-13T06:50:21.553Z"
+      "updatedAt": "2026-02-13T08:20:25.099Z"
     },
     {
       "skillId": "official-skills/infrastructure-protection",
@@ -424,7 +424,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/infrastructure-protection",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.557Z"
+      "updatedAt": "2026-02-13T08:20:25.103Z"
     },
     {
       "skillId": "official-skills/mcp-client",
@@ -463,7 +463,7 @@
       ],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/mcp-client",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.558Z"
+      "updatedAt": "2026-02-13T08:20:25.104Z"
     },
     {
       "skillId": "official-skills/mcp-common",
@@ -490,7 +490,7 @@
       ],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/mcp-common",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.568Z"
+      "updatedAt": "2026-02-13T08:20:25.108Z"
     },
     {
       "skillId": "official-skills/mcp-config",
@@ -512,7 +512,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/mcp-config",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.573Z"
+      "updatedAt": "2026-02-13T08:20:25.111Z"
     },
     {
       "skillId": "official-skills/mcp-proxy",
@@ -543,7 +543,7 @@
       ],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/mcp-proxy",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.574Z"
+      "updatedAt": "2026-02-13T08:20:25.112Z"
     },
     {
       "skillId": "official-skills/memory",
@@ -565,7 +565,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/memory",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.578Z"
+      "updatedAt": "2026-02-13T08:20:25.114Z"
     },
     {
       "skillId": "official-skills/parallel-execution",
@@ -587,7 +587,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/parallel-execution",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.585Z"
+      "updatedAt": "2026-02-13T08:20:25.120Z"
     },
     {
       "skillId": "official-skills/pm",
@@ -609,7 +609,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/pm",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.586Z"
+      "updatedAt": "2026-02-13T08:20:25.121Z"
     },
     {
       "skillId": "official-skills/pr-automerge",
@@ -631,7 +631,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/pr-automerge",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.587Z"
+      "updatedAt": "2026-02-13T08:20:25.121Z"
     },
     {
       "skillId": "official-skills/pr-comments",
@@ -652,7 +652,7 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/pr-comments",
-      "updatedAt": "2026-02-13T06:50:21.589Z"
+      "updatedAt": "2026-02-13T08:20:25.122Z"
     },
     {
       "skillId": "official-skills/process",
@@ -674,7 +674,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/process",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.589Z"
+      "updatedAt": "2026-02-13T08:20:25.123Z"
     },
     {
       "skillId": "official-skills/qa-engineer",
@@ -696,7 +696,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/qa-engineer",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.591Z"
+      "updatedAt": "2026-02-13T08:20:25.124Z"
     },
     {
       "skillId": "official-skills/release",
@@ -718,7 +718,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/release",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.591Z"
+      "updatedAt": "2026-02-13T08:20:25.124Z"
     },
     {
       "skillId": "official-skills/requirements-engineer",
@@ -740,7 +740,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/requirements-engineer",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.592Z"
+      "updatedAt": "2026-02-13T08:20:25.125Z"
     },
     {
       "skillId": "official-skills/reviewer",
@@ -762,7 +762,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/reviewer",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.596Z"
+      "updatedAt": "2026-02-13T08:20:25.126Z"
     },
     {
       "skillId": "official-skills/search",
@@ -783,7 +783,7 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/search",
-      "updatedAt": "2026-02-13T06:50:21.597Z"
+      "updatedAt": "2026-02-13T08:20:25.127Z"
     },
     {
       "skillId": "official-skills/security-engineer",
@@ -805,7 +805,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/security-engineer",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.598Z"
+      "updatedAt": "2026-02-13T08:20:25.128Z"
     },
     {
       "skillId": "official-skills/skill-creator",
@@ -827,7 +827,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/skill-creator",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.598Z"
+      "updatedAt": "2026-02-13T08:20:25.129Z"
     },
     {
       "skillId": "official-skills/skill-writer",
@@ -849,7 +849,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/skill-writer",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.599Z"
+      "updatedAt": "2026-02-13T08:20:25.130Z"
     },
     {
       "skillId": "official-skills/story-breakdown",
@@ -871,7 +871,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/story-breakdown",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.600Z"
+      "updatedAt": "2026-02-13T08:20:25.131Z"
     },
     {
       "skillId": "official-skills/suggest",
@@ -893,7 +893,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/suggest",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.601Z"
+      "updatedAt": "2026-02-13T08:20:25.131Z"
     },
     {
       "skillId": "official-skills/system-engineer",
@@ -915,7 +915,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/system-engineer",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.602Z"
+      "updatedAt": "2026-02-13T08:20:25.132Z"
     },
     {
       "skillId": "official-skills/taskboard",
@@ -936,7 +936,7 @@
       ],
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/taskboard",
-      "updatedAt": "2026-02-13T06:50:21.603Z"
+      "updatedAt": "2026-02-13T08:20:25.133Z"
     },
     {
       "skillId": "official-skills/tdd",
@@ -958,7 +958,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/tdd",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.604Z"
+      "updatedAt": "2026-02-13T08:20:25.134Z"
     },
     {
       "skillId": "official-skills/thinking",
@@ -980,7 +980,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/thinking",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.605Z"
+      "updatedAt": "2026-02-13T08:20:25.135Z"
     },
     {
       "skillId": "official-skills/user-tester",
@@ -1002,7 +1002,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/user-tester",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.606Z"
+      "updatedAt": "2026-02-13T08:20:25.136Z"
     },
     {
       "skillId": "official-skills/validate",
@@ -1024,7 +1024,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/validate",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.607Z"
+      "updatedAt": "2026-02-13T08:20:25.137Z"
     },
     {
       "skillId": "official-skills/web-designer",
@@ -1046,7 +1046,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/web-designer",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.608Z"
+      "updatedAt": "2026-02-13T08:20:25.138Z"
     },
     {
       "skillId": "official-skills/work-queue",
@@ -1068,7 +1068,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/work-queue",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.609Z"
+      "updatedAt": "2026-02-13T08:20:25.139Z"
     },
     {
       "skillId": "official-skills/workflow",
@@ -1090,7 +1090,7 @@
       "resources": [],
       "sourcePath": "/Users/karsten/.ica/official-skills/skills/workflow",
       "version": "10.2.14",
-      "updatedAt": "2026-02-13T06:50:21.610Z"
+      "updatedAt": "2026-02-13T08:20:25.140Z"
     }
   ]
 }
