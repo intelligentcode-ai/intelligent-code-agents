@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.2] - 2026-02-13
+
+### Security
+- Redacted and sanitized repository auth/sync errors before persisting source state or returning API responses.
+- Normalized source and hook repository URLs to strip embedded credentials before storage.
+- Hardened dashboard API exposure by requiring explicit `--allow-remote=true` for non-loopback access.
+- Enforced helper API request-body limits and stricter JSON/content-type validation to reduce local DoS risk.
+
+### Added
+- Security regression tests for helper body limits, URL credential stripping, and error-message redaction.
+
 ## [12.0.1] - 2026-02-13
 
 ### Added
