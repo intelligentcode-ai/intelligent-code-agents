@@ -240,6 +240,7 @@ function printHelp(): void {
   output.write(`  ica hooks install [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks uninstall [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks sync [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n\n`);
+  output.write(`  ica launch [--host=127.0.0.1] [--port=4173] [--open=true|false]\n\n`);
   output.write(`  Note: repository registration is unified. Adding one source auto-registers both skills and hooks mirrors.\n\n`);
   output.write(`  ica container mount-project --project-path=<path> --confirm [--container-name=<name>] [--image=<image>] [--port=<host:container>] [--json]\n\n`);
   output.write(`Common flags:\n`);
@@ -257,6 +258,28 @@ function printHelp(): void {
   output.write(`  --force\n`);
   output.write(`  --yes\n`);
   output.write(`  --json\n`);
+}
+
+function openBrowser(url: string): void {
+  let command = "";
+  let args: string[] = [];
+  if (process.platform === "darwin") {
+    command = "open";
+    args = [url];
+  } else if (process.platform === "win32") {
+    command = "cmd";
+    args = ["/c", "start", "", url];
+  } else {
+    command = "xdg-open";
+    args = [url];
+  }
+
+  try {
+    const child = spawn(command, args, { detached: true, stdio: "ignore" });
+    child.unref();
+  } catch (error) {
+    process.stderr.write(`Unable to open browser automatically: ${error instanceof Error ? error.message : String(error)}\n`);
+  }
 }
 
 async function promptInteractive(command: OperationKind, options: Record<string, string | boolean>): Promise<InstallRequest> {
@@ -902,6 +925,43 @@ async function runContainer(positionals: string[], options: Record<string, strin
   }
 }
 
+async function runLaunch(options: Record<string, string | boolean>): Promise<void> {
+  const repoRoot = findRepoRoot(__dirname);
+  const host = stringOption(options, "host", "127.0.0.1").trim() || "127.0.0.1";
+  const port = stringOption(options, "port", "4173").trim() || "4173";
+  const dashboardUrl = `http://${host}:${port}`;
+  const serverScript = path.join(repoRoot, "dist", "src", "installer-dashboard", "server", "index.js");
+
+  if (!fs.existsSync(serverScript)) {
+    throw new Error("Dashboard runtime is not built. Run: npm run build");
+  }
+
+  if (boolOption(options, "open", false)) {
+    openBrowser(dashboardUrl);
+  }
+
+  output.write(`Launching ICA dashboard at ${dashboardUrl}\n`);
+  const child = spawn(process.execPath, [serverScript], {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      ICA_DASHBOARD_HOST: host,
+      ICA_DASHBOARD_PORT: port,
+    },
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    child.once("error", (error) => reject(error));
+    child.once("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`Dashboard process exited with code ${code ?? "unknown"}`));
+    });
+  });
+}
+
 async function main(): Promise<void> {
   const { command, options, positionals } = parseArgv(process.argv.slice(2));
   const normalized = command.toLowerCase();
@@ -938,6 +998,11 @@ async function main(): Promise<void> {
 
   if (normalized === "container") {
     await runContainer(positionals, options);
+    return;
+  }
+
+  if (normalized === "launch") {
+    await runLaunch(options);
     return;
   }
 

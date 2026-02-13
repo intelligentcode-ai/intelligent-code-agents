@@ -2,6 +2,10 @@
 
 ## Verified Web Install (Copy/Paste)
 
+Bootstrap downloads the latest signed source artifact (`ica-<tag>-source.tar.gz`) from the latest release and verifies it against `SHA256SUMS.txt`.
+
+Release assets: <https://github.com/intelligentcode-ai/intelligent-code-agents/releases/latest>
+
 macOS/Linux:
 
 ```bash
@@ -14,7 +18,14 @@ Windows PowerShell:
 iwr https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.ps1 -UseBasicParsing | iex
 ```
 
-Bootstrap validates release artifacts and stops on verification failures.
+Then run:
+
+```bash
+ica install
+ica launch --open=true
+```
+
+Bootstrap validates release artifacts and stops on verification failures. It does not auto-run install/sync.
 
 ## Build From Source
 
@@ -34,6 +45,7 @@ node dist/src/installer-cli/index.js sync
 node dist/src/installer-cli/index.js list
 node dist/src/installer-cli/index.js doctor
 node dist/src/installer-cli/index.js catalog
+node dist/src/installer-cli/index.js launch --open=true
 node dist/src/installer-cli/index.js sources list
 node dist/src/installer-cli/index.js sources add --repo-url=https://github.com/intelligentcode-ai/skills.git
 node dist/src/installer-cli/index.js sources add --repo-path=.   # uses current directory as local source
@@ -53,6 +65,14 @@ node dist/src/installer-cli/index.js install --yes \
 ```
 
 ## Dashboard (Local-first)
+
+Recommended after bootstrap:
+
+```bash
+ica launch --open=true
+```
+
+From source checkout:
 
 ```bash
 npm ci
