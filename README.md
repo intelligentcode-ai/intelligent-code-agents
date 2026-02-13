@@ -10,6 +10,8 @@ It gives you one clean control plane for:
 
 ## Install First (Verified Bootstrap)
 
+Bootstrap pulls signed source artifacts from the latest release (`ica-<tag>-source.tar.gz` + `SHA256SUMS.txt`), verifies checksums, and installs `ica`.
+
 macOS/Linux:
 
 ```bash
@@ -20,6 +22,13 @@ Windows PowerShell:
 
 ```powershell
 iwr https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.ps1 -UseBasicParsing | iex
+```
+
+Then run:
+
+```bash
+ica install
+ica launch --open=true
 ```
 
 ## Multi-Source Skills (Clear + Explicit)
@@ -91,6 +100,7 @@ Commands:
 - `ica list`
 - `ica doctor`
 - `ica catalog`
+- `ica launch`
 - `ica sources list`
 - `ica sources add --repo-url=...` (or `--repo-path=...`; defaults to current directory when omitted)
 - `ica sources remove --id=...`

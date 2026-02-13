@@ -19,6 +19,7 @@ need_cmd() {
 
 need_cmd curl
 need_cmd tar
+need_cmd node
 
 sha256_file() {
   local file_path="$1"
@@ -34,38 +35,24 @@ sha256_file() {
   exit 1
 }
 
-os_name="$(uname -s | tr '[:upper:]' '[:lower:]')"
-arch_name="$(uname -m)"
+release_json="$(curl --fail --location --silent --show-error "https://api.github.com/repos/${REPO}/releases/latest")"
+version_tag="$(printf '%s' "${release_json}" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+if [[ -z "${version_tag}" ]]; then
+  echo "ERROR: unable to determine latest release tag." >&2
+  exit 1
+fi
 
-case "${arch_name}" in
-  x86_64|amd64) arch_name="x64" ;;
-  aarch64|arm64) arch_name="arm64" ;;
-  *)
-    echo "ERROR: unsupported architecture: ${arch_name}" >&2
-    exit 1
-    ;;
-esac
-
-case "${os_name}" in
-  darwin) os_name="darwin" ;;
-  linux) os_name="linux" ;;
-  *)
-    echo "ERROR: unsupported OS: ${os_name}" >&2
-    exit 1
-    ;;
-esac
-
-artifact="ica-${os_name}-${arch_name}.tar.gz"
+artifact="ica-${version_tag}-source.tar.gz"
 base_url="https://github.com/${REPO}/releases/latest/download"
 artifact_url="${base_url}/${artifact}"
-checksum_url="${base_url}/${artifact}.sha256"
+sums_url="${base_url}/SHA256SUMS.txt"
 
 echo "Downloading ${artifact}..."
 curl --fail --location --silent --show-error "${artifact_url}" --output "${TMP_DIR}/${artifact}"
-curl --fail --location --silent --show-error "${checksum_url}" --output "${TMP_DIR}/${artifact}.sha256"
+curl --fail --location --silent --show-error "${sums_url}" --output "${TMP_DIR}/SHA256SUMS.txt"
 
 echo "Verifying checksum..."
-expected_checksum="$(awk '{print $1}' "${TMP_DIR}/${artifact}.sha256" | tr '[:upper:]' '[:lower:]')"
+expected_checksum="$(awk -v target="${artifact}" '$2 == target {print tolower($1)}' "${TMP_DIR}/SHA256SUMS.txt" | head -n 1)"
 actual_checksum="$(sha256_file "${TMP_DIR}/${artifact}" | tr '[:upper:]' '[:lower:]')"
 if [[ -z "${expected_checksum}" || -z "${actual_checksum}" ]]; then
   echo "ERROR: failed to evaluate checksum values." >&2
@@ -78,15 +65,31 @@ if [[ "${expected_checksum}" != "${actual_checksum}" ]]; then
   exit 1
 fi
 
-echo "Installing ICA CLI to ${INSTALL_DIR}"
-mkdir -p "${INSTALL_DIR}"
-tar -xzf "${TMP_DIR}/${artifact}" -C "${TMP_DIR}"
-install -m 0755 "${TMP_DIR}/ica" "${INSTALL_DIR}/ica"
+INSTALL_ROOT="${HOME}/.ica/bootstrap/${version_tag}"
+ENTRYPOINT="${INSTALL_ROOT}/dist/src/installer-cli/index.js"
+
+echo "Installing ICA runtime to ${INSTALL_ROOT}"
+mkdir -p "${INSTALL_DIR}" "${INSTALL_ROOT}"
+tar -xzf "${TMP_DIR}/${artifact}" -C "${INSTALL_ROOT}" --strip-components=1
+
+if [[ ! -f "${ENTRYPOINT}" ]]; then
+  need_cmd npm
+  (cd "${INSTALL_ROOT}" && npm ci --silent && npm run build:quick --silent)
+fi
+
+cat >"${INSTALL_DIR}/ica" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+exec node "${ENTRYPOINT}" "\$@"
+EOF
+chmod 0755 "${INSTALL_DIR}/ica"
 
 if [[ ":$PATH:" != *":${INSTALL_DIR}:"* ]]; then
   echo "NOTICE: ${INSTALL_DIR} is not in PATH. Add this line to your shell profile:"
   echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
 fi
 
-echo "ICA installed. Launching interactive install..."
-"${INSTALL_DIR}/ica" install
+echo "ICA installed (${version_tag})."
+echo "Next steps:"
+echo "  1) Install skills/hooks: ica install"
+echo "  2) Launch dashboard:    ica launch --open=true"
