@@ -66,6 +66,10 @@ Post-install evidence with expanded `Installed State` and `Operation Report`.
 ![ICA Dashboard Management](docs/assets/dashboard/dashboard-step-05-management.png)
 Management action example (`Uninstall selected`) with updated state/report.
 
+### 6) Manage hooks
+![ICA Dashboard Hooks](docs/assets/dashboard/dashboard-step-06-hooks.png)
+Dedicated hooks catalog/actions with source-aware hook install state.
+
 ## Build From Source
 
 ```bash

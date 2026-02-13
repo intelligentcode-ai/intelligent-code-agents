@@ -955,15 +955,6 @@ export function InstallerDashboard(): JSX.Element {
             Skills
           </button>
           <button
-            className={`tab-btn ${activeTab === "settings" ? "is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "settings"}
-            onClick={() => setActiveTab("settings")}
-          >
-            Settings
-          </button>
-          <button
             className={`tab-btn ${activeTab === "hooks" ? "is-active" : ""}`}
             type="button"
             role="tab"
@@ -971,6 +962,15 @@ export function InstallerDashboard(): JSX.Element {
             onClick={() => setActiveTab("hooks")}
           >
             Hooks
+          </button>
+          <button
+            className={`tab-btn ${activeTab === "settings" ? "is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "settings"}
+            onClick={() => setActiveTab("settings")}
+          >
+            Settings
           </button>
           <button
             className={`tab-btn ${activeTab === "state" ? "is-active" : ""}`}
