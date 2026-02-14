@@ -32,7 +32,7 @@ interface ParsedArgs {
 }
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_DASHBOARD_IMAGE = "ica-dashboard:local";
+const DEFAULT_DASHBOARD_IMAGE = "ghcr.io/intelligentcode-ai/ica-installer-dashboard:main";
 
 export type ServeImageBuildMode = "auto" | "always" | "never";
 export type ServeReusePortsMode = boolean;
@@ -316,6 +316,9 @@ export function shouldBuildDashboardImage(input: {
   if (input.imageExists) {
     return false;
   }
+  if (input.image.trim().toLowerCase().startsWith("ghcr.io/")) {
+    return false;
+  }
   return input.image === input.defaultImage;
 }
 
@@ -421,6 +424,10 @@ async function ensureDashboardImage(options: {
     defaultImage: options.defaultImage,
   });
   if (!shouldBuild) {
+    if (!imageExists && options.image.trim().toLowerCase().startsWith("ghcr.io/")) {
+      output.write(`Pulling dashboard image '${options.image}'...\n`);
+      await execFileAsync("docker", ["pull", options.image], { maxBuffer: 16 * 1024 * 1024 });
+    }
     return;
   }
 
@@ -457,7 +464,7 @@ function printHelp(): void {
   output.write(`  ica hooks uninstall [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks sync [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n\n`);
   output.write(
-    `  ica serve [--host=127.0.0.1] [--ui-port=4173] [--api-port=4174] [--reuse-ports=true|false] [--open=true|false] [--image=ica-dashboard:local] [--build-image=auto|always|never]\n`,
+    `  ica serve [--host=127.0.0.1] [--ui-port=4173] [--api-port=4174] [--reuse-ports=true|false] [--open=true|false] [--image=ghcr.io/intelligentcode-ai/ica-installer-dashboard:main] [--build-image=auto|always|never]\n`,
   );
   output.write(`  ica launch (alias for serve; deprecated)\n\n`);
   output.write(`  Note: repository registration is unified. Adding one source auto-registers both skills and hooks mirrors.\n\n`);

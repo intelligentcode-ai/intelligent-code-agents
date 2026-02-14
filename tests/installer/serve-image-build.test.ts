@@ -63,6 +63,18 @@ test("shouldBuildDashboardImage does not auto-build custom images", () => {
   );
 });
 
+test("shouldBuildDashboardImage does not auto-build default GHCR image", () => {
+  assert.equal(
+    shouldBuildDashboardImage({
+      mode: "auto",
+      image: "ghcr.io/intelligentcode-ai/ica-installer-dashboard:main",
+      imageExists: false,
+      defaultImage: "ghcr.io/intelligentcode-ai/ica-installer-dashboard:main",
+    }),
+    false,
+  );
+});
+
 test("shouldBuildDashboardImage honors always and never", () => {
   assert.equal(
     shouldBuildDashboardImage({
