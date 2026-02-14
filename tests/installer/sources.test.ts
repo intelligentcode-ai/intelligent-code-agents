@@ -373,3 +373,78 @@ test("buildMultiSourceCatalog consumes skills.index.json metadata when present",
     }
   }
 });
+
+test("buildMultiSourceCatalog keeps directory-discovered skills when index is incomplete", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-sources-test-"));
+  const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-source-repo-"));
+  const repoDir = path.join(sourceRoot, "repo");
+  const previous = process.env.ICA_STATE_HOME;
+  process.env.ICA_STATE_HOME = tempRoot;
+
+  try {
+    fs.mkdirSync(path.join(repoDir, "skills", "index-listed"), { recursive: true });
+    fs.mkdirSync(path.join(repoDir, "skills", "index-missing"), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoDir, "skills", "index-listed", "SKILL.md"),
+      "---\nname: index-listed\ndescription: from-skill\ncategory: process\n---\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(repoDir, "skills", "index-missing", "SKILL.md"),
+      "---\nname: index-missing\ndescription: from-skill\ncategory: process\n---\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(repoDir, "skills.index.json"),
+      JSON.stringify(
+        {
+          skills: [
+            {
+              name: "index-listed",
+              description: "from-index",
+              category: "command",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    execFileSync("git", ["init", "-q"], { cwd: repoDir });
+    execFileSync("git", ["add", "."], { cwd: repoDir });
+    execFileSync("git", ["-c", "user.name=ICA Test", "-c", "user.email=ica-test@example.com", "commit", "-q", "-m", "seed"], {
+      cwd: repoDir,
+    });
+
+    await ensureSourceRegistry();
+    await updateSource(OFFICIAL_SOURCE_ID, { enabled: false });
+    await addSource({
+      id: "index-incomplete-source",
+      name: "index-incomplete-source",
+      repoUrl: `file://${repoDir}`,
+      transport: "https",
+      skillsRoot: "/skills",
+      enabled: true,
+      removable: true,
+    });
+
+    const catalog = await buildMultiSourceCatalog({
+      repoVersion: "1.0.0",
+      refresh: true,
+    });
+
+    const listed = catalog.skills.find((skill) => skill.skillId === "index-incomplete-source/index-listed");
+    const missing = catalog.skills.find((skill) => skill.skillId === "index-incomplete-source/index-missing");
+    assert.ok(listed);
+    assert.equal(listed?.description, "from-index");
+    assert.ok(missing);
+    assert.equal(missing?.description, "from-skill");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ICA_STATE_HOME;
+    } else {
+      process.env.ICA_STATE_HOME = previous;
+    }
+  }
+});

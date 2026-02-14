@@ -476,6 +476,7 @@ function printHelp(): void {
   output.write(`  --force\n`);
   output.write(`  --yes\n`);
   output.write(`  --json\n`);
+  output.write(`  --refresh (for catalog: force live source refresh)\n`);
 }
 
 function openBrowser(url: string): void {
@@ -665,7 +666,8 @@ async function runDoctor(options: Record<string, string | boolean>): Promise<voi
 
 async function runCatalog(options: Record<string, string | boolean>): Promise<void> {
   const repoRoot = findRepoRoot(__dirname);
-  const catalog = await loadCatalogFromSources(repoRoot, false);
+  const refresh = boolOption(options, "refresh", false);
+  const catalog = await loadCatalogFromSources(repoRoot, refresh);
   if (boolOption(options, "json", false)) {
     output.write(`${JSON.stringify(catalog, null, 2)}\n`);
     return;
@@ -673,6 +675,21 @@ async function runCatalog(options: Record<string, string | boolean>): Promise<vo
 
   output.write(`Catalog version: ${catalog.version}\n`);
   output.write(`Generated at: ${catalog.generatedAt}\n`);
+  output.write(`Source: ${catalog.catalogSource || "live"}\n`);
+  if (catalog.stale) {
+    output.write(`Stale: yes\n`);
+    if (catalog.staleReason) {
+      output.write(`Reason: ${catalog.staleReason}\n`);
+    }
+  } else {
+    output.write(`Stale: no\n`);
+  }
+  if (typeof catalog.cacheAgeSeconds === "number") {
+    output.write(`Cache age: ${catalog.cacheAgeSeconds}s\n`);
+  }
+  if (catalog.nextRefreshAt) {
+    output.write(`Next refresh: ${catalog.nextRefreshAt}\n`);
+  }
   for (const skill of catalog.skills) {
     output.write(`- ${skill.skillId} [${skill.category}]\n`);
     output.write(`  ${skill.description}\n`);

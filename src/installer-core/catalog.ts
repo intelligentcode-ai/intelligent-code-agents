@@ -1,10 +1,12 @@
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import { SkillCatalog, SkillCatalogEntry, SkillResource, TargetPlatform } from "./types";
 import { buildMultiSourceCatalog } from "./catalogMultiSource";
 import { isSkillBlocked } from "./skillBlocklist";
-import { DEFAULT_SKILLS_ROOT, OFFICIAL_SOURCE_ID, OFFICIAL_SOURCE_NAME, OFFICIAL_SOURCE_URL } from "./sources";
+import { DEFAULT_SKILLS_ROOT, OFFICIAL_SOURCE_ID, OFFICIAL_SOURCE_NAME, OFFICIAL_SOURCE_URL, getIcaStateRoot } from "./sources";
 import { frontmatterList, frontmatterString, parseFrontmatter } from "./skillMetadata";
+import { pathExists, writeText } from "./fs";
 
 interface LocalCatalogEntry {
   name: string;
@@ -21,6 +23,14 @@ interface LocalCatalogEntry {
   resources: SkillResource[];
   sourcePath: string;
 }
+
+interface CacheRecord {
+  catalog: SkillCatalog;
+  savedAtMs: number;
+}
+
+export const CATALOG_CACHE_TTL_MS = 60 * 60 * 1000;
+const CATALOG_CACHE_RELATIVE_PATH = path.join("catalog", "skills.catalog.json");
 
 function inferCategory(skillName: string): string {
   const roleSkills = new Set([
@@ -118,6 +128,115 @@ function resolveGeneratedAt(sourceDateEpoch?: string): string {
   return "1970-01-01T00:00:00.000Z";
 }
 
+function normalizeCatalog(repoRoot: string, catalog: SkillCatalog): SkillCatalog {
+  return {
+    ...catalog,
+    sources: catalog.sources || [],
+    skills: (catalog.skills || []).map((skill) => ({
+      ...skill,
+      skillId: skill.skillId || `${skill.sourceId || "local"}/${skill.skillName || skill.name}`,
+      sourceId: skill.sourceId || "local",
+      sourceName: skill.sourceName || skill.sourceId || "local",
+      sourceUrl: skill.sourceUrl || "",
+      skillName: skill.skillName || skill.name,
+      sourcePath: path.isAbsolute(skill.sourcePath || "") ? (skill.sourcePath || "") : path.resolve(repoRoot, skill.sourcePath || ""),
+    })),
+  };
+}
+
+function withLiveDiagnostics(catalog: SkillCatalog): SkillCatalog {
+  return {
+    ...catalog,
+    stale: false,
+    catalogSource: "live",
+    staleReason: undefined,
+    cacheAgeSeconds: undefined,
+    nextRefreshAt: undefined,
+  };
+}
+
+function withSnapshotDiagnostics(catalog: SkillCatalog, staleReason: string): SkillCatalog {
+  return {
+    ...catalog,
+    stale: true,
+    catalogSource: "snapshot",
+    staleReason,
+    cacheAgeSeconds: undefined,
+    nextRefreshAt: undefined,
+  };
+}
+
+function withCacheDiagnostics(catalog: SkillCatalog, savedAtMs: number, nowMs: number, staleReason?: string): SkillCatalog {
+  const cacheAgeSeconds = Math.max(0, Math.floor((nowMs - savedAtMs) / 1000));
+  const nextRefreshAt = new Date(savedAtMs + CATALOG_CACHE_TTL_MS).toISOString();
+  const ttlExpired = nowMs >= savedAtMs + CATALOG_CACHE_TTL_MS;
+  const stale = Boolean(staleReason) || ttlExpired;
+
+  return {
+    ...catalog,
+    stale,
+    catalogSource: "cache",
+    staleReason: staleReason || (stale ? "Cached catalog is older than refresh TTL." : undefined),
+    cacheAgeSeconds,
+    nextRefreshAt,
+  };
+}
+
+function liveUnavailableReason(catalog: SkillCatalog): string {
+  const failures = catalog.sources.filter((source) => source.enabled !== false && source.lastError).map((source) => `${source.id}: ${source.lastError}`);
+  if (failures.length > 0) {
+    return `Live catalog refresh failed (${failures.join("; ")}).`;
+  }
+
+  const hasEnabledSource = catalog.sources.some((source) => source.enabled !== false);
+  if (!hasEnabledSource) {
+    return "No enabled skill sources are configured; serving fallback catalog.";
+  }
+
+  return "Live catalog returned zero skills; serving fallback catalog.";
+}
+
+function shouldAttemptLiveRefresh(refresh: boolean, cache: CacheRecord | null, nowMs: number): boolean {
+  if (refresh) return true;
+  if (!cache) return true;
+  return nowMs >= cache.savedAtMs + CATALOG_CACHE_TTL_MS;
+}
+
+function cachePath(): string {
+  return path.join(getIcaStateRoot(), CATALOG_CACHE_RELATIVE_PATH);
+}
+
+async function loadCatalogCache(repoRoot: string): Promise<CacheRecord | null> {
+  const targetPath = cachePath();
+  if (!(await pathExists(targetPath))) {
+    return null;
+  }
+
+  try {
+    const raw = await fsp.readFile(targetPath, "utf8");
+    const parsed = JSON.parse(raw) as SkillCatalog;
+    const stat = await fsp.stat(targetPath);
+    return {
+      catalog: normalizeCatalog(repoRoot, parsed),
+      savedAtMs: stat.mtimeMs,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function saveCatalogCache(catalog: SkillCatalog): Promise<void> {
+  const payload: SkillCatalog = {
+    ...catalog,
+    stale: undefined,
+    catalogSource: undefined,
+    staleReason: undefined,
+    cacheAgeSeconds: undefined,
+    nextRefreshAt: undefined,
+  };
+  await writeText(cachePath(), `${JSON.stringify(payload, null, 2)}\n`);
+}
+
 export function buildDefaultSourceCatalog(version: string, sourceDateEpoch?: string): SkillCatalog {
   return {
     generatedAt: resolveGeneratedAt(sourceDateEpoch),
@@ -177,19 +296,7 @@ export function loadCatalog(repoRoot: string, fallbackVersion = "0.0.0"): SkillC
   const catalogPath = path.join(repoRoot, "src", "catalog", "skills.catalog.json");
   if (fs.existsSync(catalogPath)) {
     const catalog = loadCatalogFromFile(catalogPath);
-    const normalized: SkillCatalog = {
-      ...catalog,
-      sources: catalog.sources || [],
-      skills: catalog.skills.map((skill) => ({
-        ...skill,
-        skillId: skill.skillId || `${skill.sourceId || "local"}/${skill.skillName || skill.name}`,
-        sourceId: skill.sourceId || "local",
-        sourceName: skill.sourceName || skill.sourceId || "local",
-        sourceUrl: skill.sourceUrl || "",
-        skillName: skill.skillName || skill.name,
-        sourcePath: path.isAbsolute(skill.sourcePath) ? skill.sourcePath : path.resolve(repoRoot, skill.sourcePath),
-      })),
-    };
+    const normalized = normalizeCatalog(repoRoot, catalog);
     if (normalized.skills.length > 0) {
       return normalized;
     }
@@ -201,19 +308,52 @@ export function loadCatalog(repoRoot: string, fallbackVersion = "0.0.0"): SkillC
 export async function loadCatalogFromSources(repoRoot: string, refresh = false): Promise<SkillCatalog> {
   const versionFile = path.join(repoRoot, "VERSION");
   const version = fs.existsSync(versionFile) ? fs.readFileSync(versionFile, "utf8").trim() : "0.0.0";
-  const multi = await buildMultiSourceCatalog({
-    repoVersion: version,
-    refresh,
-  });
-  if (multi.skills.length > 0) {
-    return multi;
+  const snapshot = loadCatalog(repoRoot, version);
+  const cache = await loadCatalogCache(repoRoot);
+  const nowMs = Date.now();
+  let liveFailureReason: string | undefined;
+
+  if (!shouldAttemptLiveRefresh(refresh, cache, nowMs) && cache) {
+    return withCacheDiagnostics(cache.catalog, cache.savedAtMs, nowMs);
   }
-  const fallback = loadCatalog(repoRoot, version);
-  return {
-    ...fallback,
-    source: multi.sources.length > 0 ? "multi-source" : fallback.source,
-    sources: multi.sources.length > 0 ? multi.sources : fallback.sources,
+
+  let multi: SkillCatalog;
+  try {
+    multi = await buildMultiSourceCatalog({
+      repoVersion: version,
+      refresh,
+    });
+  } catch {
+    liveFailureReason = "Live catalog refresh failed unexpectedly; serving fallback catalog.";
+    multi = {
+      generatedAt: new Date().toISOString(),
+      source: "multi-source",
+      version,
+      sources: [],
+      skills: [],
+    };
+  }
+  if (multi.skills.length > 0) {
+    const live = withLiveDiagnostics(multi);
+    try {
+      await saveCatalogCache(live);
+    } catch {
+      // Cache persistence is best-effort; live catalog should still be returned.
+    }
+    return live;
+  }
+
+  const reason = liveFailureReason || liveUnavailableReason(multi);
+  if (cache) {
+    return withCacheDiagnostics(cache.catalog, cache.savedAtMs, nowMs, reason);
+  }
+
+  const fallback: SkillCatalog = {
+    ...snapshot,
+    source: multi.sources.length > 0 ? "multi-source" : snapshot.source,
+    sources: multi.sources.length > 0 ? multi.sources : snapshot.sources,
   };
+  return withSnapshotDiagnostics(fallback, `${reason} Serving bundled snapshot catalog.`);
 }
 
 export function findSkill(catalog: SkillCatalog, skillNameOrId: string): SkillCatalogEntry | undefined {
