@@ -1,39 +1,29 @@
 # Intelligent Code Agents (ICA)
 
-ICA is a skills installer and manager for coding agents.
+ICA is the fastest path from "nothing installed" to a working, managed agent stack.
 
-It gives you one clean control plane for:
-- installing, uninstalling, syncing, and auditing skills
-- managing multiple skill sources with explicit source pinning (`<source>/<skill>`)
-- running from CLI or a local-first dashboard
-- using verified bootstrap installers and signed, reproducible releases
+Use one CLI and one local dashboard to install, sync, audit, and update skills across runtimes without hand-wired setup.
 
-## Install First (Verified Bootstrap)
+What ICA gives you:
+- one command surface for install/uninstall/sync/audit
+- source-aware skill management with explicit pinning (`<source>/<skill>`)
+- CLI + local dashboard workflows
+- verified bootstrap installers and reproducible releases
 
-Bootstrap pulls signed source artifacts from the latest release (`ica-<tag>-source.tar.gz` + `SHA256SUMS.txt`), verifies checksums, and installs `ica`.
+## Skills Repository + Contribution
 
-macOS/Linux:
+Official skills live in the standalone Skills repository:
+- [intelligentcode-ai/skills](https://github.com/intelligentcode-ai/skills)
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.sh | bash
-```
-
-Windows PowerShell:
-
-```powershell
-iwr https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.ps1 -UseBasicParsing | iex
-```
-
-Then run:
-
-```bash
-ica install
-ica launch --open=true
-```
+Want to add a custom skill?
+- Open a PR in the Skills repo: [Create Pull Request](https://github.com/intelligentcode-ai/skills/pulls)
+- Follow contribution requirements in: [How to Contribute](https://github.com/intelligentcode-ai/skills#how-to-contribute)
 
 ## Agent Bootstrap Prompt (IDE/Local Agent)
 
-Use this prompt as the first message in a local coding agent:
+Use this when you want your local agent to do setup for you end-to-end.
+
+Paste this into your coding agent:
 
 ```text
 Bootstrap ICA for this local environment.
@@ -64,6 +54,32 @@ Final output:
 
 Canonical prompt source:
 - [skills/ica-bootstrap/assets/INITIAL_PROMPT.md](https://github.com/intelligentcode-ai/skills/blob/master/skills/ica-bootstrap/assets/INITIAL_PROMPT.md)
+
+## Install First (Verified Bootstrap)
+
+If you're setting up manually, this is the safest and fastest starting point.
+
+Bootstrap downloads the latest source artifact (`ica-<tag>-source.tar.gz`), verifies it against `SHA256SUMS.txt`, and installs `ica`.
+
+macOS/Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.sh | bash
+```
+
+Windows PowerShell:
+
+```powershell
+iwr https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.ps1 -UseBasicParsing | iex
+```
+
+Then run:
+
+```bash
+ica install
+ica launch --open=true
+```
+
 ## Multi-Source Skills (Clear + Explicit)
 
 ICA supports multiple skill repositories side-by-side.
