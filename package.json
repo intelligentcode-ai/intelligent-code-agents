@@ -1,6 +1,6 @@
 {
   "name": "intelligent-code-agents",
-  "version": "12.0.9",
+  "version": "12.1.0",
   "private": true,
   "description": "ICA cross-platform interactive installer, CLI, and dashboard",
   "bin": {
