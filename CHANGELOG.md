@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.8] - 2026-02-14
+
+### Fixed
+- Changed dashboard serve default image to `ghcr.io/intelligentcode-ai/ica-installer-dashboard:main` so bootstrap users do not require local source image builds by default.
+- Updated `--build-image=auto` behavior to skip local image builds for GHCR images and pull the remote image when missing.
+- Added regression coverage to ensure default GHCR images are never auto-built from local source.
+
 ## [12.0.7] - 2026-02-14
 
 ### Added
