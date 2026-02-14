@@ -123,6 +123,12 @@ function parseTargets(value?: string): TargetPlatform[] {
   return Array.from(new Set(parsed));
 }
 
+function parseBooleanQuery(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return false;
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
 function sanitizeError(value: unknown, fallback = "Operation failed."): string {
   return safeErrorMessage(value, fallback);
 }
@@ -445,8 +451,7 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
   app.get("/api/v1/catalog/skills", async (_request, reply) => {
     try {
       const request = _request as { query?: { refresh?: string | boolean } };
-      const refreshRaw = request.query?.refresh;
-      const refresh = refreshRaw === true || refreshRaw === "true" || refreshRaw === "1";
+      const refresh = parseBooleanQuery(request.query?.refresh);
       const catalog = await deps.loadCatalogFromSources(repoRoot, refresh);
       return {
         generatedAt: catalog.generatedAt,

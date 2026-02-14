@@ -267,3 +267,57 @@ test("loadCatalogFromSources prefers runtime cache over bundled snapshot when li
     }
   }
 });
+
+test("loadCatalogFromSources tolerates live refresh exceptions and serves snapshot fallback", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-catalog-exception-test-"));
+  const badStateRoot = path.join(tempRoot, "state-file");
+  const previous = process.env.ICA_STATE_HOME;
+  process.env.ICA_STATE_HOME = badStateRoot;
+
+  try {
+    fs.writeFileSync(badStateRoot, "not-a-directory", "utf8");
+    fs.mkdirSync(path.join(tempRoot, "src", "catalog"), { recursive: true });
+    fs.writeFileSync(path.join(tempRoot, "VERSION"), "3.0.0\n", "utf8");
+    fs.writeFileSync(
+      path.join(tempRoot, "src", "catalog", "skills.catalog.json"),
+      JSON.stringify(
+        {
+          generatedAt: "2026-01-01T00:00:00.000Z",
+          source: "multi-source",
+          version: "3.0.0",
+          sources: [],
+          skills: [
+            {
+              skillId: "official-skills/snapshot-rescue",
+              sourceId: "official-skills",
+              sourceName: "official",
+              sourceUrl: "https://github.com/intelligentcode-ai/skills.git",
+              skillName: "snapshot-rescue",
+              name: "snapshot-rescue",
+              description: "snapshot fallback",
+              category: "process",
+              dependencies: [],
+              compatibleTargets: ["claude", "codex", "cursor", "gemini", "antigravity"],
+              resources: [],
+              sourcePath: "/tmp/snapshot-rescue",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const catalog = await loadCatalogFromSources(tempRoot, true);
+    assert.equal(catalog.catalogSource, "snapshot");
+    assert.equal(catalog.stale, true);
+    assert.equal(catalog.skills[0].skillName, "snapshot-rescue");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ICA_STATE_HOME;
+    } else {
+      process.env.ICA_STATE_HOME = previous;
+    }
+  }
+});

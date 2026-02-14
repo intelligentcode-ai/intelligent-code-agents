@@ -405,7 +405,7 @@ test("skills catalog endpoint forwards refresh flag and stale diagnostics", asyn
 
   const res = await app.inject({
     method: "GET",
-    url: "/api/v1/catalog/skills?refresh=true",
+    url: "/api/v1/catalog/skills?refresh=on",
     headers: {
       "x-ica-api-key": API_KEY,
     },

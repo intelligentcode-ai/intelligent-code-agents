@@ -311,15 +311,28 @@ export async function loadCatalogFromSources(repoRoot: string, refresh = false):
   const snapshot = loadCatalog(repoRoot, version);
   const cache = await loadCatalogCache(repoRoot);
   const nowMs = Date.now();
+  let liveFailureReason: string | undefined;
 
   if (!shouldAttemptLiveRefresh(refresh, cache, nowMs) && cache) {
     return withCacheDiagnostics(cache.catalog, cache.savedAtMs, nowMs);
   }
 
-  const multi = await buildMultiSourceCatalog({
-    repoVersion: version,
-    refresh,
-  });
+  let multi: SkillCatalog;
+  try {
+    multi = await buildMultiSourceCatalog({
+      repoVersion: version,
+      refresh,
+    });
+  } catch {
+    liveFailureReason = "Live catalog refresh failed unexpectedly; serving fallback catalog.";
+    multi = {
+      generatedAt: new Date().toISOString(),
+      source: "multi-source",
+      version,
+      sources: [],
+      skills: [],
+    };
+  }
   if (multi.skills.length > 0) {
     const live = withLiveDiagnostics(multi);
     try {
@@ -330,7 +343,7 @@ export async function loadCatalogFromSources(repoRoot: string, refresh = false):
     return live;
   }
 
-  const reason = liveUnavailableReason(multi);
+  const reason = liveFailureReason || liveUnavailableReason(multi);
   if (cache) {
     return withCacheDiagnostics(cache.catalog, cache.savedAtMs, nowMs, reason);
   }
