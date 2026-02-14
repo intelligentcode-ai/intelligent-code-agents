@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.6] - 2026-02-14
+
+### Added
+- Host-side installer API service under `src/installer-api` with ephemeral session API-key enforcement.
+- Host BFF proxy under `src/installer-bff` for same-origin browser access to `/api/v1/*` and `/ws/events`.
+- Realtime websocket event channel support with short-lived tickets and operation/source lifecycle events.
+- New installer test coverage for API security, realtime events, BFF security, startup resilience, and serve orchestration.
+
+### Changed
+- `ica serve` now orchestrates API + BFF + frontend-only container lifecycle on localhost with configurable ports.
+- Dashboard frontend now uses same-origin API calls via BFF and no longer depends on runtime API-key bootstrap config.
+- Added optional `--reuse-ports=true|false` and `--build-image=auto|always|never` serve behaviors to reduce operator friction.
+- Documentation updated for control-plane architecture, startup troubleshooting, and serve-first workflow.
+
+### Security
+- Enforced loopback-only access and local-origin checks on BFF control-plane routes.
+- Kept API key scoped to host processes (API/BFF) rather than exposing it to browser runtime config.
+
 ## [12.0.5] - 2026-02-14
 
 ### Changed
