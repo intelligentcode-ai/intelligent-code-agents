@@ -6,26 +6,26 @@ import { setSourceSyncStatus, ensureSourceRegistry, OFFICIAL_SOURCE_ID } from ".
 import { syncSource } from "./sourceSync";
 import { CatalogSkill, InstallSelection, SkillCatalog, SkillResource, SkillSource, TargetPlatform } from "./types";
 import { isSkillBlocked } from "./skillBlocklist";
-
-const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
+import { frontmatterList, frontmatterString, parseFrontmatter } from "./skillMetadata";
 
 interface CatalogOptions {
   repoVersion: string;
   refresh: boolean;
 }
 
-function parseFrontmatter(content: string): Record<string, string> {
-  const match = content.match(FRONTMATTER_RE);
-  if (!match) return {};
-  const map: Record<string, string> = {};
-  for (const line of match[1].split("\n")) {
-    const idx = line.indexOf(":");
-    if (idx === -1) continue;
-    const key = line.slice(0, idx).trim();
-    const value = line.slice(idx + 1).trim();
-    if (key) map[key] = value;
-  }
-  return map;
+interface SkillIndexEntry {
+  skillName?: string;
+  name?: string;
+  description?: string;
+  category?: string;
+  scope?: string;
+  subcategory?: string;
+  tags?: string[] | string;
+  version?: string;
+  author?: string;
+  "contact-email"?: string;
+  contactEmail?: string;
+  website?: string;
 }
 
 function inferCategory(skillName: string): string {
@@ -85,18 +85,58 @@ function skillRootPath(source: SkillSource, localRepoPath: string): string {
   return path.join(localRepoPath, relativeRoot);
 }
 
+function normalizeTags(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function loadSkillIndexEntries(localRepoPath: string, root: string): SkillIndexEntry[] | null {
+  const candidates = [path.join(localRepoPath, "skills.index.json"), path.join(root, "skills.index.json")];
+  for (const candidate of candidates) {
+    if (!fs.existsSync(candidate)) continue;
+    try {
+      const raw = JSON.parse(fs.readFileSync(candidate, "utf8")) as { skills?: SkillIndexEntry[] } | SkillIndexEntry[];
+      if (Array.isArray(raw)) {
+        return raw;
+      }
+      if (raw && Array.isArray(raw.skills)) {
+        return raw.skills;
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 function toCatalogSkill(source: SkillSource, skillDir: string): CatalogSkill | null {
   const skillFile = path.join(skillDir, "SKILL.md");
   if (!fs.existsSync(skillFile)) return null;
   const content = fs.readFileSync(skillFile, "utf8");
   const frontmatter = parseFrontmatter(content);
-  const skillName = frontmatter.name || path.basename(skillDir);
+  const skillName = frontmatterString(frontmatter, "name") || path.basename(skillDir);
   if (isSkillBlocked(skillName)) {
     return null;
   }
   const skillId = `${source.id}/${skillName}`;
   const stat = fs.statSync(skillFile);
-  const explicitCategory = (frontmatter.category || "").trim().toLowerCase();
+  const explicitCategory = (frontmatterString(frontmatter, "category") || "").trim().toLowerCase();
+  const scope = (frontmatterString(frontmatter, "scope") || "").trim().toLowerCase() || undefined;
+  const subcategory = (frontmatterString(frontmatter, "subcategory") || "").trim().toLowerCase() || undefined;
+  const tags = frontmatterList(frontmatter, "tags");
+  const author = frontmatterString(frontmatter, "author");
+  const contactEmail = frontmatterString(frontmatter, "contact-email") || frontmatterString(frontmatter, "contactEmail");
+  const website = frontmatterString(frontmatter, "website");
 
   return {
     skillId,
@@ -105,15 +145,73 @@ function toCatalogSkill(source: SkillSource, skillDir: string): CatalogSkill | n
     sourceUrl: source.repoUrl,
     skillName,
     name: skillName,
-    description: frontmatter.description || "",
+    description: frontmatterString(frontmatter, "description") || "",
     category: explicitCategory || inferCategory(skillName),
+    scope,
+    subcategory,
+    tags: tags.length > 0 ? tags : undefined,
+    author,
+    contactEmail,
+    website,
     dependencies: [],
     compatibleTargets: ["claude", "codex", "cursor", "gemini", "antigravity"] satisfies TargetPlatform[],
     resources: collectResources(skillDir, skillName),
     sourcePath: skillDir,
-    version: frontmatter.version,
+    version: frontmatterString(frontmatter, "version"),
     updatedAt: stat.mtime.toISOString(),
   };
+}
+
+function toCatalogSkillFromIndex(source: SkillSource, root: string, entry: SkillIndexEntry): CatalogSkill | null {
+  const skillName = (entry.skillName || entry.name || "").trim();
+  if (!skillName || isSkillBlocked(skillName)) {
+    return null;
+  }
+
+  const skillDir = path.join(root, skillName);
+  const skillFile = path.join(skillDir, "SKILL.md");
+  if (!fs.existsSync(skillFile)) {
+    return null;
+  }
+  const stat = fs.statSync(skillFile);
+  const explicitCategory = (entry.category || "").trim().toLowerCase();
+  const scope = (entry.scope || "").trim().toLowerCase() || undefined;
+  const subcategory = (entry.subcategory || "").trim().toLowerCase() || undefined;
+  const tags = normalizeTags(entry.tags);
+
+  return {
+    skillId: `${source.id}/${skillName}`,
+    sourceId: source.id,
+    sourceName: source.name,
+    sourceUrl: source.repoUrl,
+    skillName,
+    name: skillName,
+    description: (entry.description || "").trim(),
+    category: explicitCategory || inferCategory(skillName),
+    scope,
+    subcategory,
+    tags: tags.length > 0 ? tags : undefined,
+    author: entry.author?.trim() || undefined,
+    contactEmail: entry.contactEmail?.trim() || entry["contact-email"]?.trim() || undefined,
+    website: entry.website?.trim() || undefined,
+    dependencies: [],
+    compatibleTargets: ["claude", "codex", "cursor", "gemini", "antigravity"] satisfies TargetPlatform[],
+    resources: collectResources(skillDir, skillName),
+    sourcePath: skillDir,
+    version: entry.version?.trim() || undefined,
+    updatedAt: stat.mtime.toISOString(),
+  };
+}
+
+function loadCatalogSkillsFromIndex(source: SkillSource, localRepoPath: string, root: string): CatalogSkill[] | null {
+  const entries = loadSkillIndexEntries(localRepoPath, root);
+  if (!entries) {
+    return null;
+  }
+  const indexedSkills = entries
+    .map((entry) => toCatalogSkillFromIndex(source, root, entry))
+    .filter((entry): entry is CatalogSkill => Boolean(entry));
+  return indexedSkills;
 }
 
 async function syncIfNeeded(source: SkillSource, refresh: boolean): Promise<SkillSource> {
@@ -167,6 +265,12 @@ export async function buildMultiSourceCatalog(options: CatalogOptions): Promise<
       const root = skillRootPath(hydrated, localRepoPath);
       if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
         throw new Error(`Source '${source.id}' is invalid: missing skills root '${hydrated.skillsRoot}'.`);
+      }
+
+      const indexedSkills = loadCatalogSkillsFromIndex(hydrated, localRepoPath, root);
+      if (indexedSkills) {
+        catalogSkills.push(...indexedSkills);
+        continue;
       }
 
       const skillDirs = fs
