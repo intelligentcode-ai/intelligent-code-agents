@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.4] - 2026-02-14
+
+### Added
+- Faceted skill metadata support in catalogs and dashboard UX (`scope`, `subcategory`, `tags`) for broader non-development discovery/filtering.
+- Optional root `skills.index.json` fast-path loading for source repositories to improve catalog loading performance.
+- New shared frontmatter parser with YAML-list support for skill metadata extraction.
+
+### Changed
+- Skills dashboard now supports filtering by source, scope, category, and tag, and includes metadata badges on skill cards.
+- Catalog schema/types now include optional author/contact/site metadata fields for richer source metadata transport.
+- README includes an agent bootstrap prompt path for installing/running bootstrap onboarding skills.
+
 ## [12.0.3] - 2026-02-13
 
 ### Changed

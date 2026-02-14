@@ -31,6 +31,39 @@ ica install
 ica launch --open=true
 ```
 
+## Agent Bootstrap Prompt (IDE/Local Agent)
+
+Use this prompt as the first message in a local coding agent:
+
+```text
+Bootstrap ICA for this local environment.
+
+Your task:
+1) Download and install this skill file into your own native skill storage (using your runtime's normal skill conventions):
+   https://raw.githubusercontent.com/intelligentcode-ai/skills/master/skills/ica-bootstrap/SKILL.md
+2) Immediately execute the installed `ica-bootstrap` skill.
+3) Let `ica-bootstrap` complete end-to-end setup, including:
+   - ICA CLI installation
+   - skills source registration/refresh
+   - installation of `ica-cli`
+   - verification (`ica doctor`, `ica list`)
+
+Behavior requirements:
+- Do the work directly on this machine.
+- Do not ask me where skill folders are.
+- Do not ask me to confirm routine steps.
+- Ask only if credentials, permissions, or security policy block execution.
+- If a command fails, diagnose and retry with the safest fallback automatically.
+
+Final output:
+- What you installed
+- What you executed
+- Current ICA health/status
+- Exact blocker only if setup is still not complete
+```
+
+Canonical prompt source:
+- [skills/ica-bootstrap/assets/INITIAL_PROMPT.md](https://github.com/intelligentcode-ai/skills/blob/master/skills/ica-bootstrap/assets/INITIAL_PROMPT.md)
 ## Multi-Source Skills (Clear + Explicit)
 
 ICA supports multiple skill repositories side-by-side.
