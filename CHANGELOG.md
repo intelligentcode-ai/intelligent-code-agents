@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.5] - 2026-02-14
+
+### Changed
+- Reordered onboarding in README so the agent bootstrap prompt is shown before manual shell bootstrap steps.
+- Added a dedicated Skills repository section with direct links for contribution pull requests and contribution guidelines.
+- Refined top-level README language to be clearer, more action-oriented, and less generic.
+
 ## [12.0.4] - 2026-02-14
 
 ### Added
