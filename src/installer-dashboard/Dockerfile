@@ -2,18 +2,15 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN npm run build:dashboard:web
 
-FROM node:20-alpine
-WORKDIR /app
-ENV NODE_ENV=production
+FROM nginx:1.27-alpine
+WORKDIR /usr/share/nginx/html
 
-COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
+COPY --from=build /app/dist/installer-dashboard/web-build/ /usr/share/nginx/html/
+COPY src/installer-dashboard/nginx/default.conf /etc/nginx/conf.d/default.conf
 
-COPY --from=build /app/dist ./dist
-EXPOSE 4173
-CMD ["node", "dist/src/installer-dashboard/server/index.js"]
+EXPOSE 80

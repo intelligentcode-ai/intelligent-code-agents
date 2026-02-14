@@ -203,37 +203,41 @@ function toCatalogSkillFromIndex(source: SkillSource, root: string, entry: Skill
   };
 }
 
-function discoverCatalogSkillsFromFilesystem(source: SkillSource, root: string): CatalogSkill[] {
-  const skillDirs = fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(root, entry.name))
-    .sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
-
-  const discovered: CatalogSkill[] = [];
-  for (const skillDir of skillDirs) {
-    const item = toCatalogSkill(source, skillDir);
-    if (item) discovered.push(item);
-  }
-  return discovered;
+function skillNameFromIndexEntry(entry: SkillIndexEntry): string {
+  return (entry.skillName || entry.name || "").trim();
 }
 
-function loadCatalogSkillsFromIndex(source: SkillSource, localRepoPath: string, root: string): CatalogSkill[] | null {
+function loadSkillIndexMap(localRepoPath: string, root: string): Map<string, SkillIndexEntry> | null {
   const entries = loadSkillIndexEntries(localRepoPath, root);
-  if (!entries) {
-    return null;
+  if (!entries) return null;
+
+  const map = new Map<string, SkillIndexEntry>();
+  for (const entry of entries) {
+    const name = skillNameFromIndexEntry(entry);
+    if (!name) continue;
+    map.set(name, entry);
   }
-  const indexedSkills = entries
-    .map((entry) => toCatalogSkillFromIndex(source, root, entry))
-    .filter((entry): entry is CatalogSkill => Boolean(entry));
-  const indexedById = new Set(indexedSkills.map((entry) => entry.skillId));
-  const discoveredSkills = discoverCatalogSkillsFromFilesystem(source, root);
-  for (const discovered of discoveredSkills) {
-    if (!indexedById.has(discovered.skillId)) {
-      indexedSkills.push(discovered);
-    }
-  }
-  return indexedSkills;
+  return map;
+}
+
+function applyIndexMetadata(skill: CatalogSkill, entry: SkillIndexEntry): CatalogSkill {
+  const explicitCategory = (entry.category || "").trim().toLowerCase();
+  const scope = (entry.scope || "").trim().toLowerCase() || undefined;
+  const subcategory = (entry.subcategory || "").trim().toLowerCase() || undefined;
+  const tags = normalizeTags(entry.tags);
+
+  return {
+    ...skill,
+    description: (entry.description || "").trim() || skill.description,
+    category: explicitCategory || skill.category,
+    scope: scope || skill.scope,
+    subcategory: subcategory || skill.subcategory,
+    tags: tags.length > 0 ? tags : skill.tags,
+    author: entry.author?.trim() || skill.author,
+    contactEmail: entry.contactEmail?.trim() || entry["contact-email"]?.trim() || skill.contactEmail,
+    website: entry.website?.trim() || skill.website,
+    version: entry.version?.trim() || skill.version,
+  };
 }
 
 async function syncIfNeeded(source: SkillSource, refresh: boolean): Promise<SkillSource> {
@@ -289,13 +293,30 @@ export async function buildMultiSourceCatalog(options: CatalogOptions): Promise<
         throw new Error(`Source '${source.id}' is invalid: missing skills root '${hydrated.skillsRoot}'.`);
       }
 
-      const indexedSkills = loadCatalogSkillsFromIndex(hydrated, localRepoPath, root);
-      if (indexedSkills) {
-        catalogSkills.push(...indexedSkills);
-        continue;
+      const indexMap = loadSkillIndexMap(localRepoPath, root);
+
+      const skillDirs = fs
+        .readdirSync(root, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => path.join(root, entry.name))
+        .sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
+
+      const seenSkillNames = new Set<string>();
+      for (const skillDir of skillDirs) {
+        const discovered = toCatalogSkill(hydrated, skillDir);
+        if (!discovered) continue;
+        seenSkillNames.add(discovered.skillName);
+        const indexEntry = indexMap?.get(discovered.skillName);
+        catalogSkills.push(indexEntry ? applyIndexMetadata(discovered, indexEntry) : discovered);
       }
 
-      catalogSkills.push(...discoverCatalogSkillsFromFilesystem(hydrated, root));
+      if (indexMap) {
+        for (const [skillName, entry] of indexMap.entries()) {
+          if (seenSkillNames.has(skillName)) continue;
+          const fromIndex = toCatalogSkillFromIndex(hydrated, root, entry);
+          if (fromIndex) catalogSkills.push(fromIndex);
+        }
+      }
     } catch (error) {
       const message = safeErrorMessage(error, "Source refresh failed.");
       hydratedSources.push({
