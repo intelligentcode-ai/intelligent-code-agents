@@ -8,6 +8,11 @@
     "generatedAt": { "type": "string", "format": "date-time" },
     "source": { "type": "string", "enum": ["local-repo", "github-release", "multi-source"] },
     "version": { "type": "string" },
+    "stale": { "type": "boolean" },
+    "catalogSource": { "type": "string", "enum": ["live", "cache", "snapshot"] },
+    "staleReason": { "type": "string" },
+    "cacheAgeSeconds": { "type": "number" },
+    "nextRefreshAt": { "type": "string", "format": "date-time" },
     "sources": {
       "type": "array",
       "items": {

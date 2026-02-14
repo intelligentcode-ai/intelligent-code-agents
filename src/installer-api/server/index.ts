@@ -444,10 +444,18 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
 
   app.get("/api/v1/catalog/skills", async (_request, reply) => {
     try {
-      const catalog = await deps.loadCatalogFromSources(repoRoot, false);
+      const request = _request as { query?: { refresh?: string | boolean } };
+      const refreshRaw = request.query?.refresh;
+      const refresh = refreshRaw === true || refreshRaw === "true" || refreshRaw === "1";
+      const catalog = await deps.loadCatalogFromSources(repoRoot, refresh);
       return {
         generatedAt: catalog.generatedAt,
         version: catalog.version,
+        stale: catalog.stale,
+        catalogSource: catalog.catalogSource,
+        staleReason: catalog.staleReason,
+        cacheAgeSeconds: catalog.cacheAgeSeconds,
+        nextRefreshAt: catalog.nextRefreshAt,
         sources: catalog.sources.map((source) =>
           toPublicSource({
             id: source.id,

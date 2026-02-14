@@ -58,6 +58,11 @@ export interface SkillCatalog {
   version: string;
   sources: SkillSource[];
   skills: CatalogSkill[];
+  stale?: boolean;
+  catalogSource?: "live" | "cache" | "snapshot";
+  staleReason?: string;
+  cacheAgeSeconds?: number;
+  nextRefreshAt?: string;
 }
 
 export type SkillCatalogEntry = CatalogSkill;

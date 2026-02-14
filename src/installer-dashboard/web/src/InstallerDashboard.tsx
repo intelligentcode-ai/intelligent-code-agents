@@ -256,6 +256,7 @@ export function InstallerDashboard(): JSX.Element {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogLoadingMessage, setCatalogLoadingMessage] = useState("");
   const [catalogLoadingProgress, setCatalogLoadingProgress] = useState(0);
+  const [catalogWarning, setCatalogWarning] = useState("");
   const [selectionCustomized, setSelectionCustomized] = useState(false);
   const [sourceRepoUrl, setSourceRepoUrl] = useState("");
   const [sourceName, setSourceName] = useState("");
@@ -441,13 +442,25 @@ export function InstallerDashboard(): JSX.Element {
         setCatalogLoadingProgress(58);
         setCatalogLoadingMessage("Loading refreshed skills catalog…");
       }
-      const res = await apiFetch("/api/v1/catalog/skills");
-      const payload = (await res.json()) as { skills?: Skill[]; error?: string };
+      const res = await apiFetch(`/api/v1/catalog/skills${runRefresh ? "?refresh=true" : ""}`);
+      const payload = (await res.json()) as {
+        skills?: Skill[];
+        stale?: boolean;
+        catalogSource?: "live" | "cache" | "snapshot";
+        staleReason?: string;
+        error?: string;
+      };
       if (!res.ok) {
         throw new Error(asErrorMessage(payload, "Failed to load skills catalog."));
       }
       setCatalogLoadingProgress(88);
       setSkills(Array.isArray(payload.skills) ? payload.skills : []);
+      if (payload.stale) {
+        const source = payload.catalogSource || "fallback";
+        setCatalogWarning(payload.staleReason || `Catalog is currently served from ${source}.`);
+      } else {
+        setCatalogWarning("");
+      }
       setCatalogLoadingProgress(100);
       setCatalogLoadingMessage("Skills catalog is ready.");
     } finally {
@@ -1242,6 +1255,7 @@ export function InstallerDashboard(): JSX.Element {
                     {!catalogLoading && selectedUnknownSkillCount > 0 ? ` • ${selectedUnknownSkillCount} unavailable` : ""}
                     {!catalogLoading && normalizedQuery ? ` • ${filteredSkillsCount} shown` : ""}
                   </p>
+                  {catalogWarning && <p className="operation-hint">{catalogWarning}</p>}
                 </div>
                 <div className="bulk-actions">
                   <button className="btn btn-ghost" onClick={() => setSkillsSelection(skills.map((skill) => skill.skillId), true)} type="button">

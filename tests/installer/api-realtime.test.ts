@@ -373,3 +373,56 @@ test("catalog failures return structured retryable JSON error", async (t) => {
   assert.equal(payload.retryable, true);
   assert.ok(payload.error && payload.error.length > 0);
 });
+
+test("skills catalog endpoint forwards refresh flag and stale diagnostics", async (t) => {
+  const refreshCalls: boolean[] = [];
+  const app = await createInstallerApiServer({
+    apiKey: API_KEY,
+    dependencies: ({
+      loadCatalogFromSources: async (_repoRoot: string, refresh = false) => {
+        refreshCalls.push(refresh);
+        return {
+          generatedAt: "2026-02-14T00:00:00.000Z",
+          source: "multi-source" as const,
+          version: "1.0.0",
+          sources: [],
+          skills: [],
+          stale: true,
+          catalogSource: "snapshot" as const,
+          staleReason: "live catalog unavailable; serving snapshot",
+          cacheAgeSeconds: 3600,
+          nextRefreshAt: "2026-02-14T01:00:00.000Z",
+        };
+      },
+      loadHookCatalogFromSources: async () => createHookCatalogFixture(),
+      loadSources: async () => [],
+      loadHookSources: async () => [],
+    }) as never,
+  });
+  t.after(async () => {
+    await app.close();
+  });
+
+  const res = await app.inject({
+    method: "GET",
+    url: "/api/v1/catalog/skills?refresh=true",
+    headers: {
+      "x-ica-api-key": API_KEY,
+    },
+  });
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(refreshCalls, [true]);
+  const payload = res.json() as {
+    stale?: boolean;
+    catalogSource?: string;
+    staleReason?: string;
+    cacheAgeSeconds?: number;
+    nextRefreshAt?: string;
+  };
+  assert.equal(payload.stale, true);
+  assert.equal(payload.catalogSource, "snapshot");
+  assert.match(String(payload.staleReason || ""), /snapshot/i);
+  assert.equal(payload.cacheAgeSeconds, 3600);
+  assert.equal(payload.nextRefreshAt, "2026-02-14T01:00:00.000Z");
+});
