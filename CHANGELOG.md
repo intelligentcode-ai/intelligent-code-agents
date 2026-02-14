@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.1.0] - 2026-02-14
+
+### Added
+- Tracking config bootstrap/resolution core with deterministic precedence across project, ICA home, and agent-home fallbacks.
+- First-run tracking config creation flow with explicit scope/provider selection hooks and persisted defaults.
+- TDD preference persistence and scope-level override handling in tracking config flows.
+- Installer contract tests for tracking config precedence, bootstrap persistence, TDD defaults, and provider updates.
+
+### Changed
+- Added a dedicated tracking-provider update helper so backend selection can be changed and re-persisted consistently.
+
 ## [12.0.9] - 2026-02-14
 
 ### Changed
