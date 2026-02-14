@@ -16,6 +16,8 @@
   "include": [
     "src/installer-core/**/*.ts",
     "src/installer-cli/**/*.ts",
+    "src/installer-api/**/*.ts",
+    "src/installer-bff/**/*.ts",
     "src/installer-helper/**/*.ts",
     "src/installer-dashboard/server/**/*.ts",
     "tests/installer/**/*.ts"

@@ -92,4 +92,4 @@ fi
 echo "ICA installed (${version_tag})."
 echo "Next steps:"
 echo "  1) Install skills/hooks: ica install"
-echo "  2) Launch dashboard:    ica launch --open=true"
+echo "  2) Launch dashboard:    ica serve --open=true"

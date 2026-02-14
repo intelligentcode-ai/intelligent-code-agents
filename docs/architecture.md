@@ -6,6 +6,13 @@ and templates that can be installed into multiple agent runtimes and IDEs.
 
 Claude Code support is optional and explicitly scoped under `src/targets/claude/` (hooks + modes).
 
+## Installer Control Plane
+
+The installer dashboard runtime is split into:
+- **Host control plane (`ica serve`)**: starts ICA API on loopback (`127.0.0.1`) with a per-session API key.
+- **Frontend container**: serves static dashboard assets only (no installer logic, no volume mounts).
+- **Host BFF bridge**: browser calls same-origin `/api/v1/*` and `/ws/events`; BFF injects API key upstream.
+
 ## Core Components
 
 ### Skills

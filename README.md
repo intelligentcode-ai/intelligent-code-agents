@@ -77,7 +77,7 @@ Then run:
 
 ```bash
 ica install
-ica launch --open=true
+ica serve --open=true
 ```
 
 ## Multi-Source Skills (Clear + Explicit)
@@ -153,14 +153,14 @@ Commands:
 - `ica list`
 - `ica doctor`
 - `ica catalog`
-- `ica launch`
+- `ica serve`
+- `ica launch` (alias; deprecated)
 - `ica sources list`
 - `ica sources add --repo-url=...` (or `--repo-path=...`; defaults to current directory when omitted)
 - `ica sources remove --id=...`
 - `ica sources auth --id=... --token=...`
 - `ica sources refresh [--id=...]`
 - `ica sources update --id=... --name=... --repo-url=...`
-- `ica container mount-project --project-path=/path --confirm`
 
 Source-qualified example:
 
@@ -180,15 +180,18 @@ When install mode is `symlink`, ICA links installed skills from that local skill
 
 ## Dashboard
 
-Start locally (binds to `127.0.0.1`):
+Start locally (frontend container + host API control plane):
 
 ```bash
-npm ci
-npm run build
-npm run start:dashboard
+ica serve --open=true
 ```
 
 Open: `http://127.0.0.1:4173`
+
+Architecture note:
+- `ica serve` runs the ICA API on localhost (`127.0.0.1`) with an ephemeral per-session API key.
+- The dashboard container serves static frontend assets only.
+- A host-side BFF proxies `/api/v1/*` and `/ws/events` as same-origin routes for the browser.
 
 ### GHCR Container
 
@@ -197,9 +200,10 @@ Dashboard highlights:
 - Install, uninstall, and sync skills across multiple targets
 - Add/remove/auth/refresh skill sources (HTTPS + SSH)
 - Target discovery plus user/project scope management
-- Native project directory picker (host helper) plus container mount orchestration endpoint
+- Native project directory picker via localhost CLI API
 - Skill catalog filtering with bulk selection controls
 - Installed-state and operation-report inspection in the UI
+- Frontend-only container with host-BFF same-origin proxying
 
 Container image can be built from `src/installer-dashboard/Dockerfile` and published to GHCR via `.github/workflows/dashboard-ghcr.yml`.
 
@@ -212,8 +216,10 @@ docker build -f src/installer-dashboard/Dockerfile -t ica-dashboard:local .
 Run:
 
 ```bash
-docker run --rm -p 4173:4173 ica-dashboard:local
+docker run --rm -p 4173:80 ica-dashboard:local
 ```
+
+For full installer functionality (API + WS + container lifecycle), use `ica serve --open=true`.
 
 ## Supported Targets
 

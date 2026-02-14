@@ -93,7 +93,7 @@ node '$entryPoint' @args
     Write-Host "ICA installed ($versionTag)."
     Write-Host "Next steps:"
     Write-Host "  1) Install skills/hooks: ica install"
-    Write-Host "  2) Launch dashboard:    ica launch --open=true"
+    Write-Host "  2) Launch dashboard:    ica serve --open=true"
 }
 finally {
     Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue

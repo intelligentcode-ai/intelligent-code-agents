@@ -3,7 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
-import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
+import net from "node:net";
+import { spawn, execFile } from "node:child_process";
+import { promisify } from "node:util";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { executeOperation } from "../installer-core/executor";
@@ -29,10 +31,18 @@ interface ParsedArgs {
   positionals: string[];
 }
 
-const HELPER_HOST = "127.0.0.1";
-const HELPER_PORT = Number(process.env.ICA_HELPER_PORT || "4174");
-const HELPER_TOKEN = process.env.ICA_HELPER_TOKEN || crypto.randomBytes(24).toString("hex");
-let helperProcess: ChildProcessWithoutNullStreams | null = null;
+const execFileAsync = promisify(execFile);
+const DEFAULT_DASHBOARD_IMAGE = "ica-dashboard:local";
+
+export type ServeImageBuildMode = "auto" | "always" | "never";
+export type ServeReusePortsMode = boolean;
+
+export function redactCliErrorMessage(message: string): string {
+  return message
+    .replace(/(ICA_(?:UI_)?API_KEY=)[^\s]+/g, "$1[REDACTED]")
+    .replace(/(--(?:token|api-key)=)[^\s]+/g, "$1[REDACTED]")
+    .replace(/(x-ica-api-key["']?\s*[:=]\s*["']?)[^"',\s]+/gi, "$1[REDACTED]");
+}
 
 function parseArgv(argv: string[]): ParsedArgs {
   const [command = "help", ...rest] = argv;
@@ -155,29 +165,207 @@ function parseHookTargetsStrict(rawValue: string): HookTargetPlatform[] {
   return ["claude"];
 }
 
-async function helperRequest(pathname: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const response = await fetch(`http://${HELPER_HOST}:${HELPER_PORT}${pathname}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-ica-helper-token": HELPER_TOKEN,
-    },
-    body: JSON.stringify(body),
-  });
-  const payload = (await response.json()) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(typeof payload.error === "string" ? payload.error : "Helper request failed.");
+async function commandExists(command: string): Promise<boolean> {
+  try {
+    await execFileAsync(command, ["--version"], { maxBuffer: 1024 * 1024 });
+    return true;
+  } catch {
+    return false;
   }
-  return payload;
 }
 
-async function waitForHelperReady(retries = 30): Promise<void> {
+async function isLoopbackPortAvailable(port: number): Promise<boolean> {
+  return await new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.once("error", () => {
+      resolve(false);
+    });
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+async function getListeningPids(port: number): Promise<number[]> {
+  const pids = new Set<number>();
+
+  try {
+    if (process.platform === "win32") {
+      const { stdout } = await execFileAsync("netstat", ["-ano", "-p", "tcp"], { maxBuffer: 4 * 1024 * 1024 });
+      const lines = stdout.split(/\r?\n/);
+      const matcher = new RegExp(`:${port}\\s+\\S+\\s+LISTENING\\s+(\\d+)`, "i");
+      for (const line of lines) {
+        const match = line.match(matcher);
+        if (!match) continue;
+        const pid = Number.parseInt(match[1], 10);
+        if (Number.isInteger(pid) && pid > 0 && pid !== process.pid) {
+          pids.add(pid);
+        }
+      }
+      return Array.from(pids);
+    }
+
+    const { stdout } = await execFileAsync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], { maxBuffer: 1024 * 1024 });
+    for (const line of stdout.split(/\r?\n/)) {
+      const pid = Number.parseInt(line.trim(), 10);
+      if (Number.isInteger(pid) && pid > 0 && pid !== process.pid) {
+        pids.add(pid);
+      }
+    }
+  } catch {
+    return [];
+  }
+
+  return Array.from(pids);
+}
+
+function canSignalPid(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForPortAvailable(port: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await isLoopbackPortAvailable(port)) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return await isLoopbackPortAvailable(port);
+}
+
+async function reclaimLoopbackPort(port: number, flagName: "ui-port" | "api-port"): Promise<void> {
+  if (await isLoopbackPortAvailable(port)) {
+    return;
+  }
+
+  const pids = await getListeningPids(port);
+  if (pids.length === 0) {
+    throw new Error(
+      `Requested --${flagName}=${port} is in use, but ICA could not identify the owning process to stop it automatically.`,
+    );
+  }
+
+  output.write(`Notice: ${flagName} ${port} is busy; stopping existing process on that port.\n`);
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // ignore individual process signal failures
+    }
+  }
+
+  if (await waitForPortAvailable(port, 2000)) {
+    return;
+  }
+
+  for (const pid of pids) {
+    if (!canSignalPid(pid)) continue;
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // ignore individual process signal failures
+    }
+  }
+
+  if (await waitForPortAvailable(port, 1500)) {
+    return;
+  }
+
+  throw new Error(`Requested --${flagName}=${port} is still in use after attempting to stop the existing process.`);
+}
+
+export function parseServeImageBuildMode(rawValue: string): ServeImageBuildMode {
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === "auto" || normalized === "always" || normalized === "never") {
+    return normalized;
+  }
+  throw new Error(`Invalid --build-image value '${rawValue}'. Supported: auto|always|never`);
+}
+
+export function parseServeReusePorts(rawValue: string): ServeReusePortsMode {
+  const normalized = rawValue.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  throw new Error(`Invalid --reuse-ports value '${rawValue}'. Supported: true|false`);
+}
+
+export function shouldBuildDashboardImage(input: {
+  mode: ServeImageBuildMode;
+  image: string;
+  imageExists: boolean;
+  defaultImage: string;
+}): boolean {
+  if (input.mode === "always") {
+    return true;
+  }
+  if (input.mode === "never") {
+    return false;
+  }
+  if (input.imageExists) {
+    return false;
+  }
+  return input.image === input.defaultImage;
+}
+
+function toDockerRunArgs(base: {
+  containerName: string;
+  image: string;
+  env?: string[];
+  ports?: string[];
+}): string[] {
+  const args: string[] = ["run", "-d", "--name", base.containerName];
+  for (const envItem of base.env || []) {
+    args.push("-e", envItem);
+  }
+  for (const port of base.ports || []) {
+    args.push("-p", port);
+  }
+  args.push(base.image);
+  return args;
+}
+
+async function allocateLoopbackPort(input: {
+  preferredPort: number;
+  explicit: boolean;
+  flagName: "ui-port" | "api-port";
+  blockedPorts?: Set<number>;
+}): Promise<number> {
+  const blocked = input.blockedPorts || new Set<number>();
+  if (!blocked.has(input.preferredPort) && (await isLoopbackPortAvailable(input.preferredPort))) {
+    return input.preferredPort;
+  }
+  if (input.explicit) {
+    throw new Error(`Requested --${input.flagName}=${input.preferredPort} is unavailable. Choose a different port.`);
+  }
+  for (let candidate = input.preferredPort + 1; candidate <= Math.min(65535, input.preferredPort + 100); candidate += 1) {
+    if (blocked.has(candidate)) {
+      continue;
+    }
+    if (await isLoopbackPortAvailable(candidate)) {
+      output.write(`Notice: ${input.flagName} ${input.preferredPort} is busy; using ${candidate}.\n`);
+      return candidate;
+    }
+  }
+  throw new Error(`Unable to find a free localhost port for --${input.flagName} near ${input.preferredPort}.`);
+}
+
+async function waitForApiReady(port: number, apiKey: string, retries = 40): Promise<void> {
   for (let attempt = 0; attempt < retries; attempt += 1) {
     try {
-      const response = await fetch(`http://${HELPER_HOST}:${HELPER_PORT}/health`, {
-        headers: {
-          "x-ica-helper-token": HELPER_TOKEN,
-        },
+      const response = await fetch(`http://127.0.0.1:${port}/api/v1/health`, {
+        headers: { "x-ica-api-key": apiKey },
       });
       if (response.ok) return;
     } catch {
@@ -185,37 +373,65 @@ async function waitForHelperReady(retries = 30): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
-  throw new Error("ICA helper did not become ready in time.");
+  throw new Error("ICA API did not become ready in time.");
 }
 
-async function ensureHelperRunning(repoRoot: string): Promise<void> {
-  if (helperProcess && !helperProcess.killed) {
+async function waitForHttpReady(url: string, retries = 40): Promise<void> {
+  for (let attempt = 0; attempt < retries; attempt += 1) {
     try {
-      await waitForHelperReady(1);
-      return;
+      const response = await fetch(url);
+      if (response.ok) return;
     } catch {
-      // respawn below
+      // retry
     }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error(`Service did not become ready in time: ${url}`);
+}
+
+async function dockerInspect(containerName: string): Promise<boolean> {
+  try {
+    await execFileAsync("docker", ["inspect", containerName], { maxBuffer: 8 * 1024 * 1024 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function dockerImageExists(image: string): Promise<boolean> {
+  try {
+    await execFileAsync("docker", ["image", "inspect", image], { maxBuffer: 8 * 1024 * 1024 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureDashboardImage(options: {
+  repoRoot: string;
+  image: string;
+  mode: ServeImageBuildMode;
+  defaultImage: string;
+}): Promise<void> {
+  const imageExists = await dockerImageExists(options.image);
+  const shouldBuild = shouldBuildDashboardImage({
+    mode: options.mode,
+    image: options.image,
+    imageExists,
+    defaultImage: options.defaultImage,
+  });
+  if (!shouldBuild) {
+    return;
   }
 
-  const helperScript = path.join(repoRoot, "dist", "src", "installer-helper", "server.js");
-  if (!fs.existsSync(helperScript)) {
-    throw new Error("Native helper is not built. Run: npm run build");
+  const dockerfilePath = path.join(options.repoRoot, "src", "installer-dashboard", "Dockerfile");
+  if (!fs.existsSync(dockerfilePath)) {
+    throw new Error(`Dashboard Dockerfile not found at ${dockerfilePath}. Provide --image=<image> or run with --build-image=never.`);
   }
 
-  helperProcess = spawn(process.execPath, [helperScript], {
-    env: {
-      ...process.env,
-      ICA_HELPER_PORT: String(HELPER_PORT),
-      ICA_HELPER_TOKEN: HELPER_TOKEN,
-    },
-    stdio: "pipe",
-  });
-  helperProcess.stderr.on("data", (chunk) => {
-    const message = chunk.toString("utf8");
-    process.stderr.write(`[ica-helper] ${message}`);
-  });
-  await waitForHelperReady();
+  output.write(`Building dashboard image '${options.image}' from source...\n`);
+  await execFileAsync("docker", ["build", "-f", dockerfilePath, "-t", options.image, options.repoRoot], { maxBuffer: 16 * 1024 * 1024 });
+  output.write(`Built dashboard image '${options.image}'.\n`);
 }
 
 function printHelp(): void {
@@ -240,9 +456,11 @@ function printHelp(): void {
   output.write(`  ica hooks install [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks uninstall [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks sync [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n\n`);
-  output.write(`  ica launch [--host=127.0.0.1] [--port=4173] [--open=true|false] [--allow-remote=true|false]\n\n`);
+  output.write(
+    `  ica serve [--host=127.0.0.1] [--ui-port=4173] [--api-port=4174] [--reuse-ports=true|false] [--open=true|false] [--image=ica-dashboard:local] [--build-image=auto|always|never]\n`,
+  );
+  output.write(`  ica launch (alias for serve; deprecated)\n\n`);
   output.write(`  Note: repository registration is unified. Adding one source auto-registers both skills and hooks mirrors.\n\n`);
-  output.write(`  ica container mount-project --project-path=<path> --confirm [--container-name=<name>] [--image=<image>] [--port=<host:container>] [--json]\n\n`);
   output.write(`Common flags:\n`);
   output.write(`  --targets=claude,codex\n`);
   output.write(`  --scope=user|project\n`);
@@ -284,7 +502,7 @@ function openBrowser(url: string): void {
 
 function isLoopbackHost(host: string): boolean {
   const normalized = host.trim().toLowerCase();
-  return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
+  return normalized === "127.0.0.1" || normalized === "localhost";
 }
 
 async function promptInteractive(command: OperationKind, options: Record<string, string | boolean>): Promise<InstallRequest> {
@@ -898,80 +1116,192 @@ async function runHooks(positionals: string[], options: Record<string, string | 
   }
 }
 
-async function runContainer(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
-  const action = (positionals[0] || "mount-project").toLowerCase();
-  if (action !== "mount-project") {
-    throw new Error(`Unknown container action '${action}'. Supported: mount-project`);
+async function runServe(options: Record<string, string | boolean>): Promise<void> {
+  const repoRoot = findRepoRoot(__dirname);
+  const host = stringOption(options, "host", "127.0.0.1").trim() || "127.0.0.1";
+  if (!isLoopbackHost(host)) {
+    throw new Error(`Refusing non-loopback host '${host}'. The ICA API is localhost-only.`);
   }
-  const projectPath = stringOption(options, "project-path", "").trim();
-  if (!projectPath) {
-    throw new Error("Missing required option --project-path");
+  const uiPortInput = Number(stringOption(options, "ui-port", stringOption(options, "port", "4173")).trim() || "4173");
+  const apiPortInput = Number(stringOption(options, "api-port", "4174").trim() || "4174");
+  if (!Number.isInteger(uiPortInput) || uiPortInput <= 0) {
+    throw new Error("Invalid --ui-port value.");
   }
-  if (!boolOption(options, "confirm", false)) {
-    throw new Error("Container mount requires --confirm");
+  if (!Number.isInteger(apiPortInput) || apiPortInput <= 0) {
+    throw new Error("Invalid --api-port value.");
+  }
+  const uiPortExplicit = options["ui-port"] !== undefined || options.port !== undefined;
+  const apiPortExplicit = options["api-port"] !== undefined;
+  const reusePorts = parseServeReusePorts(stringOption(options, "reuse-ports", process.env.ICA_REUSE_PORTS || "true"));
+  if (uiPortInput === apiPortInput) {
+    throw new Error("API and UI ports must be different. Choose distinct --api-port and --ui-port values.");
+  }
+  let apiPort = apiPortInput;
+  let uiPort = uiPortInput;
+  if (reusePorts) {
+    await reclaimLoopbackPort(apiPort, "api-port");
+    await reclaimLoopbackPort(uiPort, "ui-port");
+  } else {
+    apiPort = await allocateLoopbackPort({
+      preferredPort: apiPortInput,
+      explicit: apiPortExplicit,
+      flagName: "api-port",
+    });
+    uiPort = await allocateLoopbackPort({
+      preferredPort: uiPortInput,
+      explicit: uiPortExplicit,
+      flagName: "ui-port",
+      blockedPorts: new Set([apiPort]),
+    });
+  }
+  const uiContainerPort = await allocateLoopbackPort({
+    preferredPort: uiPort + 1,
+    explicit: false,
+    flagName: "ui-port",
+    blockedPorts: new Set([apiPort, uiPort]),
+  });
+
+  const apiScript = path.join(repoRoot, "dist", "src", "installer-api", "server", "index.js");
+  const bffScript = path.join(repoRoot, "dist", "src", "installer-bff", "server", "index.js");
+  if (!fs.existsSync(apiScript)) {
+    throw new Error("ICA API runtime is not built. Run: npm run build");
+  }
+  if (!fs.existsSync(bffScript)) {
+    throw new Error("ICA dashboard BFF runtime is not built. Run: npm run build");
+  }
+  if (!(await commandExists("docker"))) {
+    throw new Error("Docker CLI is not available.");
   }
 
-  const repoRoot = findRepoRoot(__dirname);
-  await ensureHelperRunning(repoRoot);
-  const payload = await helperRequest("/container/mount-project", {
-    projectPath,
-    containerName: stringOption(options, "container-name", "") || undefined,
-    image: stringOption(options, "image", "") || undefined,
-    port: stringOption(options, "port", "") || undefined,
-    confirm: true,
-  });
-  if (boolOption(options, "json", false)) {
-    output.write(`${JSON.stringify(payload, null, 2)}\n`);
-    return;
+  const containerName = stringOption(options, "container-name", process.env.ICA_DASHBOARD_CONTAINER_NAME || "ica-dashboard");
+  const image = stringOption(options, "image", process.env.ICA_DASHBOARD_IMAGE || DEFAULT_DASHBOARD_IMAGE);
+  const buildMode = parseServeImageBuildMode(stringOption(options, "build-image", process.env.ICA_DASHBOARD_BUILD_IMAGE || "auto"));
+  const apiKey = crypto.randomBytes(24).toString("hex");
+  const hostForUrl = host.includes(":") ? `[${host}]` : host;
+  const apiBaseUrl = `http://${hostForUrl}:${apiPort}`;
+  const staticOrigin = `http://${hostForUrl}:${uiContainerPort}`;
+  const dashboardUrl = `http://${hostForUrl}:${uiPort}`;
+  const open = boolOption(options, "open", false);
+
+  if (await dockerInspect(containerName)) {
+    await execFileAsync("docker", ["rm", "-f", containerName], { maxBuffer: 8 * 1024 * 1024 });
   }
-  output.write(`Mounted project path '${projectPath}' into container '${String(payload.containerName || "")}'.\n`);
-  if (payload.command) {
-    output.write(`Command: ${String(payload.command)}\n`);
+
+  await ensureDashboardImage({
+    repoRoot,
+    image,
+    mode: buildMode,
+    defaultImage: DEFAULT_DASHBOARD_IMAGE,
+  });
+
+  const apiProcess = spawn(process.execPath, [apiScript], {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      ICA_API_HOST: "127.0.0.1",
+      ICA_API_PORT: String(apiPort),
+      ICA_API_KEY: apiKey,
+      ICA_UI_PORT: String(uiPort),
+    },
+  });
+  let shutdownRequested = false;
+  let containerStarted = false;
+  let bffStarted = false;
+  let apiProcessError: Error | null = null;
+  let bffProcessError: Error | null = null;
+  apiProcess.once("error", (error) => {
+    apiProcessError = error;
+    shutdownRequested = true;
+  });
+  const bffProcess = spawn(process.execPath, [bffScript], {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      ICA_BFF_HOST: "127.0.0.1",
+      ICA_BFF_PORT: String(uiPort),
+      ICA_BFF_STATIC_ORIGIN: `http://127.0.0.1:${uiContainerPort}`,
+      ICA_BFF_API_ORIGIN: `http://127.0.0.1:${apiPort}`,
+      ICA_BFF_API_KEY: apiKey,
+    },
+  });
+  bffProcess.once("error", (error) => {
+    bffProcessError = error;
+    shutdownRequested = true;
+  });
+
+  const shutdown = async (): Promise<void> => {
+    if (!shutdownRequested) {
+      shutdownRequested = true;
+    }
+    if (containerStarted) {
+      try {
+        await execFileAsync("docker", ["rm", "-f", containerName], { maxBuffer: 8 * 1024 * 1024 });
+      } catch {
+        // ignore cleanup failure
+      }
+    }
+    if (apiProcess.exitCode === null && !apiProcess.killed) {
+      apiProcess.kill("SIGTERM");
+    }
+    if (bffProcess.exitCode === null && !bffProcess.killed) {
+      bffProcess.kill("SIGTERM");
+    }
+  };
+
+  try {
+    await waitForApiReady(apiPort, apiKey);
+    const runArgs = toDockerRunArgs({
+      containerName,
+      image,
+      ports: [`127.0.0.1:${uiContainerPort}:80`],
+    });
+    const dockerRunResult = await execFileAsync("docker", runArgs, { maxBuffer: 8 * 1024 * 1024 });
+    containerStarted = true;
+    await waitForHttpReady(`http://127.0.0.1:${uiContainerPort}/`);
+    await waitForHttpReady(`http://127.0.0.1:${uiPort}/health`);
+    bffStarted = true;
+
+    output.write(`ICA dashboard listening at ${dashboardUrl}\n`);
+    output.write(`Dashboard proxy: http://${hostForUrl}:${uiPort} -> ${staticOrigin} + ${apiBaseUrl}\n`);
+    output.write(`Container: ${containerName} (${(dockerRunResult.stdout || "").trim()})\n`);
+    if (open) {
+      openBrowser(dashboardUrl);
+    }
+
+    const requestShutdown = (): void => {
+      shutdownRequested = true;
+    };
+    process.once("SIGINT", requestShutdown);
+    process.once("SIGTERM", requestShutdown);
+
+    while (!shutdownRequested) {
+      if (apiProcess.exitCode !== null) {
+        throw new Error(`ICA API process exited with code ${apiProcess.exitCode}`);
+      }
+      if (bffProcess.exitCode !== null) {
+        throw new Error(`ICA dashboard BFF process exited with code ${bffProcess.exitCode}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    if (apiProcessError) {
+      throw apiProcessError;
+    }
+    if (bffProcessError) {
+      throw bffProcessError;
+    }
+    if (!bffStarted) {
+      throw new Error("ICA dashboard BFF did not start correctly.");
+    }
+    await shutdown();
+  } catch (error) {
+    await shutdown();
+    throw error;
   }
 }
 
 async function runLaunch(options: Record<string, string | boolean>): Promise<void> {
-  const repoRoot = findRepoRoot(__dirname);
-  const host = stringOption(options, "host", "127.0.0.1").trim() || "127.0.0.1";
-  const port = stringOption(options, "port", "4173").trim() || "4173";
-  const allowRemote = boolOption(options, "allow-remote", false);
-  if (!isLoopbackHost(host) && !allowRemote) {
-    throw new Error(
-      `Refusing non-loopback dashboard host '${host}' without explicit consent. Use --allow-remote=true if you intentionally want remote API access.`,
-    );
-  }
-  const dashboardUrl = `http://${host}:${port}`;
-  const serverScript = path.join(repoRoot, "dist", "src", "installer-dashboard", "server", "index.js");
-
-  if (!fs.existsSync(serverScript)) {
-    throw new Error("Dashboard runtime is not built. Run: npm run build");
-  }
-
-  if (boolOption(options, "open", false)) {
-    openBrowser(dashboardUrl);
-  }
-
-  output.write(`Launching ICA dashboard at ${dashboardUrl}\n`);
-  const child = spawn(process.execPath, [serverScript], {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      ICA_DASHBOARD_HOST: host,
-      ICA_DASHBOARD_PORT: port,
-      ICA_DASHBOARD_ALLOW_REMOTE: allowRemote ? "true" : "false",
-    },
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    child.once("error", (error) => reject(error));
-    child.once("exit", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`Dashboard process exited with code ${code ?? "unknown"}`));
-    });
-  });
+  output.write("Deprecation notice: `ica launch` is now an alias of `ica serve` and will be removed in a future release.\n");
+  await runServe(options);
 }
 
 async function main(): Promise<void> {
@@ -1008,8 +1338,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (normalized === "container") {
-    await runContainer(positionals, options);
+  if (normalized === "serve") {
+    await runServe(options);
     return;
   }
 
@@ -1021,13 +1351,10 @@ async function main(): Promise<void> {
   printHelp();
 }
 
-main().catch((error) => {
-  process.stderr.write(`ICA CLI failed: ${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 1;
-});
-
-process.on("exit", () => {
-  if (helperProcess && !helperProcess.killed) {
-    helperProcess.kill();
-  }
-});
+if (require.main === module) {
+  main().catch((error) => {
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`ICA CLI failed: ${redactCliErrorMessage(rawMessage)}\n`);
+    process.exitCode = 1;
+  });
+}
