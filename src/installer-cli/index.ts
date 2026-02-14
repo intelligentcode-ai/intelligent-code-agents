@@ -240,7 +240,7 @@ function printHelp(): void {
   output.write(`  ica hooks install [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks uninstall [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks sync [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n\n`);
-  output.write(`  ica launch [--host=127.0.0.1] [--port=4173] [--open=true|false]\n\n`);
+  output.write(`  ica launch [--host=127.0.0.1] [--port=4173] [--open=true|false] [--allow-remote=true|false]\n\n`);
   output.write(`  Note: repository registration is unified. Adding one source auto-registers both skills and hooks mirrors.\n\n`);
   output.write(`  ica container mount-project --project-path=<path> --confirm [--container-name=<name>] [--image=<image>] [--port=<host:container>] [--json]\n\n`);
   output.write(`Common flags:\n`);
@@ -280,6 +280,11 @@ function openBrowser(url: string): void {
   } catch (error) {
     process.stderr.write(`Unable to open browser automatically: ${error instanceof Error ? error.message : String(error)}\n`);
   }
+}
+
+function isLoopbackHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase();
+  return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
 }
 
 async function promptInteractive(command: OperationKind, options: Record<string, string | boolean>): Promise<InstallRequest> {
@@ -929,6 +934,12 @@ async function runLaunch(options: Record<string, string | boolean>): Promise<voi
   const repoRoot = findRepoRoot(__dirname);
   const host = stringOption(options, "host", "127.0.0.1").trim() || "127.0.0.1";
   const port = stringOption(options, "port", "4173").trim() || "4173";
+  const allowRemote = boolOption(options, "allow-remote", false);
+  if (!isLoopbackHost(host) && !allowRemote) {
+    throw new Error(
+      `Refusing non-loopback dashboard host '${host}' without explicit consent. Use --allow-remote=true if you intentionally want remote API access.`,
+    );
+  }
   const dashboardUrl = `http://${host}:${port}`;
   const serverScript = path.join(repoRoot, "dist", "src", "installer-dashboard", "server", "index.js");
 
@@ -947,6 +958,7 @@ async function runLaunch(options: Record<string, string | boolean>): Promise<voi
       ...process.env,
       ICA_DASHBOARD_HOST: host,
       ICA_DASHBOARD_PORT: port,
+      ICA_DASHBOARD_ALLOW_REMOTE: allowRemote ? "true" : "false",
     },
   });
 

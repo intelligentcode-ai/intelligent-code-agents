@@ -1,10 +1,11 @@
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { hasExecutable } from "../installer-core/security";
 
 const execFileAsync = promisify(execFile);
+export const MAX_JSON_BODY_BYTES = 64 * 1024;
 
 type JsonMap = Record<string, unknown>;
 
@@ -16,18 +17,27 @@ interface MountProjectRequest {
   confirm?: boolean;
 }
 
-function sendJson(res: http.ServerResponse, status: number, payload: JsonMap): void {
+export class RequestError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export function sendJson(res: http.ServerResponse, status: number, payload: JsonMap): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
   res.end(`${JSON.stringify(payload)}\n`);
 }
 
-function isLoopback(remoteAddress: string | undefined): boolean {
+export function isLoopback(remoteAddress: string | undefined): boolean {
   if (!remoteAddress) return false;
   return ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(remoteAddress);
 }
 
-function helperTokenFromRequest(req: http.IncomingMessage): string {
+export function helperTokenFromRequest(req: http.IncomingMessage): string {
   const auth = String(req.headers.authorization || "");
   const byHeader = String(req.headers["x-ica-helper-token"] || "");
   if (byHeader) return byHeader;
@@ -37,27 +47,35 @@ function helperTokenFromRequest(req: http.IncomingMessage): string {
   return "";
 }
 
-async function readJsonBody(req: http.IncomingMessage): Promise<JsonMap> {
+export async function readJsonBody(req: http.IncomingMessage): Promise<JsonMap> {
+  const contentLength = Number(req.headers["content-length"] || "0");
+  if (Number.isFinite(contentLength) && contentLength > MAX_JSON_BODY_BYTES) {
+    throw new RequestError(413, `Request body too large (max ${MAX_JSON_BODY_BYTES} bytes).`);
+  }
+
   const chunks: Buffer[] = [];
+  let total = 0;
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const normalized = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += normalized.length;
+    if (total > MAX_JSON_BODY_BYTES) {
+      throw new RequestError(413, `Request body too large (max ${MAX_JSON_BODY_BYTES} bytes).`);
+    }
+    chunks.push(normalized);
   }
   if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as JsonMap;
-}
-
-async function hasCommand(command: string): Promise<boolean> {
   try {
-    const checker = process.platform === "win32" ? "where" : "command";
-    const args = process.platform === "win32" ? [command] : ["-v", command];
-    await execFileAsync(checker, args);
-    return true;
+    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as JsonMap;
   } catch {
-    return false;
+    throw new RequestError(400, "Invalid JSON request body.");
   }
 }
 
-async function pickDirectoryNative(initialPath?: string): Promise<string> {
+export async function hasCommand(command: string): Promise<boolean> {
+  return hasExecutable(command, process.platform);
+}
+
+export async function pickDirectoryNative(initialPath?: string): Promise<string> {
   if (process.platform === "darwin") {
     const prompt = "Select project directory";
     const script = `POSIX path of (choose folder with prompt "${prompt}" default location POSIX file "${initialPath || process.cwd()}")`;
@@ -99,7 +117,7 @@ async function pickDirectoryNative(initialPath?: string): Promise<string> {
   throw new Error(`Unsupported platform '${process.platform}' for native picker.`);
 }
 
-async function dockerInspect(containerName: string): Promise<JsonMap | null> {
+export async function dockerInspect(containerName: string): Promise<JsonMap | null> {
   try {
     const result = await execFileAsync("docker", ["inspect", containerName], { maxBuffer: 8 * 1024 * 1024 });
     const parsed = JSON.parse(result.stdout || "[]") as JsonMap[];
@@ -109,7 +127,7 @@ async function dockerInspect(containerName: string): Promise<JsonMap | null> {
   }
 }
 
-function toDockerRunArgs(base: {
+export function toDockerRunArgs(base: {
   containerName: string;
   image: string;
   env?: string[];
@@ -140,7 +158,7 @@ function toDockerRunArgs(base: {
   return args;
 }
 
-async function mountProjectDirectory(request: MountProjectRequest): Promise<JsonMap> {
+export async function mountProjectDirectory(request: MountProjectRequest): Promise<JsonMap> {
   if (!request.confirm) {
     throw new Error("Mount operation requires explicit confirmation.");
   }
@@ -211,7 +229,7 @@ async function mountProjectDirectory(request: MountProjectRequest): Promise<Json
   };
 }
 
-async function route(req: http.IncomingMessage, res: http.ServerResponse, token: string): Promise<void> {
+export async function route(req: http.IncomingMessage, res: http.ServerResponse, token: string): Promise<void> {
   if (!isLoopback(req.socket.remoteAddress)) {
     sendJson(res, 403, { error: "Loopback requests only." });
     return;
@@ -223,23 +241,37 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, token:
 
   if (req.method === "POST" && req.url === "/pick-directory") {
     try {
+      if (!String(req.headers["content-type"] || "").toLowerCase().includes("application/json")) {
+        throw new RequestError(415, "Unsupported media type: expected application/json.");
+      }
       const body = await readJsonBody(req);
       const initialPath = typeof body.initialPath === "string" ? body.initialPath : process.cwd();
       const selected = await pickDirectoryNative(initialPath);
       sendJson(res, 200, { path: selected });
     } catch (error) {
-      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+      if (error instanceof RequestError) {
+        sendJson(res, error.status, { error: error.message });
+      } else {
+        sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+      }
     }
     return;
   }
 
   if (req.method === "POST" && req.url === "/container/mount-project") {
     try {
+      if (!String(req.headers["content-type"] || "").toLowerCase().includes("application/json")) {
+        throw new RequestError(415, "Unsupported media type: expected application/json.");
+      }
       const body = (await readJsonBody(req)) as MountProjectRequest;
       const payload = await mountProjectDirectory(body);
       sendJson(res, 200, payload);
     } catch (error) {
-      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+      if (error instanceof RequestError) {
+        sendJson(res, error.status, { error: error.message });
+      } else {
+        sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+      }
     }
     return;
   }
@@ -271,7 +303,9 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((error) => {
-  process.stderr.write(`ICA helper failed: ${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    process.stderr.write(`ICA helper failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}

@@ -64,7 +64,6 @@ Final output:
 
 Canonical prompt source:
 - [skills/ica-bootstrap/assets/INITIAL_PROMPT.md](https://github.com/intelligentcode-ai/skills/blob/master/skills/ica-bootstrap/assets/INITIAL_PROMPT.md)
-
 ## Multi-Source Skills (Clear + Explicit)
 
 ICA supports multiple skill repositories side-by-side.

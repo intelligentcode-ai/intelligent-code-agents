@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.3] - 2026-02-13
+
+### Changed
+- Replaced outdated `SECURITY.md` incident text with a current vulnerability reporting and disclosure policy.
+- Removed obsolete legacy template docs (`agenttask-templates-guide.md`, `template-extensions.md`) that are no longer part of active ICA workflows.
+- Updated `docs/index.md` to remove links to deleted legacy template pages.
+
+## [12.0.2] - 2026-02-13
+
+### Security
+- Redacted and sanitized repository auth/sync errors before persisting source state or returning API responses.
+- Normalized source and hook repository URLs to strip embedded credentials before storage.
+- Hardened dashboard API exposure by requiring explicit `--allow-remote=true` for non-loopback access.
+- Enforced helper API request-body limits and stricter JSON/content-type validation to reduce local DoS risk.
+
+### Added
+- Security regression tests for helper body limits, URL credential stripping, and error-message redaction.
+
+## [12.0.1] - 2026-02-13
+
+### Added
+- New `ica launch` CLI command for starting the local dashboard with optional host/port/open flags.
+- Bootstrap launch regression tests covering source-artifact selection and launch guidance in both shell and PowerShell installers.
+
+### Changed
+- Bootstrap installers now download signed source release artifacts (`ica-<tag>-source.tar.gz`) and verify against `SHA256SUMS.txt`.
+- Bootstrap flow now prints explicit post-install next steps for `ica install` and `ica launch --open=true`.
+- Installation docs now link release artifacts directly and document CLI-first launch workflow.
+
+### Fixed
+- Dashboard tab order restored so `Hooks` appears before `Settings`.
+- README dashboard walkthrough restored with a dedicated hooks step and matching screenshot asset.
+
 ## [12.0.0] - 2026-02-13
 
 ### Added

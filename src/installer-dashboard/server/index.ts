@@ -16,6 +16,7 @@ import { loadHookCatalogFromSources, HookInstallSelection } from "../../installe
 import { executeHookOperation, HookInstallRequest, HookTargetPlatform } from "../../installer-core/hookExecutor";
 import { loadHookInstallState } from "../../installer-core/hookState";
 import { registerRepository } from "../../installer-core/repositories";
+import { redactSensitive, safeErrorMessage } from "../../installer-core/security";
 import { loadInstallState } from "../../installer-core/state";
 import { discoverTargets, resolveTargetPaths } from "../../installer-core/targets";
 import { SUPPORTED_TARGETS } from "../../installer-core/constants";
@@ -62,6 +63,7 @@ function capabilityRegistry(): Capability[] {
 }
 
 const HOOK_CAPABLE_TARGETS = new Set<HookTargetPlatform>(["claude", "gemini"]);
+const LOOPBACK_IPS = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
 function parseScope(value?: string): InstallScope {
   return value === "project" ? "project" : "user";
@@ -78,6 +80,45 @@ function parseTargets(value?: string): TargetPlatform[] {
     .filter((item): item is TargetPlatform => SUPPORTED_TARGETS.includes(item as TargetPlatform));
 
   return Array.from(new Set(parsed));
+}
+
+function sanitizeError(value: unknown, fallback = "Operation failed."): string {
+  return safeErrorMessage(value, fallback);
+}
+
+function toPublicSource(source: {
+  id: string;
+  name: string;
+  repoUrl: string;
+  transport: "https" | "ssh";
+  official: boolean;
+  enabled: boolean;
+  skillsRoot?: string;
+  hooksRoot?: string;
+  credentialRef?: string;
+  removable: boolean;
+  lastSyncAt?: string;
+  lastError?: string;
+  revision?: string;
+}): {
+  id: string;
+  name: string;
+  repoUrl: string;
+  transport: "https" | "ssh";
+  official: boolean;
+  enabled: boolean;
+  skillsRoot?: string;
+  hooksRoot?: string;
+  credentialRef?: string;
+  removable: boolean;
+  lastSyncAt?: string;
+  lastError?: string;
+  revision?: string;
+} {
+  return {
+    ...source,
+    lastError: source.lastError ? redactSensitive(source.lastError) : undefined,
+  };
 }
 
 const HELPER_HOST = "127.0.0.1";
@@ -311,7 +352,22 @@ async function main(): Promise<void> {
     return {
       generatedAt: catalog.generatedAt,
       version: catalog.version,
-      sources: catalog.sources,
+      sources: catalog.sources.map((source) =>
+        toPublicSource({
+          id: source.id,
+          name: source.name,
+          repoUrl: source.repoUrl,
+          transport: source.transport,
+          official: source.official,
+          enabled: source.enabled,
+          skillsRoot: source.skillsRoot,
+          credentialRef: source.credentialRef,
+          removable: source.removable,
+          lastSyncAt: source.lastSyncAt,
+          lastError: source.lastError,
+          revision: source.revision,
+        }),
+      ),
       skills: catalog.skills,
     };
   });
@@ -321,7 +377,22 @@ async function main(): Promise<void> {
     return {
       generatedAt: catalog.generatedAt,
       version: catalog.version,
-      sources: catalog.sources,
+      sources: catalog.sources.map((source) =>
+        toPublicSource({
+          id: source.id,
+          name: source.name,
+          repoUrl: source.repoUrl,
+          transport: source.transport,
+          official: source.official,
+          enabled: source.enabled,
+          hooksRoot: source.hooksRoot,
+          credentialRef: source.credentialRef,
+          removable: source.removable,
+          lastSyncAt: source.lastSyncAt,
+          lastError: source.lastError,
+          revision: source.revision,
+        }),
+      ),
       hooks: catalog.hooks,
     };
   });
@@ -502,7 +573,9 @@ async function main(): Promise<void> {
     }
 
     return {
-      sources: Array.from(byId.values()).sort((a, b) => a.id.localeCompare(b.id)),
+      sources: Array.from(byId.values())
+        .map((source) => toPublicSource(source))
+        .sort((a, b) => a.id.localeCompare(b.id)),
     };
   });
 
@@ -596,7 +669,7 @@ async function main(): Promise<void> {
 
       return { source };
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+      return reply.code(400).send({ error: sanitizeError(error) });
     }
   });
 
@@ -618,7 +691,7 @@ async function main(): Promise<void> {
       await credentialProvider.delete(params.id);
       return { source: removed || { id: params.id } };
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+      return reply.code(400).send({ error: sanitizeError(error) });
     }
   });
 
@@ -673,7 +746,7 @@ async function main(): Promise<void> {
           const result = await syncSource(skillSource, credentialProvider);
           refreshed.push({ type: "skills", revision: result.revision, localPath: result.localPath });
         } catch (error) {
-          refreshed.push({ type: "skills", error: error instanceof Error ? error.message : String(error) });
+          refreshed.push({ type: "skills", error: sanitizeError(error) });
         }
       }
       if (hookSource) {
@@ -681,12 +754,12 @@ async function main(): Promise<void> {
           const result = await syncHookSource(hookSource, credentialProvider);
           refreshed.push({ type: "hooks", revision: result.revision, localPath: result.localPath });
         } catch (error) {
-          refreshed.push({ type: "hooks", error: error instanceof Error ? error.message : String(error) });
+          refreshed.push({ type: "hooks", error: sanitizeError(error) });
         }
       }
       return { sourceId: params.id, refreshed };
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+      return reply.code(400).send({ error: sanitizeError(error) });
     }
   });
 
@@ -719,7 +792,7 @@ async function main(): Promise<void> {
           const result = await syncSource(entry.skills, credentialProvider);
           item.skills = { revision: result.revision, localPath: result.localPath };
         } catch (error) {
-          item.skills = { error: error instanceof Error ? error.message : String(error) };
+          item.skills = { error: sanitizeError(error) };
         }
       }
       if (entry.hooks) {
@@ -727,7 +800,7 @@ async function main(): Promise<void> {
           const result = await syncHookSource(entry.hooks, credentialProvider);
           item.hooks = { revision: result.revision, localPath: result.localPath };
         } catch (error) {
-          item.hooks = { error: error instanceof Error ? error.message : String(error) };
+          item.hooks = { error: sanitizeError(error) };
         }
       }
       refreshed.push(item);
@@ -747,7 +820,7 @@ async function main(): Promise<void> {
       });
       return payload;
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+      return reply.code(400).send({ error: sanitizeError(error) });
     }
   });
 
@@ -767,21 +840,21 @@ async function main(): Promise<void> {
       });
       return payload;
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+      return reply.code(400).send({ error: sanitizeError(error) });
     }
   });
 
+  const allowRemoteApi = process.env.ICA_DASHBOARD_ALLOW_REMOTE === "true";
   app.addHook("preHandler", async (request, reply) => {
-    if (!["POST", "PATCH", "DELETE"].includes(request.method) || !request.url.startsWith("/api/v1/")) {
+    if (!request.url.startsWith("/api/v1/")) {
       return;
     }
 
-    const loopbackIps = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
-    if (!loopbackIps.has(request.ip)) {
+    if (!allowRemoteApi && !LOOPBACK_IPS.has(request.ip)) {
       return reply.code(403).send({ error: "Forbidden: dashboard API accepts local loopback requests only." });
     }
 
-    if (request.method !== "DELETE") {
+    if (["POST", "PATCH", "DELETE"].includes(request.method) && request.method !== "DELETE") {
       const contentType = String(request.headers["content-type"] || "");
       if (!contentType.toLowerCase().includes("application/json")) {
         return reply.code(415).send({ error: "Unsupported media type: expected application/json." });
@@ -986,6 +1059,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  process.stderr.write(`Dashboard startup failed: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(`Dashboard startup failed: ${sanitizeError(error)}\n`);
   process.exitCode = 1;
 });

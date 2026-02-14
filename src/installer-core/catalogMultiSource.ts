@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createCredentialProvider } from "./credentials";
+import { safeErrorMessage } from "./security";
 import { setSourceSyncStatus, ensureSourceRegistry, OFFICIAL_SOURCE_ID } from "./sources";
 import { syncSource } from "./sourceSync";
 import { CatalogSkill, InstallSelection, SkillCatalog, SkillResource, SkillSource, TargetPlatform } from "./types";
@@ -283,7 +284,7 @@ export async function buildMultiSourceCatalog(options: CatalogOptions): Promise<
         if (item) catalogSkills.push(item);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = safeErrorMessage(error, "Source refresh failed.");
       hydratedSources.push({
         ...source,
         lastError: message,
