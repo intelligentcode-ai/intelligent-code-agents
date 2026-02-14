@@ -52,3 +52,32 @@ test("buildLocalCatalog excludes blocked ICA command skills", () => {
   assert.equal(catalog.skills.length, 1);
   assert.equal(catalog.skills[0].name, "reviewer");
 });
+
+test("buildLocalCatalog parses scope/subcategory/tags from skill frontmatter", () => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-catalog-test-"));
+  const skillRoot = path.join(tmpRoot, "src", "skills", "demo");
+  fs.mkdirSync(skillRoot, { recursive: true });
+  fs.writeFileSync(
+    path.join(skillRoot, "SKILL.md"),
+    `---
+name: demo
+description: Demo skill
+category: command
+scope: system-management
+subcategory: setup
+tags:
+  - onboarding
+  - bootstrap
+---
+
+# Demo
+`,
+    "utf8",
+  );
+
+  const catalog = buildLocalCatalog(tmpRoot, "1.0.0");
+  assert.equal(catalog.skills.length, 1);
+  assert.equal(catalog.skills[0].scope, "system-management");
+  assert.equal(catalog.skills[0].subcategory, "setup");
+  assert.deepEqual(catalog.skills[0].tags, ["onboarding", "bootstrap"]);
+});

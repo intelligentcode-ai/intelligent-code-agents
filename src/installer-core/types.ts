@@ -38,6 +38,12 @@ export interface CatalogSkill {
   name: string;
   description: string;
   category: string;
+  scope?: string;
+  subcategory?: string;
+  tags?: string[];
+  author?: string;
+  contactEmail?: string;
+  website?: string;
   dependencies: string[];
   compatibleTargets: TargetPlatform[];
   resources: SkillResource[];

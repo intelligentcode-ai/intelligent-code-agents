@@ -4,9 +4,18 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { addSource, ensureSourceRegistry, getSourcesFilePath, loadSources, OFFICIAL_SOURCE_ID } from "../../src/installer-core/sources";
+import {
+  addSource,
+  ensureSourceRegistry,
+  getSourcesFilePath,
+  loadSources,
+  OFFICIAL_SOURCE_ID,
+  setSourceSyncStatus,
+  updateSource,
+} from "../../src/installer-core/sources";
 import { createCredentialProvider } from "../../src/installer-core/credentials";
 import { resolveInstallSelections } from "../../src/installer-core/catalogMultiSource";
+import { buildMultiSourceCatalog } from "../../src/installer-core/catalogMultiSource";
 import { syncSource } from "../../src/installer-core/sourceSync";
 import { getSourceSkillsPath } from "../../src/installer-core/sources";
 import { reconcileLegacyManagedSkills } from "../../src/installer-core/state";
@@ -226,4 +235,80 @@ test("reconcileLegacyManagedSkills marks missing source bindings as orphaned", (
   );
 
   assert.equal(state.managedSkills[0].orphaned, true);
+});
+
+test("buildMultiSourceCatalog consumes skills.index.json metadata when present", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-sources-test-"));
+  const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-source-repo-"));
+  const repoDir = path.join(sourceRoot, "repo");
+  const previous = process.env.ICA_STATE_HOME;
+  process.env.ICA_STATE_HOME = tempRoot;
+
+  try {
+    fs.mkdirSync(path.join(repoDir, "skills", "index-demo"), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoDir, "skills", "index-demo", "SKILL.md"),
+      "---\nname: index-demo\ndescription: from-skill\ncategory: process\n---\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(repoDir, "skills.index.json"),
+      JSON.stringify(
+        {
+          version: "1",
+          generatedAt: "2026-01-01T00:00:00.000Z",
+          skills: [
+            {
+              name: "index-demo",
+              description: "from-index",
+              category: "command",
+              scope: "social-media",
+              subcategory: "publishing",
+              tags: ["content", "scheduler"],
+              version: "2.0.0",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    execFileSync("git", ["init", "-q"], { cwd: repoDir });
+    execFileSync("git", ["add", "."], { cwd: repoDir });
+    execFileSync("git", ["-c", "user.name=ICA Test", "-c", "user.email=ica-test@example.com", "commit", "-q", "-m", "seed"], {
+      cwd: repoDir,
+    });
+
+    await ensureSourceRegistry();
+    await updateSource(OFFICIAL_SOURCE_ID, { enabled: false });
+    await addSource({
+      id: "index-metadata-source",
+      name: "index-metadata-source",
+      repoUrl: `file://${repoDir}`,
+      transport: "https",
+      skillsRoot: "/skills",
+      enabled: true,
+      removable: true,
+    });
+
+    const catalog = await buildMultiSourceCatalog({
+      repoVersion: "1.0.0",
+      refresh: true,
+    });
+    const entry = catalog.skills.find((skill) => skill.skillId === "index-metadata-source/index-demo");
+    assert.ok(entry);
+    assert.equal(entry?.description, "from-index");
+    assert.equal(entry?.category, "command");
+    assert.equal(entry?.scope, "social-media");
+    assert.equal(entry?.subcategory, "publishing");
+    assert.deepEqual(entry?.tags, ["content", "scheduler"]);
+    assert.equal(entry?.version, "2.0.0");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ICA_STATE_HOME;
+    } else {
+      process.env.ICA_STATE_HOME = previous;
+    }
+  }
 });

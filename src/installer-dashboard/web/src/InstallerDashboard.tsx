@@ -27,6 +27,12 @@ type Skill = {
   name: string;
   description: string;
   category: string;
+  scope?: string;
+  subcategory?: string;
+  tags?: string[];
+  author?: string;
+  contactEmail?: string;
+  website?: string;
   resources: Array<{ type: string; path: string }>;
   version?: string;
   updatedAt?: string;
@@ -252,6 +258,9 @@ export function InstallerDashboard(): JSX.Element {
   const [appearanceBackground, setAppearanceBackground] = useState<DashboardBackground>(() => readStoredAppearance().background);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [scopeFilter, setScopeFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [tagFilter, setTagFilter] = useState<string>("all");
   const [installedOnly, setInstalledOnly] = useState(false);
   const [hookSourceFilter, setHookSourceFilter] = useState<string>("all");
   const [hooksInstalledOnly, setHooksInstalledOnly] = useState(false);
@@ -305,6 +314,15 @@ export function InstallerDashboard(): JSX.Element {
   const sourceFilterOptions = useMemo(() => {
     return Array.from(new Set(skills.map((skill) => skill.sourceId))).sort((a, b) => a.localeCompare(b));
   }, [skills]);
+  const scopeFilterOptions = useMemo(() => {
+    return Array.from(new Set(skills.map((skill) => (skill.scope || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  }, [skills]);
+  const categoryFilterOptions = useMemo(() => {
+    return Array.from(new Set(skills.map((skill) => skill.category).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  }, [skills]);
+  const tagFilterOptions = useMemo(() => {
+    return Array.from(new Set(skills.flatMap((skill) => skill.tags || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  }, [skills]);
   const hookSourceFilterOptions = useMemo(() => {
     return Array.from(new Set(hooks.map((hook) => hook.sourceId))).sort((a, b) => a.localeCompare(b));
   }, [hooks]);
@@ -314,6 +332,15 @@ export function InstallerDashboard(): JSX.Element {
       if (sourceFilter !== "all" && skill.sourceId !== sourceFilter) {
         return false;
       }
+      if (scopeFilter !== "all" && (skill.scope || "") !== scopeFilter) {
+        return false;
+      }
+      if (categoryFilter !== "all" && skill.category !== categoryFilter) {
+        return false;
+      }
+      if (tagFilter !== "all" && !(skill.tags || []).includes(tagFilter)) {
+        return false;
+      }
       if (installedOnly && !installedSkillIds.has(skill.skillId)) {
         return false;
       }
@@ -321,10 +348,11 @@ export function InstallerDashboard(): JSX.Element {
         return true;
       }
       const resourceText = skill.resources.map((item) => `${item.type} ${item.path}`).join(" ");
-      const haystack = `${skill.skillId} ${skill.description} ${skill.category} ${resourceText}`.toLowerCase();
+      const tagText = (skill.tags || []).join(" ");
+      const haystack = `${skill.skillId} ${skill.description} ${skill.category} ${skill.scope || ""} ${skill.subcategory || ""} ${tagText} ${resourceText}`.toLowerCase();
       return haystack.includes(normalizedQuery);
     });
-  }, [skills, sourceFilter, installedOnly, installedSkillIds, normalizedQuery]);
+  }, [skills, sourceFilter, scopeFilter, categoryFilter, tagFilter, installedOnly, installedSkillIds, normalizedQuery]);
 
   const filteredCategorized = useMemo(() => {
     const byCategory = new Map<string, Skill[]>();
@@ -1126,7 +1154,7 @@ export function InstallerDashboard(): JSX.Element {
               <div className="catalog-controls">
                 <input
                   className="input input-search"
-                  placeholder="Search source/skill, descriptions, resources…"
+                  placeholder="Search source/skill, scope, category, tags, resources…"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                 />
@@ -1149,6 +1177,64 @@ export function InstallerDashboard(): JSX.Element {
                           onClick={() => setSourceFilter(sourceId)}
                         >
                           {sourceNameById.get(sourceId) || sourceId}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="source-filter">
+                    <span className="filter-label">Scope</span>
+                    <div className="source-chip-row">
+                      <button className={`chip chip-filter ${scopeFilter === "all" ? "is-active" : ""}`} type="button" onClick={() => setScopeFilter("all")}>
+                        all
+                      </button>
+                      {scopeFilterOptions.map((scopeId) => (
+                        <button
+                          key={scopeId}
+                          className={`chip chip-filter ${scopeFilter === scopeId ? "is-active" : ""}`}
+                          type="button"
+                          onClick={() => setScopeFilter(scopeId)}
+                        >
+                          {titleCase(scopeId)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="source-filter">
+                    <span className="filter-label">Category</span>
+                    <div className="source-chip-row">
+                      <button
+                        className={`chip chip-filter ${categoryFilter === "all" ? "is-active" : ""}`}
+                        type="button"
+                        onClick={() => setCategoryFilter("all")}
+                      >
+                        all
+                      </button>
+                      {categoryFilterOptions.map((categoryId) => (
+                        <button
+                          key={categoryId}
+                          className={`chip chip-filter ${categoryFilter === categoryId ? "is-active" : ""}`}
+                          type="button"
+                          onClick={() => setCategoryFilter(categoryId)}
+                        >
+                          {titleCase(categoryId)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="source-filter">
+                    <span className="filter-label">Tag</span>
+                    <div className="source-chip-row">
+                      <button className={`chip chip-filter ${tagFilter === "all" ? "is-active" : ""}`} type="button" onClick={() => setTagFilter("all")}>
+                        all
+                      </button>
+                      {tagFilterOptions.map((tagId) => (
+                        <button
+                          key={tagId}
+                          className={`chip chip-filter ${tagFilter === tagId ? "is-active" : ""}`}
+                          type="button"
+                          onClick={() => setTagFilter(tagId)}
+                        >
+                          {tagId}
                         </button>
                       ))}
                     </div>
@@ -1201,6 +1287,17 @@ export function InstallerDashboard(): JSX.Element {
                               </div>
                             </div>
                             <p className="skill-description">{skill.description}</p>
+                            {(skill.scope || skill.subcategory || (skill.tags && skill.tags.length > 0)) && (
+                              <div className="skill-badges">
+                                {skill.scope && <span className="badge">scope: {skill.scope}</span>}
+                                {skill.subcategory && <span className="badge">sub: {skill.subcategory}</span>}
+                                {(skill.tags || []).slice(0, 3).map((tag) => (
+                                  <span key={`${skill.skillId}-tag-${tag}`} className="badge">
+                                    #{tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             {skill.resources.length > 0 && (
                               <details className="skill-resources">
                                 <summary>Resources ({skill.resources.length})</summary>
