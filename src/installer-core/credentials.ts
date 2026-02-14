@@ -4,6 +4,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { ensureDir, pathExists, readText, writeText } from "./fs";
+import { hasExecutable, safeErrorMessage } from "./security";
 import { getIcaStateRoot } from "./sources";
 
 const execFileAsync = promisify(execFile);
@@ -108,14 +109,7 @@ class KeychainCredentialProvider implements CredentialProvider {
   }
 
   private async hasCommand(command: string): Promise<boolean> {
-    try {
-      const checker = os.platform() === "win32" ? "where" : "command";
-      const args = os.platform() === "win32" ? [command] : ["-v", command];
-      await execFileAsync(checker, args);
-      return true;
-    } catch {
-      return false;
-    }
+    return hasExecutable(command, os.platform());
   }
 
   private async ensureAvailable(): Promise<boolean> {
@@ -140,7 +134,7 @@ class KeychainCredentialProvider implements CredentialProvider {
         secret,
       ]);
     } catch (error) {
-      throw new Error(`Keychain store failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Keychain store failed: ${safeErrorMessage(error)}`);
     }
   }
 

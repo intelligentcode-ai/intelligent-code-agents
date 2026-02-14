@@ -1,5 +1,6 @@
 import path from "node:path";
 import { ensureDir, pathExists, readText, writeText } from "./fs";
+import { redactSensitive, stripUrlCredentials } from "./security";
 import { getIcaStateRoot } from "./sources";
 import { SourceTransport } from "./types";
 
@@ -122,11 +123,12 @@ export function getHookSourceHooksPath(sourceId: string): string {
 }
 
 function normalizeHookSource(source: HookSource): HookSource {
+  const cleanRepoUrl = stripUrlCredentials(source.repoUrl.trim());
   return {
     ...source,
     id: slug(source.id),
     name: source.name?.trim() || source.id,
-    repoUrl: source.repoUrl.trim(),
+    repoUrl: cleanRepoUrl,
     transport: source.transport || detectTransport(source.repoUrl),
     hooksRoot: normalizeHooksRoot(source.hooksRoot),
     official: Boolean(source.official),
@@ -134,7 +136,7 @@ function normalizeHookSource(source: HookSource): HookSource {
     removable: source.removable !== false,
     credentialRef: source.credentialRef?.trim() || undefined,
     lastSyncAt: source.lastSyncAt,
-    lastError: source.lastError,
+    lastError: source.lastError ? redactSensitive(source.lastError) : undefined,
     localPath: source.localPath,
     localHooksPath: source.localHooksPath,
     revision: source.revision,
@@ -241,10 +243,11 @@ export async function setHookSourceSyncStatus(
   if (idx === -1) return;
 
   const source = sources[idx];
+  const nextError = typeof status.lastError === "string" ? redactSensitive(status.lastError) : status.lastError;
   const next: HookSource = {
     ...source,
     lastSyncAt: status.lastSyncAt ?? source.lastSyncAt,
-    lastError: status.lastError,
+    lastError: nextError,
     localPath: status.localPath ?? source.localPath,
     localHooksPath: status.localHooksPath ?? source.localHooksPath,
     revision: status.revision ?? source.revision,

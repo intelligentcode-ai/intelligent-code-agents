@@ -1,6 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import { ensureDir, pathExists, readText, writeText } from "./fs";
+import { redactSensitive, stripUrlCredentials } from "./security";
 import { SourceTransport, SkillSource } from "./types";
 
 export const OFFICIAL_SOURCE_ID = "official-skills";
@@ -112,11 +113,12 @@ export function getSourceSkillsPath(sourceId: string): string {
 }
 
 function normalizeSource(source: SkillSource): SkillSource {
+  const cleanRepoUrl = stripUrlCredentials(source.repoUrl.trim());
   return {
     ...source,
     id: slug(source.id),
     name: source.name?.trim() || source.id,
-    repoUrl: source.repoUrl.trim(),
+    repoUrl: cleanRepoUrl,
     transport: source.transport || detectTransport(source.repoUrl),
     skillsRoot: normalizeSkillsRoot(source.skillsRoot),
     official: Boolean(source.official),
@@ -124,7 +126,7 @@ function normalizeSource(source: SkillSource): SkillSource {
     removable: source.removable !== false,
     credentialRef: source.credentialRef?.trim() || undefined,
     lastSyncAt: source.lastSyncAt,
-    lastError: source.lastError,
+    lastError: source.lastError ? redactSensitive(source.lastError) : undefined,
     localPath: source.localPath,
     localSkillsPath: source.localSkillsPath,
     revision: source.revision,
@@ -232,10 +234,11 @@ export async function setSourceSyncStatus(
   if (idx === -1) return;
 
   const source = sources[idx];
+  const nextError = typeof status.lastError === "string" ? redactSensitive(status.lastError) : status.lastError;
   const next: SkillSource = {
     ...source,
       lastSyncAt: status.lastSyncAt ?? source.lastSyncAt,
-      lastError: status.lastError,
+      lastError: nextError,
       localPath: status.localPath ?? source.localPath,
       localSkillsPath: status.localSkillsPath ?? source.localSkillsPath,
       revision: status.revision ?? source.revision,

@@ -106,6 +106,67 @@ test("custom repositories are stored and reloaded from disk", async () => {
   }
 });
 
+test("source sync status redacts credential leaks in lastError", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-sources-test-"));
+  const previous = process.env.ICA_STATE_HOME;
+  process.env.ICA_STATE_HOME = tempRoot;
+
+  try {
+    await addSource({
+      id: "sanitized-source",
+      name: "sanitized-source",
+      repoUrl: "https://github.com/example/sanitized-source.git",
+      transport: "https",
+      skillsRoot: "/skills",
+      enabled: true,
+      removable: true,
+    });
+
+    await setSourceSyncStatus("sanitized-source", {
+      lastError: "fatal: could not read from https://oauth2:mySecretCredential@github.com/example/sanitized-source.git",
+    });
+
+    const reloaded = await loadSources();
+    const match = reloaded.find((source) => source.id === "sanitized-source");
+    assert.ok(match?.lastError);
+    assert.equal(match?.lastError?.includes("mySecretCredential"), false);
+    assert.equal(match?.lastError?.includes("<redacted>"), true);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ICA_STATE_HOME;
+    } else {
+      process.env.ICA_STATE_HOME = previous;
+    }
+  }
+});
+
+test("source registry strips credentials from repo URL before persistence", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-sources-test-"));
+  const previous = process.env.ICA_STATE_HOME;
+  process.env.ICA_STATE_HOME = tempRoot;
+
+  try {
+    await addSource({
+      id: "credential-url-source",
+      name: "credential-url-source",
+      repoUrl: "https://oauth2:myCredential1234567890@github.com/example/private-skills.git",
+      transport: "https",
+      skillsRoot: "/skills",
+      enabled: true,
+      removable: true,
+    });
+    const loaded = await loadSources();
+    const match = loaded.find((source) => source.id === "credential-url-source");
+    assert.equal(match?.repoUrl, "https://github.com/example/private-skills.git");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ICA_STATE_HOME;
+    } else {
+      process.env.ICA_STATE_HOME = previous;
+    }
+  }
+});
+
 test("synced skills are stored in ~/.ica/<source>/skills", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-sources-test-"));
   const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-source-repo-"));

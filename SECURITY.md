@@ -1,34 +1,31 @@
-# Security Notice
+# Security Policy
 
-## Memory Files in Git History
+## Supported Versions
 
-### Issue
-Between commits 5ca1914 and 9e9518a, memory files were incorrectly committed to the repository. These files should have been local-only as per system design.
+Security fixes are applied to the latest release line of ICA.
+If you are on an older version, update to the newest release first.
 
-### Impact
-- No actual credentials or tokens were exposed
-- The files contain system learning patterns and behavioral documentation
-- These files have been removed from tracking as of commit 9e9518a
+## Reporting a Vulnerability
 
-### Mitigation
-1. All memory files have been removed from current version
-2. The memory/ directory is properly gitignored
-3. No sensitive credentials were found in the exposed files
+Please do not open public issues for security reports.
 
-### Going Forward
-- Memory files will remain local-only
-- The .gitignore properly excludes memory/ directory
-- PRB execution will no longer create memory files in version control
+Report privately via:
+- GitHub Security Advisories (preferred): `Security` tab on this repository
+- Email: `security@intelligentcode.ai`
 
-### For Users
-If you have cloned this repository, ensure your local memory/ directory is not tracked:
-```bash
-git rm --cached -r memory/
-git commit -m "Remove memory from tracking"
-```
+Include:
+- affected version/commit
+- reproduction steps
+- impact assessment
+- any proposed mitigation
 
-## Affected Releases
-- v6.8.1
-- v6.8.2
+## Response Expectations
 
-These releases contain memory files that should not have been included.
+- Initial acknowledgment target: within 3 business days
+- Triage + severity assignment: as quickly as possible after reproduction
+- Fix timeline: based on severity and exploitability
+
+## Disclosure
+
+We follow coordinated disclosure. Public details are shared after a fix is available
+or after mitigation guidance is provided.
