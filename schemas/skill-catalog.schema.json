@@ -58,6 +58,12 @@
           "name": { "type": "string" },
           "description": { "type": "string" },
           "category": { "type": "string" },
+          "scope": { "type": "string" },
+          "subcategory": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "author": { "type": "string" },
+          "contactEmail": { "type": "string" },
+          "website": { "type": "string" },
           "dependencies": { "type": "array", "items": { "type": "string" } },
           "compatibleTargets": {
             "type": "array",

@@ -4,35 +4,22 @@ import { SkillCatalog, SkillCatalogEntry, SkillResource, TargetPlatform } from "
 import { buildMultiSourceCatalog } from "./catalogMultiSource";
 import { isSkillBlocked } from "./skillBlocklist";
 import { DEFAULT_SKILLS_ROOT, OFFICIAL_SOURCE_ID, OFFICIAL_SOURCE_NAME, OFFICIAL_SOURCE_URL } from "./sources";
+import { frontmatterList, frontmatterString, parseFrontmatter } from "./skillMetadata";
 
-const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
 interface LocalCatalogEntry {
   name: string;
   description: string;
   category: string;
+  scope?: string;
+  subcategory?: string;
+  tags?: string[];
+  author?: string;
+  contactEmail?: string;
+  website?: string;
   dependencies: string[];
   compatibleTargets: TargetPlatform[];
   resources: SkillResource[];
   sourcePath: string;
-}
-
-function parseFrontmatter(content: string): Record<string, string> {
-  const match = content.match(FRONTMATTER_RE);
-  if (!match) {
-    return {};
-  }
-
-  const map: Record<string, string> = {};
-  for (const line of match[1].split("\n")) {
-    const idx = line.indexOf(":");
-    if (idx === -1) continue;
-    const key = line.slice(0, idx).trim();
-    const value = line.slice(idx + 1).trim();
-    if (key) {
-      map[key] = value;
-    }
-  }
-  return map;
 }
 
 function inferCategory(skillName: string): string {
@@ -92,17 +79,29 @@ function toCatalogEntry(skillDir: string, repoRoot: string): LocalCatalogEntry |
 
   const content = fs.readFileSync(skillFile, "utf8");
   const frontmatter = parseFrontmatter(content);
-  const name = frontmatter.name || path.basename(skillDir);
+  const name = frontmatterString(frontmatter, "name") || path.basename(skillDir);
   if (isSkillBlocked(name)) {
     return null;
   }
-  const description = frontmatter.description || "";
-  const explicitCategory = (frontmatter.category || "").trim().toLowerCase();
+  const description = frontmatterString(frontmatter, "description") || "";
+  const explicitCategory = (frontmatterString(frontmatter, "category") || "").trim().toLowerCase();
+  const scope = (frontmatterString(frontmatter, "scope") || "").trim().toLowerCase() || undefined;
+  const subcategory = (frontmatterString(frontmatter, "subcategory") || "").trim().toLowerCase() || undefined;
+  const tags = frontmatterList(frontmatter, "tags");
+  const author = frontmatterString(frontmatter, "author");
+  const contactEmail = frontmatterString(frontmatter, "contact-email") || frontmatterString(frontmatter, "contactEmail");
+  const website = frontmatterString(frontmatter, "website");
 
   return {
     name,
     description,
     category: explicitCategory || inferCategory(name),
+    scope,
+    subcategory,
+    tags: tags.length > 0 ? tags : undefined,
+    author,
+    contactEmail,
+    website,
     dependencies: [],
     compatibleTargets: ["claude", "codex", "cursor", "gemini", "antigravity"] satisfies TargetPlatform[],
     resources: collectResources(skillDir),
