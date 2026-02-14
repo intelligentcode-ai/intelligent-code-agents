@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.4] - 2026-02-14
+
+### Fixed
+- Implemented `ica serve` as a supported alias for `ica launch` to prevent bootstrap-installed CLI failures on `serve`.
+- Hardened dashboard launch orchestration so default `ica launch` uses GHCR runtime and opens the browser only after health readiness.
+- Added local runtime auto-build behavior so missing dashboard web assets are built before local launch.
+- Fixed skills catalog refresh behavior when `skills.index.json` is stale by including discovered on-disk skills missing from the index.
+
 ## [12.0.3] - 2026-02-13
 
 ### Changed

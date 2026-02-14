@@ -203,6 +203,21 @@ function toCatalogSkillFromIndex(source: SkillSource, root: string, entry: Skill
   };
 }
 
+function discoverCatalogSkillsFromFilesystem(source: SkillSource, root: string): CatalogSkill[] {
+  const skillDirs = fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(root, entry.name))
+    .sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
+
+  const discovered: CatalogSkill[] = [];
+  for (const skillDir of skillDirs) {
+    const item = toCatalogSkill(source, skillDir);
+    if (item) discovered.push(item);
+  }
+  return discovered;
+}
+
 function loadCatalogSkillsFromIndex(source: SkillSource, localRepoPath: string, root: string): CatalogSkill[] | null {
   const entries = loadSkillIndexEntries(localRepoPath, root);
   if (!entries) {
@@ -211,6 +226,13 @@ function loadCatalogSkillsFromIndex(source: SkillSource, localRepoPath: string, 
   const indexedSkills = entries
     .map((entry) => toCatalogSkillFromIndex(source, root, entry))
     .filter((entry): entry is CatalogSkill => Boolean(entry));
+  const indexedById = new Set(indexedSkills.map((entry) => entry.skillId));
+  const discoveredSkills = discoverCatalogSkillsFromFilesystem(source, root);
+  for (const discovered of discoveredSkills) {
+    if (!indexedById.has(discovered.skillId)) {
+      indexedSkills.push(discovered);
+    }
+  }
   return indexedSkills;
 }
 
@@ -273,16 +295,7 @@ export async function buildMultiSourceCatalog(options: CatalogOptions): Promise<
         continue;
       }
 
-      const skillDirs = fs
-        .readdirSync(root, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => path.join(root, entry.name))
-        .sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
-
-      for (const skillDir of skillDirs) {
-        const item = toCatalogSkill(hydrated, skillDir);
-        if (item) catalogSkills.push(item);
-      }
+      catalogSkills.push(...discoverCatalogSkillsFromFilesystem(hydrated, root));
     } catch (error) {
       const message = safeErrorMessage(error, "Source refresh failed.");
       hydratedSources.push({

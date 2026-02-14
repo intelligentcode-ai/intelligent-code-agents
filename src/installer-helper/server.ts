@@ -127,6 +127,18 @@ export async function dockerInspect(containerName: string): Promise<JsonMap | nu
   }
 }
 
+export function resolveDashboardImage(
+  requestedImage: string | undefined,
+  inspectedImage: string | undefined,
+  fallbackImage: string,
+): string {
+  const requested = (requestedImage || "").trim();
+  if (requested) return requested;
+  const inspected = (inspectedImage || "").trim();
+  if (inspected) return inspected;
+  return fallbackImage;
+}
+
 export function toDockerRunArgs(base: {
   containerName: string;
   image: string;
@@ -171,11 +183,11 @@ export async function mountProjectDirectory(request: MountProjectRequest): Promi
   }
 
   const containerName = request.containerName || process.env.ICA_DASHBOARD_CONTAINER_NAME || "ica-dashboard";
-  const defaultImage = request.image || process.env.ICA_DASHBOARD_IMAGE || "ica-dashboard:local";
+  const defaultImage = (process.env.ICA_DASHBOARD_IMAGE || "ica-dashboard:local").trim();
   const defaultPort = request.port || process.env.ICA_DASHBOARD_PORT_MAPPING || "4173:4173";
   const inspect = await dockerInspect(containerName);
 
-  let image = defaultImage;
+  let image = resolveDashboardImage(request.image, undefined, defaultImage);
   let env: string[] = [];
   let ports: string[] = [defaultPort];
   let binds: string[] = [`${projectPath}:${projectPath}`];
@@ -183,7 +195,7 @@ export async function mountProjectDirectory(request: MountProjectRequest): Promi
   let entrypoint: string[] = [];
 
   if (inspect) {
-    image = String((inspect.Config as JsonMap)?.Image || defaultImage);
+    image = resolveDashboardImage(request.image, String((inspect.Config as JsonMap)?.Image || ""), defaultImage);
     env = Array.isArray((inspect.Config as JsonMap)?.Env) ? (((inspect.Config as JsonMap).Env as unknown[]) as string[]) : [];
     cmd = Array.isArray((inspect.Config as JsonMap)?.Cmd) ? (((inspect.Config as JsonMap).Cmd as unknown[]) as string[]) : [];
     entrypoint = Array.isArray((inspect.Config as JsonMap)?.Entrypoint)

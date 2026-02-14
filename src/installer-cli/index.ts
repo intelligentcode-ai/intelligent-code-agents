@@ -3,8 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
-import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, ChildProcess, ChildProcessWithoutNullStreams, SpawnOptions, execFile } from "node:child_process";
 import readline from "node:readline/promises";
+import { promisify } from "node:util";
 import { stdin as input, stdout as output } from "node:process";
 import { executeOperation } from "../installer-core/executor";
 import { loadCatalogFromSources } from "../installer-core/catalog";
@@ -32,6 +33,8 @@ interface ParsedArgs {
 const HELPER_HOST = "127.0.0.1";
 const HELPER_PORT = Number(process.env.ICA_HELPER_PORT || "4174");
 const HELPER_TOKEN = process.env.ICA_HELPER_TOKEN || crypto.randomBytes(24).toString("hex");
+const DEFAULT_DASHBOARD_IMAGE = "ghcr.io/intelligentcode-ai/ica-installer-dashboard:main";
+const execFileAsync = promisify(execFile);
 let helperProcess: ChildProcessWithoutNullStreams | null = null;
 
 function parseArgv(argv: string[]): ParsedArgs {
@@ -240,7 +243,10 @@ function printHelp(): void {
   output.write(`  ica hooks install [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks uninstall [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks sync [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n\n`);
-  output.write(`  ica launch [--host=127.0.0.1] [--port=4173] [--open=true|false] [--allow-remote=true|false]\n\n`);
+  output.write(
+    `  ica launch [--runtime=ghcr|local] [--host=127.0.0.1] [--port=4173] [--open=true|false] [--allow-remote=true|false] [--container-name=ica-dashboard] [--image=<ghcr-image>]\n`,
+  );
+  output.write(`  ica serve  (alias of launch)\n\n`);
   output.write(`  Note: repository registration is unified. Adding one source auto-registers both skills and hooks mirrors.\n\n`);
   output.write(`  ica container mount-project --project-path=<path> --confirm [--container-name=<name>] [--image=<image>] [--port=<host:container>] [--json]\n\n`);
   output.write(`Common flags:\n`);
@@ -285,6 +291,167 @@ function openBrowser(url: string): void {
 function isLoopbackHost(host: string): boolean {
   const normalized = host.trim().toLowerCase();
   return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
+}
+
+export type DashboardRuntime = "ghcr" | "local";
+
+type FetchResponseLike = {
+  ok: boolean;
+  status: number;
+  json: () => Promise<unknown>;
+};
+
+type SpawnLikeResult = {
+  pid?: number;
+  unref: () => void;
+};
+
+export interface LaunchDependencies {
+  dirname: string;
+  findRepoRoot: (dirname: string) => string;
+  existsSync: (targetPath: string) => boolean;
+  ensureHelperRunning: (repoRoot: string) => Promise<void>;
+  helperRequest: (pathname: string, body: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  fetch: (url: string) => Promise<FetchResponseLike>;
+  delay: (ms: number) => Promise<void>;
+  openBrowser: (url: string) => void;
+  spawn: (command: string, args: string[], options: SpawnOptions) => SpawnLikeResult;
+  execFile: (file: string, args: string[], options?: { cwd?: string; maxBuffer?: number }) => Promise<{ stdout: string; stderr: string }>;
+  write: (message: string) => void;
+  homedir: () => string;
+  readFileSync: (filePath: string, encoding: BufferEncoding) => string;
+  writeFileSync: (filePath: string, data: string, encoding?: BufferEncoding) => void;
+  unlinkSync: (filePath: string) => void;
+  kill: (pid: number, signal?: NodeJS.Signals | number) => boolean;
+}
+
+const defaultLaunchDependencies: LaunchDependencies = {
+  dirname: __dirname,
+  findRepoRoot,
+  existsSync: fs.existsSync,
+  ensureHelperRunning,
+  helperRequest,
+  fetch: async (url: string) => {
+    const response = await fetch(url);
+    return {
+      ok: response.ok,
+      status: response.status,
+      json: () => response.json(),
+    };
+  },
+  delay: async (ms: number) => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  },
+  openBrowser,
+  spawn: (command: string, args: string[], options: SpawnOptions) => spawn(command, args, options) as ChildProcess,
+  execFile: async (file: string, args: string[], options?: { cwd?: string; maxBuffer?: number }) => {
+    const result = (await execFileAsync(file, args, {
+      cwd: options?.cwd,
+      maxBuffer: options?.maxBuffer,
+      encoding: "utf8",
+    })) as { stdout?: string; stderr?: string };
+    return {
+      stdout: result.stdout || "",
+      stderr: result.stderr || "",
+    };
+  },
+  write: (message: string) => output.write(message),
+  homedir: () => os.homedir(),
+  readFileSync: (filePath: string, encoding: BufferEncoding) => fs.readFileSync(filePath, encoding),
+  writeFileSync: (filePath: string, data: string, encoding?: BufferEncoding) => fs.writeFileSync(filePath, data, encoding),
+  unlinkSync: (filePath: string) => fs.unlinkSync(filePath),
+  kill: (pid: number, signal?: NodeJS.Signals | number) => process.kill(pid, signal),
+};
+
+export function normalizeCommand(command: string): string {
+  if (command === "serve") return "launch";
+  return command;
+}
+
+function resolveDashboardRuntime(options: Record<string, string | boolean>): DashboardRuntime {
+  if (boolOption(options, "local", false)) {
+    return "local";
+  }
+  const runtime = stringOption(options, "runtime", "ghcr").trim().toLowerCase();
+  return runtime === "local" ? "local" : "ghcr";
+}
+
+function dashboardPidFilePath(deps: LaunchDependencies): string {
+  return path.join(deps.homedir(), ".ica", "dashboard-local.pid");
+}
+
+function parsePid(raw: string): number | null {
+  const parsed = Number(raw.trim());
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function stopManagedLocalDashboard(deps: LaunchDependencies): void {
+  const pidFile = dashboardPidFilePath(deps);
+  try {
+    const rawPid = deps.readFileSync(pidFile, "utf8");
+    const pid = parsePid(rawPid);
+    if (pid) {
+      try {
+        deps.kill(pid, "SIGTERM");
+      } catch {
+        // process is already gone
+      }
+    }
+    deps.unlinkSync(pidFile);
+  } catch {
+    // no managed local pid available
+  }
+}
+
+async function isDashboardReady(dashboardUrl: string, deps: LaunchDependencies): Promise<boolean> {
+  try {
+    const response = await deps.fetch(`${dashboardUrl}/api/v1/health`);
+    if (!response.ok) return false;
+    const payload = await response.json();
+    return Boolean((payload as { ok?: unknown }).ok);
+  } catch {
+    return false;
+  }
+}
+
+async function waitForDashboardReady(dashboardUrl: string, deps: LaunchDependencies, retries = 80, intervalMs = 250): Promise<boolean> {
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    if (await isDashboardReady(dashboardUrl, deps)) {
+      return true;
+    }
+    await deps.delay(intervalMs);
+  }
+  return false;
+}
+
+async function ensureLocalDashboardBuild(repoRoot: string, deps: LaunchDependencies): Promise<string> {
+  const serverScript = path.join(repoRoot, "dist", "src", "installer-dashboard", "server", "index.js");
+  const webBuildIndex = path.join(repoRoot, "dist", "installer-dashboard", "web-build", "index.html");
+  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+
+  if (!deps.existsSync(serverScript)) {
+    await deps.execFile(npmCommand, ["run", "build:quick", "--silent"], {
+      cwd: repoRoot,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+  }
+  if (!deps.existsSync(webBuildIndex)) {
+    await deps.execFile(npmCommand, ["run", "build:dashboard:web", "--silent"], {
+      cwd: repoRoot,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+  }
+
+  if (!deps.existsSync(serverScript)) {
+    throw new Error("Dashboard runtime is not built. Run: npm run build");
+  }
+  if (!deps.existsSync(webBuildIndex)) {
+    throw new Error("Dashboard web assets are not built. Run: npm run build:dashboard:web");
+  }
+  return serverScript;
 }
 
 async function promptInteractive(command: OperationKind, options: Record<string, string | boolean>): Promise<InstallRequest> {
@@ -930,53 +1097,66 @@ async function runContainer(positionals: string[], options: Record<string, strin
   }
 }
 
-async function runLaunch(options: Record<string, string | boolean>): Promise<void> {
-  const repoRoot = findRepoRoot(__dirname);
+export async function runLaunch(options: Record<string, string | boolean>, deps: LaunchDependencies = defaultLaunchDependencies): Promise<void> {
+  const repoRoot = deps.findRepoRoot(deps.dirname);
   const host = stringOption(options, "host", "127.0.0.1").trim() || "127.0.0.1";
   const port = stringOption(options, "port", "4173").trim() || "4173";
   const allowRemote = boolOption(options, "allow-remote", false);
+  const runtime = resolveDashboardRuntime(options);
+  const openOnReady = boolOption(options, "open", false);
   if (!isLoopbackHost(host) && !allowRemote) {
     throw new Error(
       `Refusing non-loopback dashboard host '${host}' without explicit consent. Use --allow-remote=true if you intentionally want remote API access.`,
     );
   }
   const dashboardUrl = `http://${host}:${port}`;
-  const serverScript = path.join(repoRoot, "dist", "src", "installer-dashboard", "server", "index.js");
+  const containerName = stringOption(options, "container-name", "ica-dashboard").trim() || "ica-dashboard";
+  const image = stringOption(options, "image", process.env.ICA_DASHBOARD_IMAGE || DEFAULT_DASHBOARD_IMAGE).trim() ||
+    DEFAULT_DASHBOARD_IMAGE;
 
-  if (!fs.existsSync(serverScript)) {
-    throw new Error("Dashboard runtime is not built. Run: npm run build");
-  }
-
-  if (boolOption(options, "open", false)) {
-    openBrowser(dashboardUrl);
-  }
-
-  output.write(`Launching ICA dashboard at ${dashboardUrl}\n`);
-  const child = spawn(process.execPath, [serverScript], {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      ICA_DASHBOARD_HOST: host,
-      ICA_DASHBOARD_PORT: port,
-      ICA_DASHBOARD_ALLOW_REMOTE: allowRemote ? "true" : "false",
-    },
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    child.once("error", (error) => reject(error));
-    child.once("exit", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`Dashboard process exited with code ${code ?? "unknown"}`));
+  if (runtime === "ghcr") {
+    await deps.ensureHelperRunning(repoRoot);
+    await deps.helperRequest("/container/mount-project", {
+      projectPath: repoRoot,
+      containerName,
+      image,
+      port: `${port}:4173`,
+      confirm: true,
     });
-  });
+  } else {
+    stopManagedLocalDashboard(deps);
+    const serverScript = await ensureLocalDashboardBuild(repoRoot, deps);
+    const child = deps.spawn(process.execPath, [serverScript], {
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        ICA_DASHBOARD_HOST: host,
+        ICA_DASHBOARD_PORT: port,
+        ICA_DASHBOARD_ALLOW_REMOTE: allowRemote ? "true" : "false",
+      },
+    });
+    if (typeof child.pid === "number") {
+      const pidFile = dashboardPidFilePath(deps);
+      fs.mkdirSync(path.dirname(pidFile), { recursive: true });
+      deps.writeFileSync(pidFile, `${child.pid}\n`, "utf8");
+    }
+    child.unref();
+  }
+
+  const ready = await waitForDashboardReady(dashboardUrl, deps);
+  if (!ready) {
+    throw new Error(`Dashboard did not become ready at ${dashboardUrl}.`);
+  }
+  deps.write(`Launching ICA dashboard at ${dashboardUrl}\n`);
+  if (openOnReady) {
+    deps.openBrowser(dashboardUrl);
+  }
 }
 
 async function main(): Promise<void> {
   const { command, options, positionals } = parseArgv(process.argv.slice(2));
-  const normalized = command.toLowerCase();
+  const normalized = normalizeCommand(command.toLowerCase());
 
   if (["install", "uninstall", "sync"].includes(normalized)) {
     await runOperation(normalized as OperationKind, options);
@@ -1021,13 +1201,15 @@ async function main(): Promise<void> {
   printHelp();
 }
 
-main().catch((error) => {
-  process.stderr.write(`ICA CLI failed: ${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    process.stderr.write(`ICA CLI failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
 
-process.on("exit", () => {
-  if (helperProcess && !helperProcess.killed) {
-    helperProcess.kill();
-  }
-});
+  process.on("exit", () => {
+    if (helperProcess && !helperProcess.killed) {
+      helperProcess.kill();
+    }
+  });
+}
