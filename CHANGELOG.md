@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.7] - 2026-02-14
+
+### Added
+- Hybrid skills catalog fallback diagnostics (`stale`, `catalogSource`, `staleReason`, `cacheAgeSeconds`, `nextRefreshAt`) across core/API/CLI/dashboard.
+- Runtime skills catalog cache support in `~/.ica/catalog/skills.catalog.json` with 1-hour TTL and force-refresh controls.
+- Regression tests for snapshot/cache fallback, refresh query parsing, runtime exception fallback, and index completeness behavior.
+
+### Changed
+- Bundled `src/catalog/skills.catalog.json` now seeds official skills snapshot entries for non-empty cold-start catalog loading.
+- `skills.index.json` is now a metadata overlay while directory discovery remains authoritative for included skills.
+
 ## [12.0.6] - 2026-02-14
 
 ### Added
