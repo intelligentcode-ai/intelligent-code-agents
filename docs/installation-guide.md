@@ -22,7 +22,7 @@ Then run:
 
 ```bash
 ica install
-ica launch --open=true
+ica serve --open=true
 ```
 
 Bootstrap validates release artifacts and stops on verification failures. It does not auto-run install/sync.
@@ -45,7 +45,7 @@ node dist/src/installer-cli/index.js sync
 node dist/src/installer-cli/index.js list
 node dist/src/installer-cli/index.js doctor
 node dist/src/installer-cli/index.js catalog
-node dist/src/installer-cli/index.js launch --open=true
+node dist/src/installer-cli/index.js serve --open=true
 node dist/src/installer-cli/index.js sources list
 node dist/src/installer-cli/index.js sources add --repo-url=https://github.com/intelligentcode-ai/skills.git
 node dist/src/installer-cli/index.js sources add --repo-path=.   # uses current directory as local source
@@ -69,19 +69,13 @@ node dist/src/installer-cli/index.js install --yes \
 Recommended after bootstrap:
 
 ```bash
-ica launch --open=true
-```
-
-From source checkout:
-
-```bash
-npm ci
-npm run build
-npm run start:dashboard
+ica serve --open=true
 ```
 
 - Default bind: `127.0.0.1`
 - Default URL: `http://127.0.0.1:4173`
+- API URL: `http://127.0.0.1:4174` (secured with per-session `X-ICA-API-Key`)
+- Browser traffic uses same-origin dashboard routes (`/api/v1/*`, `/ws/events`) via the host BFF proxy.
 
 ## Scope
 
