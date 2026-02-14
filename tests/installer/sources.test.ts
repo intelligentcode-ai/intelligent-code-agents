@@ -373,3 +373,78 @@ test("buildMultiSourceCatalog consumes skills.index.json metadata when present",
     }
   }
 });
+
+test("buildMultiSourceCatalog includes skills not listed in skills.index.json", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-sources-test-"));
+  const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-source-repo-"));
+  const repoDir = path.join(sourceRoot, "repo");
+  const previous = process.env.ICA_STATE_HOME;
+  process.env.ICA_STATE_HOME = tempRoot;
+
+  try {
+    fs.mkdirSync(path.join(repoDir, "skills", "indexed-skill"), { recursive: true });
+    fs.mkdirSync(path.join(repoDir, "skills", "new-unindexed-skill"), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoDir, "skills", "indexed-skill", "SKILL.md"),
+      "---\nname: indexed-skill\ndescription: from-skill\ncategory: process\n---\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(repoDir, "skills", "new-unindexed-skill", "SKILL.md"),
+      "---\nname: new-unindexed-skill\ndescription: from-frontmatter\ncategory: process\n---\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(repoDir, "skills.index.json"),
+      JSON.stringify(
+        {
+          skills: [
+            {
+              name: "indexed-skill",
+              description: "from-index",
+              category: "command",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    execFileSync("git", ["init", "-q"], { cwd: repoDir });
+    execFileSync("git", ["add", "."], { cwd: repoDir });
+    execFileSync("git", ["-c", "user.name=ICA Test", "-c", "user.email=ica-test@example.com", "commit", "-q", "-m", "seed"], {
+      cwd: repoDir,
+    });
+
+    await ensureSourceRegistry();
+    await updateSource(OFFICIAL_SOURCE_ID, { enabled: false });
+    await addSource({
+      id: "index-missing-skill-source",
+      name: "index-missing-skill-source",
+      repoUrl: `file://${repoDir}`,
+      transport: "https",
+      skillsRoot: "/skills",
+      enabled: true,
+      removable: true,
+    });
+
+    const catalog = await buildMultiSourceCatalog({
+      repoVersion: "1.0.0",
+      refresh: true,
+    });
+
+    const indexed = catalog.skills.find((skill) => skill.skillId === "index-missing-skill-source/indexed-skill");
+    const unindexed = catalog.skills.find((skill) => skill.skillId === "index-missing-skill-source/new-unindexed-skill");
+    assert.ok(indexed);
+    assert.ok(unindexed);
+    assert.equal(indexed?.description, "from-index");
+    assert.equal(unindexed?.description, "from-frontmatter");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ICA_STATE_HOME;
+    } else {
+      process.env.ICA_STATE_HOME = previous;
+    }
+  }
+});
