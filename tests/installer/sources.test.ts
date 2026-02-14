@@ -374,7 +374,7 @@ test("buildMultiSourceCatalog consumes skills.index.json metadata when present",
   }
 });
 
-test("buildMultiSourceCatalog includes skills not listed in skills.index.json", async () => {
+test("buildMultiSourceCatalog keeps directory-discovered skills when index is incomplete", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-sources-test-"));
   const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-source-repo-"));
   const repoDir = path.join(sourceRoot, "repo");
@@ -382,16 +382,16 @@ test("buildMultiSourceCatalog includes skills not listed in skills.index.json", 
   process.env.ICA_STATE_HOME = tempRoot;
 
   try {
-    fs.mkdirSync(path.join(repoDir, "skills", "indexed-skill"), { recursive: true });
-    fs.mkdirSync(path.join(repoDir, "skills", "new-unindexed-skill"), { recursive: true });
+    fs.mkdirSync(path.join(repoDir, "skills", "index-listed"), { recursive: true });
+    fs.mkdirSync(path.join(repoDir, "skills", "index-missing"), { recursive: true });
     fs.writeFileSync(
-      path.join(repoDir, "skills", "indexed-skill", "SKILL.md"),
-      "---\nname: indexed-skill\ndescription: from-skill\ncategory: process\n---\n",
+      path.join(repoDir, "skills", "index-listed", "SKILL.md"),
+      "---\nname: index-listed\ndescription: from-skill\ncategory: process\n---\n",
       "utf8",
     );
     fs.writeFileSync(
-      path.join(repoDir, "skills", "new-unindexed-skill", "SKILL.md"),
-      "---\nname: new-unindexed-skill\ndescription: from-frontmatter\ncategory: process\n---\n",
+      path.join(repoDir, "skills", "index-missing", "SKILL.md"),
+      "---\nname: index-missing\ndescription: from-skill\ncategory: process\n---\n",
       "utf8",
     );
     fs.writeFileSync(
@@ -400,7 +400,7 @@ test("buildMultiSourceCatalog includes skills not listed in skills.index.json", 
         {
           skills: [
             {
-              name: "indexed-skill",
+              name: "index-listed",
               description: "from-index",
               category: "command",
             },
@@ -420,8 +420,8 @@ test("buildMultiSourceCatalog includes skills not listed in skills.index.json", 
     await ensureSourceRegistry();
     await updateSource(OFFICIAL_SOURCE_ID, { enabled: false });
     await addSource({
-      id: "index-missing-skill-source",
-      name: "index-missing-skill-source",
+      id: "index-incomplete-source",
+      name: "index-incomplete-source",
       repoUrl: `file://${repoDir}`,
       transport: "https",
       skillsRoot: "/skills",
@@ -434,12 +434,12 @@ test("buildMultiSourceCatalog includes skills not listed in skills.index.json", 
       refresh: true,
     });
 
-    const indexed = catalog.skills.find((skill) => skill.skillId === "index-missing-skill-source/indexed-skill");
-    const unindexed = catalog.skills.find((skill) => skill.skillId === "index-missing-skill-source/new-unindexed-skill");
-    assert.ok(indexed);
-    assert.ok(unindexed);
-    assert.equal(indexed?.description, "from-index");
-    assert.equal(unindexed?.description, "from-frontmatter");
+    const listed = catalog.skills.find((skill) => skill.skillId === "index-incomplete-source/index-listed");
+    const missing = catalog.skills.find((skill) => skill.skillId === "index-incomplete-source/index-missing");
+    assert.ok(listed);
+    assert.equal(listed?.description, "from-index");
+    assert.ok(missing);
+    assert.equal(missing?.description, "from-skill");
   } finally {
     if (previous === undefined) {
       delete process.env.ICA_STATE_HOME;

@@ -5,13 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [12.0.4] - 2026-02-14
+## [12.0.9] - 2026-02-14
+
+### Changed
+- Completed sync of `main` hotfix stream back into the active release branch before merge.
+- Aligned `cli-launch-runtime` regression coverage with current `ica serve` image-build policy helpers.
 
 ### Fixed
-- Implemented `ica serve` as a supported alias for `ica launch` to prevent bootstrap-installed CLI failures on `serve`.
-- Hardened dashboard launch orchestration so default `ica launch` uses GHCR runtime and opens the browser only after health readiness.
-- Added local runtime auto-build behavior so missing dashboard web assets are built before local launch.
-- Fixed skills catalog refresh behavior when `skills.index.json` is stale by including discovered on-disk skills missing from the index.
+- Removed stale launch-runtime test API usage that no longer matched exported CLI contracts.
+
+## [12.0.8] - 2026-02-14
+
+### Fixed
+- Changed dashboard serve default image to `ghcr.io/intelligentcode-ai/ica-installer-dashboard:main` so bootstrap users do not require local source image builds by default.
+- Updated `--build-image=auto` behavior to skip local image builds for GHCR images and pull the remote image when missing.
+- Added regression coverage to ensure default GHCR images are never auto-built from local source.
+
+## [12.0.7] - 2026-02-14
+
+### Added
+- Hybrid skills catalog fallback diagnostics (`stale`, `catalogSource`, `staleReason`, `cacheAgeSeconds`, `nextRefreshAt`) across core/API/CLI/dashboard.
+- Runtime skills catalog cache support in `~/.ica/catalog/skills.catalog.json` with 1-hour TTL and force-refresh controls.
+- Regression tests for snapshot/cache fallback, refresh query parsing, runtime exception fallback, and index completeness behavior.
+
+### Changed
+- Bundled `src/catalog/skills.catalog.json` now seeds official skills snapshot entries for non-empty cold-start catalog loading.
+- `skills.index.json` is now a metadata overlay while directory discovery remains authoritative for included skills.
+
+## [12.0.6] - 2026-02-14
+
+### Added
+- Host-side installer API service under `src/installer-api` with ephemeral session API-key enforcement.
+- Host BFF proxy under `src/installer-bff` for same-origin browser access to `/api/v1/*` and `/ws/events`.
+- Realtime websocket event channel support with short-lived tickets and operation/source lifecycle events.
+- New installer test coverage for API security, realtime events, BFF security, startup resilience, and serve orchestration.
+
+### Changed
+- `ica serve` now orchestrates API + BFF + frontend-only container lifecycle on localhost with configurable ports.
+- Dashboard frontend now uses same-origin API calls via BFF and no longer depends on runtime API-key bootstrap config.
+- Added optional `--reuse-ports=true|false` and `--build-image=auto|always|never` serve behaviors to reduce operator friction.
+- Documentation updated for control-plane architecture, startup troubleshooting, and serve-first workflow.
+
+### Security
+- Enforced loopback-only access and local-origin checks on BFF control-plane routes.
+- Kept API key scoped to host processes (API/BFF) rather than exposing it to browser runtime config.
+
+## [12.0.5] - 2026-02-14
+
+### Changed
+- Reordered onboarding in README so the agent bootstrap prompt is shown before manual shell bootstrap steps.
+- Added a dedicated Skills repository section with direct links for contribution pull requests and contribution guidelines.
+- Refined top-level README language to be clearer, more action-oriented, and less generic.
+
+## [12.0.4] - 2026-02-14
+
+### Added
+- Faceted skill metadata support in catalogs and dashboard UX (`scope`, `subcategory`, `tags`) for broader non-development discovery/filtering.
+- Optional root `skills.index.json` fast-path loading for source repositories to improve catalog loading performance.
+- New shared frontmatter parser with YAML-list support for skill metadata extraction.
+
+### Changed
+- Skills dashboard now supports filtering by source, scope, category, and tag, and includes metadata badges on skill cards.
+- Catalog schema/types now include optional author/contact/site metadata fields for richer source metadata transport.
+- README includes an agent bootstrap prompt path for installing/running bootstrap onboarding skills.
 
 ## [12.0.3] - 2026-02-13
 

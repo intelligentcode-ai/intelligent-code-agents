@@ -1,5 +1,4 @@
 import http from "node:http";
-import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { hasExecutable } from "../installer-core/security";
@@ -8,14 +7,6 @@ const execFileAsync = promisify(execFile);
 export const MAX_JSON_BODY_BYTES = 64 * 1024;
 
 type JsonMap = Record<string, unknown>;
-
-interface MountProjectRequest {
-  projectPath?: string;
-  containerName?: string;
-  image?: string;
-  port?: string;
-  confirm?: boolean;
-}
 
 export class RequestError extends Error {
   constructor(
@@ -75,10 +66,15 @@ export async function hasCommand(command: string): Promise<boolean> {
   return hasExecutable(command, process.platform);
 }
 
+export function escapeAppleScriptString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 export async function pickDirectoryNative(initialPath?: string): Promise<string> {
   if (process.platform === "darwin") {
     const prompt = "Select project directory";
-    const script = `POSIX path of (choose folder with prompt "${prompt}" default location POSIX file "${initialPath || process.cwd()}")`;
+    const safeInitialPath = escapeAppleScriptString(initialPath || process.cwd());
+    const script = `POSIX path of (choose folder with prompt "${prompt}" default location POSIX file "${safeInitialPath}")`;
     const result = await execFileAsync("osascript", ["-e", script]);
     const picked = (result.stdout || "").trim();
     if (!picked) throw new Error("No directory selected.");
@@ -117,130 +113,6 @@ export async function pickDirectoryNative(initialPath?: string): Promise<string>
   throw new Error(`Unsupported platform '${process.platform}' for native picker.`);
 }
 
-export async function dockerInspect(containerName: string): Promise<JsonMap | null> {
-  try {
-    const result = await execFileAsync("docker", ["inspect", containerName], { maxBuffer: 8 * 1024 * 1024 });
-    const parsed = JSON.parse(result.stdout || "[]") as JsonMap[];
-    return parsed[0] || null;
-  } catch {
-    return null;
-  }
-}
-
-export function resolveDashboardImage(
-  requestedImage: string | undefined,
-  inspectedImage: string | undefined,
-  fallbackImage: string,
-): string {
-  const requested = (requestedImage || "").trim();
-  if (requested) return requested;
-  const inspected = (inspectedImage || "").trim();
-  if (inspected) return inspected;
-  return fallbackImage;
-}
-
-export function toDockerRunArgs(base: {
-  containerName: string;
-  image: string;
-  env?: string[];
-  ports?: string[];
-  binds?: string[];
-  entrypoint?: string[];
-  cmd?: string[];
-}): string[] {
-  const args: string[] = ["run", "-d", "--name", base.containerName];
-
-  for (const envItem of base.env || []) {
-    args.push("-e", envItem);
-  }
-  for (const port of base.ports || []) {
-    args.push("-p", port);
-  }
-  for (const bind of base.binds || []) {
-    args.push("-v", bind);
-  }
-  if (base.entrypoint && base.entrypoint.length > 0) {
-    args.push("--entrypoint", base.entrypoint.join(" "));
-  }
-
-  args.push(base.image);
-  if (base.cmd && base.cmd.length > 0) {
-    args.push(...base.cmd);
-  }
-  return args;
-}
-
-export async function mountProjectDirectory(request: MountProjectRequest): Promise<JsonMap> {
-  if (!request.confirm) {
-    throw new Error("Mount operation requires explicit confirmation.");
-  }
-  const projectPath = path.resolve(request.projectPath || "");
-  if (!projectPath || projectPath === path.parse(projectPath).root) {
-    throw new Error("projectPath must be a non-root absolute path.");
-  }
-  if (!(await hasCommand("docker"))) {
-    throw new Error("Docker CLI is not available.");
-  }
-
-  const containerName = request.containerName || process.env.ICA_DASHBOARD_CONTAINER_NAME || "ica-dashboard";
-  const defaultImage = (process.env.ICA_DASHBOARD_IMAGE || "ica-dashboard:local").trim();
-  const defaultPort = request.port || process.env.ICA_DASHBOARD_PORT_MAPPING || "4173:4173";
-  const inspect = await dockerInspect(containerName);
-
-  let image = resolveDashboardImage(request.image, undefined, defaultImage);
-  let env: string[] = [];
-  let ports: string[] = [defaultPort];
-  let binds: string[] = [`${projectPath}:${projectPath}`];
-  let cmd: string[] = [];
-  let entrypoint: string[] = [];
-
-  if (inspect) {
-    image = resolveDashboardImage(request.image, String((inspect.Config as JsonMap)?.Image || ""), defaultImage);
-    env = Array.isArray((inspect.Config as JsonMap)?.Env) ? (((inspect.Config as JsonMap).Env as unknown[]) as string[]) : [];
-    cmd = Array.isArray((inspect.Config as JsonMap)?.Cmd) ? (((inspect.Config as JsonMap).Cmd as unknown[]) as string[]) : [];
-    entrypoint = Array.isArray((inspect.Config as JsonMap)?.Entrypoint)
-      ? (((inspect.Config as JsonMap).Entrypoint as unknown[]) as string[])
-      : [];
-
-    const rawBinds = Array.isArray((inspect.HostConfig as JsonMap)?.Binds) ? (((inspect.HostConfig as JsonMap).Binds as unknown[]) as string[]) : [];
-    binds = Array.from(new Set([...rawBinds, `${projectPath}:${projectPath}`]));
-
-    const bindings = ((inspect.HostConfig as JsonMap)?.PortBindings || {}) as Record<string, Array<{ HostPort?: string }> | undefined>;
-    const inferredPorts = Object.entries(bindings)
-      .map(([containerPort, hostEntries]) => {
-        const hostPort = hostEntries?.[0]?.HostPort;
-        return hostPort ? `${hostPort}:${containerPort.replace(/\/tcp$/i, "")}` : "";
-      })
-      .filter(Boolean);
-    if (inferredPorts.length > 0) {
-      ports = inferredPorts;
-    }
-
-    await execFileAsync("docker", ["stop", containerName]);
-    await execFileAsync("docker", ["rm", containerName]);
-  }
-
-  const args = toDockerRunArgs({
-    containerName,
-    image,
-    env,
-    ports,
-    binds,
-    cmd,
-    entrypoint,
-  });
-
-  const result = await execFileAsync("docker", args, { maxBuffer: 8 * 1024 * 1024 });
-  return {
-    ok: true,
-    containerName,
-    image,
-    projectPath,
-    command: `docker ${args.join(" ")}`,
-    containerId: (result.stdout || "").trim(),
-  };
-}
-
 export async function route(req: http.IncomingMessage, res: http.ServerResponse, token: string): Promise<void> {
   if (!isLoopback(req.socket.remoteAddress)) {
     sendJson(res, 403, { error: "Loopback requests only." });
@@ -260,24 +132,6 @@ export async function route(req: http.IncomingMessage, res: http.ServerResponse,
       const initialPath = typeof body.initialPath === "string" ? body.initialPath : process.cwd();
       const selected = await pickDirectoryNative(initialPath);
       sendJson(res, 200, { path: selected });
-    } catch (error) {
-      if (error instanceof RequestError) {
-        sendJson(res, error.status, { error: error.message });
-      } else {
-        sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
-      }
-    }
-    return;
-  }
-
-  if (req.method === "POST" && req.url === "/container/mount-project") {
-    try {
-      if (!String(req.headers["content-type"] || "").toLowerCase().includes("application/json")) {
-        throw new RequestError(415, "Unsupported media type: expected application/json.");
-      }
-      const body = (await readJsonBody(req)) as MountProjectRequest;
-      const payload = await mountProjectDirectory(body);
-      sendJson(res, 200, payload);
     } catch (error) {
       if (error instanceof RequestError) {
         sendJson(res, error.status, { error: error.message });

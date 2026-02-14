@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { apiFetch } from "./api-client";
+import { RealtimeEvent, RealtimeStatus, startRealtimeClient } from "./realtime-client";
+import { runStartupTasks } from "./startup";
 
 type Target = "claude" | "codex" | "cursor" | "gemini" | "antigravity";
 
@@ -129,6 +132,7 @@ type DashboardMode = "light" | "dark";
 type DashboardAccent = "slate" | "blue" | "red" | "green" | "amber";
 type DashboardBackground = "slate" | "ocean" | "sand" | "forest" | "wine";
 type LegacyDashboardTheme = "light" | "dark" | "blue" | "red" | "green";
+type HealthPayload = { version?: string; error?: string };
 
 const allTargets: Target[] = ["claude", "codex", "cursor", "gemini", "antigravity"];
 const modeStorageKey = "ica.dashboard.mode";
@@ -244,9 +248,15 @@ export function InstallerDashboard(): JSX.Element {
   const [hookReport, setHookReport] = useState<HookOperationReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [startupWarnings, setStartupWarnings] = useState<string[]>([]);
+  const [liveStatus, setLiveStatus] = useState<RealtimeStatus>("http-only");
+  const [appVersion, setAppVersion] = useState<string>("unknown");
+  const [apiReachable, setApiReachable] = useState(false);
+  const [startupRunId, setStartupRunId] = useState(0);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogLoadingMessage, setCatalogLoadingMessage] = useState("");
   const [catalogLoadingProgress, setCatalogLoadingProgress] = useState(0);
+  const [catalogWarning, setCatalogWarning] = useState("");
   const [selectionCustomized, setSelectionCustomized] = useState(false);
   const [sourceRepoUrl, setSourceRepoUrl] = useState("");
   const [sourceName, setSourceName] = useState("");
@@ -267,6 +277,8 @@ export function InstallerDashboard(): JSX.Element {
   const [hookSelectionCustomized, setHookSelectionCustomized] = useState(false);
   const appearancePanelRef = useRef<HTMLElement | null>(null);
   const appearanceTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const refreshInstallationsRef = useRef<() => Promise<void>>(async () => undefined);
+  const refreshCatalogRef = useRef<() => Promise<void>>(async () => undefined);
 
   const selectedTargetList = useMemo(() => Array.from(targets).sort(), [targets]);
   const selectedHookTargetList = useMemo(
@@ -278,6 +290,24 @@ export function InstallerDashboard(): JSX.Element {
   const skillById = useMemo(() => new Map(skills.map((skill) => [skill.skillId, skill])), [skills]);
   const hookById = useMemo(() => new Map(hooks.map((hook) => [hook.hookId, hook])), [hooks]);
   const sourceNameById = useMemo(() => new Map(sources.map((source) => [source.id, source.name || source.id])), [sources]);
+  const liveStatusLabel = liveStatus === "connected" ? "Connected" : liveStatus === "reconnecting" ? "Reconnecting" : "HTTP-only";
+
+  function addStartupWarning(message: string): void {
+    setStartupWarnings((current) => (current.includes(message) ? current : [...current, message]));
+  }
+
+  function jumpToSkillsTab(): void {
+    setActiveTab("skills");
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  function retryStartup(): void {
+    setError("");
+    setStartupWarnings([]);
+    setStartupRunId((value) => value + 1);
+  }
 
   const installedSkillIds = useMemo(() => {
     const names = new Set<string>();
@@ -381,7 +411,7 @@ export function InstallerDashboard(): JSX.Element {
   }, [hooks, hookSourceFilter, hooksInstalledOnly, installedHookIds, normalizedHookQuery]);
 
   async function fetchSources(): Promise<void> {
-    const res = await fetch("/api/v1/sources");
+    const res = await apiFetch("/api/v1/sources");
     const payload = (await res.json()) as { sources?: Source[]; error?: string };
     if (!res.ok) {
       throw new Error(asErrorMessage(payload, "Failed to load sources."));
@@ -391,7 +421,7 @@ export function InstallerDashboard(): JSX.Element {
 
   async function refreshSources(runRefresh = false): Promise<void> {
     if (runRefresh) {
-      await fetch("/api/v1/sources/refresh-all", {
+      await apiFetch("/api/v1/sources/refresh-all", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -412,13 +442,25 @@ export function InstallerDashboard(): JSX.Element {
         setCatalogLoadingProgress(58);
         setCatalogLoadingMessage("Loading refreshed skills catalog…");
       }
-      const res = await fetch("/api/v1/catalog/skills");
-      const payload = (await res.json()) as { skills?: Skill[]; error?: string };
+      const res = await apiFetch(`/api/v1/catalog/skills${runRefresh ? "?refresh=true" : ""}`);
+      const payload = (await res.json()) as {
+        skills?: Skill[];
+        stale?: boolean;
+        catalogSource?: "live" | "cache" | "snapshot";
+        staleReason?: string;
+        error?: string;
+      };
       if (!res.ok) {
         throw new Error(asErrorMessage(payload, "Failed to load skills catalog."));
       }
       setCatalogLoadingProgress(88);
       setSkills(Array.isArray(payload.skills) ? payload.skills : []);
+      if (payload.stale) {
+        const source = payload.catalogSource || "fallback";
+        setCatalogWarning(payload.staleReason || `Catalog is currently served from ${source}.`);
+      } else {
+        setCatalogWarning("");
+      }
       setCatalogLoadingProgress(100);
       setCatalogLoadingMessage("Skills catalog is ready.");
     } finally {
@@ -431,7 +473,7 @@ export function InstallerDashboard(): JSX.Element {
   }
 
   async function fetchHooks(): Promise<void> {
-    const res = await fetch("/api/v1/catalog/hooks");
+    const res = await apiFetch("/api/v1/catalog/hooks");
     const payload = (await res.json()) as { hooks?: Hook[]; error?: string };
     if (!res.ok) {
       throw new Error(asErrorMessage(payload, "Failed to load hooks catalog."));
@@ -440,7 +482,7 @@ export function InstallerDashboard(): JSX.Element {
   }
 
   async function fetchDiscoveredTargets(): Promise<void> {
-    const res = await fetch("/api/v1/targets/discovered");
+    const res = await apiFetch("/api/v1/targets/discovered");
     const payload = (await res.json()) as { targets?: Target[]; error?: string };
     if (!res.ok) {
       throw new Error(asErrorMessage(payload, "Failed to discover targets."));
@@ -452,6 +494,18 @@ export function InstallerDashboard(): JSX.Element {
     if (validTargets.length > 0) {
       setTargets(new Set(validTargets));
     }
+  }
+
+  async function fetchApiVersion(): Promise<void> {
+    const res = await apiFetch("/api/v1/health");
+    const payload = (await res.json()) as HealthPayload;
+    if (!res.ok) {
+      setApiReachable(false);
+      throw new Error(asErrorMessage(payload, "Failed to load API health."));
+    }
+    const version = typeof payload.version === "string" && payload.version.trim() ? payload.version.trim() : "unknown";
+    setApiReachable(true);
+    setAppVersion(version);
   }
 
   async function fetchInstallations(): Promise<void> {
@@ -466,7 +520,7 @@ export function InstallerDashboard(): JSX.Element {
       targets: targetKey,
     });
 
-    const res = await fetch(`/api/v1/installations?${query.toString()}`);
+    const res = await apiFetch(`/api/v1/installations?${query.toString()}`);
     const payload = (await res.json()) as { installations?: InstallationRow[]; error?: string };
     if (!res.ok) {
       throw new Error(asErrorMessage(payload, "Failed to load installed state."));
@@ -491,13 +545,22 @@ export function InstallerDashboard(): JSX.Element {
       targets: selectedHookTargetList.join(","),
     });
 
-    const res = await fetch(`/api/v1/hooks/installations?${query.toString()}`);
+    const res = await apiFetch(`/api/v1/hooks/installations?${query.toString()}`);
     const payload = (await res.json()) as { installations?: HookInstallationRow[]; error?: string };
     if (!res.ok) {
       throw new Error(asErrorMessage(payload, "Failed to load installed hook state."));
     }
     setHookInstallations(Array.isArray(payload.installations) ? payload.installations : []);
   }
+
+  refreshInstallationsRef.current = async () => {
+    await Promise.all([fetchInstallations(), fetchHookInstallations()]);
+  };
+
+  refreshCatalogRef.current = async () => {
+    await fetchSources();
+    await Promise.all([fetchSkills(), fetchHooks()]);
+  };
 
   function setSkillsSelection(skillIds: string[], shouldSelect: boolean): void {
     setSelectionCustomized(true);
@@ -587,7 +650,7 @@ export function InstallerDashboard(): JSX.Element {
         })
         .filter((item): item is { sourceId: string; skillName: string; skillId: string } => Boolean(item));
 
-      const res = await fetch(`/api/v1/${operation}/apply`, {
+      const res = await apiFetch(`/api/v1/${operation}/apply`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -647,7 +710,7 @@ export function InstallerDashboard(): JSX.Element {
         })
         .filter((item): item is { sourceId: string; hookName: string; hookId: string } => Boolean(item));
 
-      const res = await fetch(`/api/v1/hooks/${operation}/apply`, {
+      const res = await apiFetch(`/api/v1/hooks/${operation}/apply`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -681,7 +744,7 @@ export function InstallerDashboard(): JSX.Element {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/v1/sources", {
+      const res = await apiFetch("/api/v1/sources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -713,7 +776,7 @@ export function InstallerDashboard(): JSX.Element {
     setError("");
     try {
       const endpoint = sourceId ? `/api/v1/sources/${sourceId}/refresh` : "/api/v1/sources/refresh-all";
-      const res = await fetch(endpoint, {
+      const res = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -736,7 +799,7 @@ export function InstallerDashboard(): JSX.Element {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch(`/api/v1/sources/${source.id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/v1/sources/${source.id}`, { method: "DELETE" });
       const payload = await res.json();
       if (!res.ok) {
         throw new Error(asErrorMessage(payload, "Source removal failed."));
@@ -755,7 +818,7 @@ export function InstallerDashboard(): JSX.Element {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/v1/projects/pick", {
+      const res = await apiFetch("/api/v1/projects/pick", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -776,48 +839,80 @@ export function InstallerDashboard(): JSX.Element {
     }
   }
 
-  async function mountProjectInContainer(): Promise<void> {
-    if (!trimmedProjectPath) {
-      setError("Set a project path first.");
+  useEffect(() => {
+    let cancelled = false;
+    setStartupWarnings([]);
+    setError("");
+    setApiReachable(false);
+
+    void runStartupTasks(
+      [
+        { id: "API health", critical: false, run: async () => fetchApiVersion() },
+        { id: "Targets discovery", critical: true, run: async () => fetchDiscoveredTargets() },
+        { id: "Source loading", critical: true, run: async () => fetchSources() },
+        { id: "Skills catalog", critical: false, run: async () => fetchSkills() },
+        { id: "Hooks catalog", critical: false, run: async () => fetchHooks() },
+      ],
+      { attempts: 3, initialDelayMs: 200 },
+    )
+      .then((summary) => {
+        if (cancelled) {
+          return;
+        }
+        for (const warning of summary.warnings) {
+          addStartupWarning(warning);
+        }
+        if (summary.errors.length > 0) {
+          setError(summary.errors.join(" | "));
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [startupRunId]);
+
+  useEffect(() => {
+    if (!apiReachable) {
       return;
     }
-    setBusy(true);
-    setError("");
-    try {
-      const res = await fetch("/api/v1/container/mount-project", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectPath: trimmedProjectPath,
-          confirm: true,
-        }),
-      });
-      const payload = await res.json();
-      if (!res.ok) {
-        throw new Error(asErrorMessage(payload, "Container mount failed."));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  useEffect(() => {
-    fetchDiscoveredTargets().catch((err) => setError(err instanceof Error ? err.message : String(err)));
-    fetchSources()
-      .then(async () => {
-        await fetchSkills(true);
-        await fetchHooks();
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
-  }, []);
-
-  useEffect(() => {
     setSelectionCustomized(false);
     setHookSelectionCustomized(false);
-    Promise.all([fetchInstallations(), fetchHookInstallations()]).catch((err) => setError(err instanceof Error ? err.message : String(err)));
-  }, [scope, trimmedProjectPath, targetKey, selectedHookTargetList.join(",")]);
+    Promise.all([fetchInstallations(), fetchHookInstallations()]).catch((err) =>
+      addStartupWarning(`Installations refresh: ${err instanceof Error ? err.message : String(err)}`),
+    );
+  }, [scope, trimmedProjectPath, targetKey, selectedHookTargetList.join(","), apiReachable]);
+
+  useEffect(() => {
+    const stopRealtime = startRealtimeClient({
+      onStatusChange: (status) => setLiveStatus(status),
+      onEvent: (event: RealtimeEvent) => {
+        if (event.type === "operation.completed" || event.type === "operation.failed") {
+          void refreshInstallationsRef.current().catch((err) =>
+            addStartupWarning(`Installations refresh: ${err instanceof Error ? err.message : String(err)}`),
+          );
+        }
+        if (event.type === "source.refresh.completed" || event.type === "source.refresh.failed") {
+          void refreshCatalogRef.current().catch((err) =>
+            addStartupWarning(`Catalog refresh: ${err instanceof Error ? err.message : String(err)}`),
+          );
+          void refreshInstallationsRef.current().catch((err) =>
+            addStartupWarning(`Installations refresh: ${err instanceof Error ? err.message : String(err)}`),
+          );
+        }
+      },
+      onError: (message) => addStartupWarning(message),
+    });
+
+    return () => {
+      stopRealtime();
+    };
+  }, []);
 
   useEffect(() => {
     if (selectionCustomized) return;
@@ -936,12 +1031,15 @@ export function InstallerDashboard(): JSX.Element {
   }, [selectedHooks, hookById]);
   const selectedUnknownHookCount = Math.max(0, selectedHooks.size - selectedKnownHookCount);
   const installedHookCount = installedHookIds.size;
+  const apiUnavailable = error.includes("Cannot reach ICA API at");
 
   return (
     <div className="shell">
       <header className="hero">
         <div className="hero-topline">
-          <p className="eyebrow">ICA COMMAND CENTER</p>
+          <button className="eyebrow eyebrow-link" type="button" onClick={jumpToSkillsTab} aria-label="Go to Skills tab">
+            ICA COMMAND CENTER
+          </button>
           <p className="stamp">Multi-source</p>
         </div>
         <h1>Skills & Hooks Dashboard</h1>
@@ -950,12 +1048,29 @@ export function InstallerDashboard(): JSX.Element {
           <span>{sources.length} sources</span>
           <span>{installedSkillCount} skills installed</span>
           <span>{installedHookCount} hooks installed</span>
+          <span className={`live-badge live-badge-${liveStatus}`}>Live updates: {liveStatusLabel}</span>
         </div>
       </header>
 
-      {error && (
+      {apiUnavailable && (
+        <section className="panel startup-empty-state" role="status" aria-live="polite">
+          <h2>API not reachable</h2>
+          <p className="subtle">{error}</p>
+          <div className="startup-empty-state-actions">
+            <button className="btn btn-primary" type="button" onClick={retryStartup}>
+              Retry startup
+            </button>
+          </div>
+        </section>
+      )}
+      {!apiUnavailable && error && (
         <section className="status status-error">
           <strong>Action needed:</strong> {error}
+        </section>
+      )}
+      {!apiUnavailable && startupWarnings.length > 0 && (
+        <section className="status status-info">
+          <strong>Startup warnings:</strong> {startupWarnings.join(" | ")}
         </section>
       )}
       {catalogLoading && (
@@ -1140,6 +1255,7 @@ export function InstallerDashboard(): JSX.Element {
                     {!catalogLoading && selectedUnknownSkillCount > 0 ? ` • ${selectedUnknownSkillCount} unavailable` : ""}
                     {!catalogLoading && normalizedQuery ? ` • ${filteredSkillsCount} shown` : ""}
                   </p>
+                  {catalogWarning && <p className="operation-hint">{catalogWarning}</p>}
                 </div>
                 <div className="bulk-actions">
                   <button className="btn btn-ghost" onClick={() => setSkillsSelection(skills.map((skill) => skill.skillId), true)} type="button">
@@ -1522,12 +1638,14 @@ export function InstallerDashboard(): JSX.Element {
                 />
               </>
             )}
-            <button className="btn btn-secondary" type="button" disabled={busy || !sourceRepoUrl.trim()} onClick={addSourceFromForm}>
-              Add repository
-            </button>
-            <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => refreshSource()}>
-              Refresh all repositories
-            </button>
+            <div className="repo-actions">
+              <button className="btn btn-secondary" type="button" disabled={busy || !sourceRepoUrl.trim()} onClick={addSourceFromForm}>
+                Add repository
+              </button>
+              <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => refreshSource()}>
+                Refresh all repositories
+              </button>
+            </div>
           </article>
 
           <article className="panel panel-settings panel-spacious">
@@ -1567,9 +1685,6 @@ export function InstallerDashboard(): JSX.Element {
                 />
                 <button className="btn btn-inline" type="button" disabled={busy} onClick={pickProjectPath}>
                   Pick project (native)
-                </button>
-                <button className="btn btn-inline" type="button" disabled={busy || !trimmedProjectPath} onClick={mountProjectInContainer}>
-                  Mount in container
                 </button>
               </>
             )}
@@ -1627,6 +1742,20 @@ export function InstallerDashboard(): JSX.Element {
           </details>
         </section>
       )}
+
+      <footer className="app-footer">
+        <div className="app-footer-meta">
+          <span>Intelligent Code Agents</span>
+          <span className="app-footer-version">v{appVersion}</span>
+        </div>
+        <a
+          href="https://github.com/intelligentcode-ai/intelligent-code-agents"
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          View on GitHub
+        </a>
+      </footer>
     </div>
   );
 }
