@@ -37,7 +37,38 @@ node dist/src/installer-cli/index.js catalog
 node dist/src/installer-cli/index.js sources list
 node dist/src/installer-cli/index.js sources add --repo-url=https://github.com/intelligentcode-ai/skills.git
 node dist/src/installer-cli/index.js sources add --repo-path=.   # uses current directory as local source
+node dist/src/installer-cli/index.js sources update --id=my-source --publish-default-mode=branch-pr --default-base-branch=main --provider-hint=github
 node dist/src/installer-cli/index.js sources refresh
+node dist/src/installer-cli/index.js skills validate --path=/path/to/skill --profile=personal
+node dist/src/installer-cli/index.js skills publish --source=my-source --path=/path/to/skill
+node dist/src/installer-cli/index.js skills contribute-official --path=/path/to/skill
+```
+
+## Skill Publishing Quick Start
+
+1. Add or update a source:
+
+```bash
+node dist/src/installer-cli/index.js sources add --repo-url=https://github.com/your-org/skills.git --name=my-source
+node dist/src/installer-cli/index.js sources update --id=my-source \
+  --publish-default-mode=branch-pr \
+  --default-base-branch=main \
+  --provider-hint=github \
+  --official-contribution-enabled=false
+```
+
+2. Validate and publish:
+
+```bash
+node dist/src/installer-cli/index.js skills validate --path=/path/to/skill --profile=personal
+node dist/src/installer-cli/index.js skills publish --source=my-source --path=/path/to/skill
+```
+
+3. Propose to official source:
+
+```bash
+node dist/src/installer-cli/index.js skills validate --path=/path/to/skill --profile=official
+node dist/src/installer-cli/index.js skills contribute-official --path=/path/to/skill
 ```
 
 Non-interactive example:

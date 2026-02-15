@@ -11,6 +11,10 @@ type Source = {
   enabled: boolean;
   skillsRoot: string;
   hooksRoot?: string;
+  publishDefaultMode?: "direct-push" | "branch-only" | "branch-pr";
+  defaultBaseBranch?: string;
+  providerHint?: "github" | "gitlab" | "bitbucket" | "unknown";
+  officialContributionEnabled?: boolean;
   credentialRef?: string;
   removable: boolean;
   lastSyncAt?: string;
@@ -27,7 +31,10 @@ type Skill = {
   name: string;
   description: string;
   category: string;
+  scope?: string;
+  tags?: string[];
   resources: Array<{ type: string; path: string }>;
+  sourcePath?: string;
   version?: string;
   updatedAt?: string;
 };
@@ -117,6 +124,24 @@ type HookOperationReport = {
   request?: unknown;
   targets: HookOperationTargetReport[];
 };
+
+type SkillValidationResult = {
+  profile: "personal" | "official";
+  errors: string[];
+  warnings: string[];
+  detectedFiles: string[];
+};
+
+type SkillPublishResult = {
+  mode: "direct-push" | "branch-only" | "branch-pr";
+  branch: string;
+  commitSha: string;
+  pushedRemote: string;
+  prUrl?: string;
+  compareUrl?: string;
+};
+
+type PublishMode = "direct-push" | "branch-only" | "branch-pr";
 
 type DashboardTab = "skills" | "hooks" | "settings" | "state";
 type DashboardMode = "light" | "dark";
@@ -220,6 +245,57 @@ function titleCase(value: string): string {
     .replace(/\b[a-z]/g, (match) => match.toUpperCase());
 }
 
+export function computeFilterSourceOptions<T extends { sourceId: string }>(
+  entries: T[],
+  selectedIds: Set<string>,
+  resolveEntryId: (entry: T) => string,
+): string[] {
+  const allSourceIds = Array.from(new Set(entries.map((entry) => entry.sourceId))).sort((a, b) => a.localeCompare(b));
+  if (allSourceIds.length === 0 || selectedIds.size === 0) {
+    return allSourceIds;
+  }
+
+  const selectedSourceIds = new Set<string>();
+  for (const entry of entries) {
+    if (selectedIds.has(resolveEntryId(entry))) {
+      selectedSourceIds.add(entry.sourceId);
+    }
+  }
+
+  if (selectedSourceIds.size === 0) {
+    return allSourceIds;
+  }
+
+  return Array.from(selectedSourceIds).sort((a, b) => a.localeCompare(b));
+}
+
+type SkillPublishCandidate = {
+  skillId: string;
+  skillName: string;
+  sourceId: string;
+  sourceName: string;
+  localPath: string;
+};
+
+function toSkillPublishCandidate(skill: Skill): SkillPublishCandidate {
+  return {
+    skillId: skill.skillId,
+    skillName: skill.skillName,
+    sourceId: skill.sourceId,
+    sourceName: skill.sourceName || skill.sourceId,
+    localPath: skill.sourcePath!.trim(),
+  };
+}
+
+export function listSkillPublishCandidates(skills: Skill[], selectedSkillIds: Set<string>): SkillPublishCandidate[] {
+  const withLocalPath = skills.filter((skill) => typeof skill.sourcePath === "string" && skill.sourcePath.trim().length > 0);
+  const selected = withLocalPath.filter((skill) => selectedSkillIds.has(skill.skillId));
+  const pool = selected.length > 0 ? selected : withLocalPath;
+  return pool
+    .map((skill) => toSkillPublishCandidate(skill))
+    .sort((a, b) => a.skillName.localeCompare(b.skillName) || a.sourceName.localeCompare(b.sourceName));
+}
+
 export function InstallerDashboard(): JSX.Element {
   const [sources, setSources] = useState<Source[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -246,16 +322,37 @@ export function InstallerDashboard(): JSX.Element {
   const [sourceName, setSourceName] = useState("");
   const [sourceTransport, setSourceTransport] = useState<"https" | "ssh">("https");
   const [sourceToken, setSourceToken] = useState("");
+  const [sourcePublishDefaultMode, setSourcePublishDefaultMode] = useState<"direct-push" | "branch-only" | "branch-pr">("branch-pr");
+  const [sourceDefaultBaseBranch, setSourceDefaultBaseBranch] = useState("main");
+  const [sourceProviderHint, setSourceProviderHint] = useState<"github" | "gitlab" | "bitbucket" | "unknown">("unknown");
+  const [sourceOfficialContributionEnabled, setSourceOfficialContributionEnabled] = useState(false);
+  const [editingSourceId, setEditingSourceId] = useState("");
+  const [skillPublishPath, setSkillPublishPath] = useState("");
+  const [skillPickerOpen, setSkillPickerOpen] = useState(false);
+  const [skillPickerQuery, setSkillPickerQuery] = useState("");
+  const [skillPublishName, setSkillPublishName] = useState("");
+  const [skillPublishMessage, setSkillPublishMessage] = useState("");
+  const [skillPublishOverrideMode, setSkillPublishOverrideMode] = useState<"source-default" | PublishMode>("source-default");
+  const [skillPublishOverrideBaseBranch, setSkillPublishOverrideBaseBranch] = useState("");
+  const [skillValidationProfile, setSkillValidationProfile] = useState<"personal" | "official">("personal");
+  const [skillValidationResult, setSkillValidationResult] = useState<SkillValidationResult | null>(null);
+  const [skillPublishResult, setSkillPublishResult] = useState<SkillPublishResult | null>(null);
   const [activeTab, setActiveTab] = useState<DashboardTab>("skills");
   const [appearanceMode, setAppearanceMode] = useState<DashboardMode>(() => readStoredAppearance().mode);
   const [appearanceAccent, setAppearanceAccent] = useState<DashboardAccent>(() => readStoredAppearance().accent);
   const [appearanceBackground, setAppearanceBackground] = useState<DashboardBackground>(() => readStoredAppearance().background);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [scopeFilter, setScopeFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [tagFilter, setTagFilter] = useState<string>("all");
   const [installedOnly, setInstalledOnly] = useState(false);
   const [hookSourceFilter, setHookSourceFilter] = useState<string>("all");
   const [hooksInstalledOnly, setHooksInstalledOnly] = useState(false);
   const [hookSelectionCustomized, setHookSelectionCustomized] = useState(false);
+  const [publishComposerOpen, setPublishComposerOpen] = useState(false);
+  const [publishAdvancedOpen, setPublishAdvancedOpen] = useState(false);
+  const [publishOriginSourceId, setPublishOriginSourceId] = useState<string | undefined>(undefined);
   const appearancePanelRef = useRef<HTMLElement | null>(null);
   const appearanceTriggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -269,6 +366,10 @@ export function InstallerDashboard(): JSX.Element {
   const skillById = useMemo(() => new Map(skills.map((skill) => [skill.skillId, skill])), [skills]);
   const hookById = useMemo(() => new Map(hooks.map((hook) => [hook.hookId, hook])), [hooks]);
   const sourceNameById = useMemo(() => new Map(sources.map((source) => [source.id, source.name || source.id])), [sources]);
+  const selectedPublishSource = useMemo(
+    () => sources.find((source) => source.id === editingSourceId) || null,
+    [sources, editingSourceId],
+  );
 
   const installedSkillIds = useMemo(() => {
     const names = new Set<string>();
@@ -303,13 +404,35 @@ export function InstallerDashboard(): JSX.Element {
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const normalizedHookQuery = hookSearchQuery.trim().toLowerCase();
   const sourceFilterOptions = useMemo(() => {
-    return Array.from(new Set(skills.map((skill) => skill.sourceId))).sort((a, b) => a.localeCompare(b));
-  }, [skills]);
+    return Array.from(new Set(sources.filter((source) => source.enabled).map((source) => source.id))).sort((a, b) => a.localeCompare(b));
+  }, [sources]);
   const hookSourceFilterOptions = useMemo(() => {
-    return Array.from(new Set(hooks.map((hook) => hook.sourceId))).sort((a, b) => a.localeCompare(b));
-  }, [hooks]);
+    return Array.from(new Set(sources.filter((source) => source.enabled).map((source) => source.id))).sort((a, b) => a.localeCompare(b));
+  }, [sources]);
+  const skillPublishCandidates = useMemo(() => listSkillPublishCandidates(skills, selectedSkills), [skills, selectedSkills]);
+  const selectedSkillPublishCandidates = useMemo(() => {
+    return skills
+      .filter((skill) => selectedSkills.has(skill.skillId))
+      .filter((skill) => typeof skill.sourcePath === "string" && skill.sourcePath.trim().length > 0)
+      .map((skill) => toSkillPublishCandidate(skill))
+      .sort((a, b) => a.skillName.localeCompare(b.skillName) || a.sourceName.localeCompare(b.sourceName));
+  }, [skills, selectedSkills]);
+  const publishBlockReason = useMemo(() => {
+    if (!editingSourceId || !skillPublishPath.trim()) {
+      return null;
+    }
+    return getOfficialPublishBlockReason(editingSourceId, skillPublishPath.trim(), publishOriginSourceId);
+  }, [editingSourceId, skillPublishPath, publishOriginSourceId, sources, skills]);
+  const normalizedSkillPickerQuery = skillPickerQuery.trim().toLowerCase();
+  const visibleSkillPublishCandidates = useMemo(() => {
+    if (!normalizedSkillPickerQuery) return skillPublishCandidates;
+    return skillPublishCandidates.filter((candidate) => {
+      const haystack = `${candidate.skillName} ${candidate.sourceName} ${candidate.localPath}`.toLowerCase();
+      return haystack.includes(normalizedSkillPickerQuery);
+    });
+  }, [skillPublishCandidates, normalizedSkillPickerQuery]);
 
-  const visibleSkills = useMemo(() => {
+  const sourceScopedSkills = useMemo(() => {
     return skills.filter((skill) => {
       if (sourceFilter !== "all" && skill.sourceId !== sourceFilter) {
         return false;
@@ -317,14 +440,74 @@ export function InstallerDashboard(): JSX.Element {
       if (installedOnly && !installedSkillIds.has(skill.skillId)) {
         return false;
       }
+      return true;
+    });
+  }, [skills, sourceFilter, installedOnly, installedSkillIds]);
+
+  const scopeFilterOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        sourceScopedSkills
+          .map((skill) => (skill.scope || "").trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+  }, [sourceScopedSkills]);
+
+  const categoryFilterOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        sourceScopedSkills
+          .map((skill) => (skill.category || "").trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+  }, [sourceScopedSkills]);
+
+  const tagFilterOptions = useMemo(() => {
+    const tags: string[] = [];
+    for (const skill of sourceScopedSkills) {
+      for (const tag of skill.tags || []) {
+        const normalized = tag.trim().toLowerCase();
+        if (normalized) tags.push(normalized);
+      }
+    }
+    return Array.from(new Set(tags)).sort((a, b) => a.localeCompare(b));
+  }, [sourceScopedSkills]);
+
+  const visibleSkills = useMemo(() => {
+    return sourceScopedSkills.filter((skill) => {
+      const skillScope = (skill.scope || "").trim().toLowerCase();
+      const skillCategory = (skill.category || "").trim().toLowerCase();
+      const skillTags = (skill.tags || []).map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+
+      if (scopeFilter !== "all" && skillScope !== scopeFilter) {
+        return false;
+      }
+      if (categoryFilter !== "all" && skillCategory !== categoryFilter) {
+        return false;
+      }
+      if (tagFilter !== "all" && !skillTags.includes(tagFilter)) {
+        return false;
+      }
       if (!normalizedQuery) {
         return true;
       }
       const resourceText = skill.resources.map((item) => `${item.type} ${item.path}`).join(" ");
-      const haystack = `${skill.skillId} ${skill.description} ${skill.category} ${resourceText}`.toLowerCase();
+      const tagsText = skillTags.join(" ");
+      const haystack = `${skill.skillId} ${skill.description} ${skill.category} ${skill.scope || ""} ${tagsText} ${resourceText}`.toLowerCase();
       return haystack.includes(normalizedQuery);
     });
-  }, [skills, sourceFilter, installedOnly, installedSkillIds, normalizedQuery]);
+  }, [sourceScopedSkills, scopeFilter, categoryFilter, tagFilter, normalizedQuery]);
+
+  const selectedVisibleSkillPublishCandidates = useMemo(() => {
+    return visibleSkills
+      .filter((skill) => selectedSkills.has(skill.skillId))
+      .filter((skill) => typeof skill.sourcePath === "string" && skill.sourcePath.trim().length > 0)
+      .map((skill) => toSkillPublishCandidate(skill))
+      .sort((a, b) => a.skillName.localeCompare(b.skillName) || a.sourceName.localeCompare(b.sourceName));
+  }, [visibleSkills, selectedSkills]);
+  const quickPublishCandidate = selectedVisibleSkillPublishCandidates.length === 1 ? selectedVisibleSkillPublishCandidates[0] : null;
 
   const filteredCategorized = useMemo(() => {
     const byCategory = new Map<string, Skill[]>();
@@ -660,6 +843,10 @@ export function InstallerDashboard(): JSX.Element {
           name: sourceName.trim() || undefined,
           repoUrl: sourceRepoUrl.trim(),
           transport: sourceTransport,
+          publishDefaultMode: sourcePublishDefaultMode,
+          defaultBaseBranch: sourceDefaultBaseBranch.trim() || undefined,
+          providerHint: sourceProviderHint,
+          officialContributionEnabled: sourceOfficialContributionEnabled,
           token: sourceToken.trim() || undefined,
         }),
       });
@@ -670,6 +857,10 @@ export function InstallerDashboard(): JSX.Element {
       setSourceRepoUrl("");
       setSourceName("");
       setSourceToken("");
+      setSourcePublishDefaultMode("branch-pr");
+      setSourceDefaultBaseBranch("main");
+      setSourceProviderHint("unknown");
+      setSourceOfficialContributionEnabled(false);
       await fetchSources();
       await fetchSkills(true);
       await fetchHooks();
@@ -721,6 +912,316 @@ export function InstallerDashboard(): JSX.Element {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function saveSourcePublishSettings(): Promise<void> {
+    if (!editingSourceId) {
+      setError("Select a source to update.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/v1/sources/${editingSourceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          publishDefaultMode: sourcePublishDefaultMode,
+          defaultBaseBranch: sourceDefaultBaseBranch.trim() || undefined,
+          providerHint: sourceProviderHint,
+          officialContributionEnabled: sourceOfficialContributionEnabled,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(asErrorMessage(payload, "Failed to update source publish settings."));
+      }
+      await fetchSources();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function normalizeLocalPath(value: string): string {
+    return value.trim().replace(/\\/g, "/").replace(/\/+$/, "");
+  }
+
+  function resolveSkillForPath(localPath: string): Skill | undefined {
+    const normalized = normalizeLocalPath(localPath);
+    return skills.find((skill) => normalizeLocalPath(skill.sourcePath || "") === normalized);
+  }
+
+  function isOfficialSkillBundle(localPath: string, originSourceId?: string): boolean {
+    const normalized = normalizeLocalPath(localPath);
+    const originSource = originSourceId ? sources.find((source) => source.id === originSourceId) : undefined;
+    if (originSource?.official) {
+      return true;
+    }
+
+    const matchedSkill = resolveSkillForPath(normalized);
+    if (matchedSkill) {
+      const matchedSource = sources.find((source) => source.id === matchedSkill.sourceId);
+      if (matchedSource?.official) {
+        return true;
+      }
+    }
+
+    return normalized.includes("/official-skills/");
+  }
+
+  function getOfficialPublishBlockReason(sourceId: string, localPath: string, originSourceId?: string): string | null {
+    const targetSource = sources.find((source) => source.id === sourceId);
+    if (!targetSource) {
+      return "Select a valid target source first.";
+    }
+    if (targetSource.official) {
+      return null;
+    }
+    if (isOfficialSkillBundle(localPath, originSourceId)) {
+      return "Official skills can only be published to official sources.";
+    }
+    return null;
+  }
+
+  function preparePublishOverlay(params: { localPath: string; skillName?: string; originSourceId?: string }): void {
+    setSkillPublishPath(params.localPath.trim());
+    if (params.skillName) {
+      setSkillPublishName(params.skillName);
+    }
+    setPublishOriginSourceId(params.originSourceId);
+    setPublishComposerOpen(true);
+    setPublishAdvancedOpen(false);
+  }
+
+  async function runSkillValidation(): Promise<void> {
+    if (!skillPublishPath.trim()) {
+      setError("Set a local skill path first.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setSkillValidationResult(null);
+    try {
+      const res = await fetch("/api/v1/skills/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: skillPublishPath.trim(),
+          skillName: skillPublishName.trim() || undefined,
+          profile: skillValidationProfile,
+        }),
+      });
+      const payload = (await res.json()) as { validation?: SkillValidationResult; error?: string };
+      if (!res.ok) {
+        throw new Error(asErrorMessage(payload, "Skill validation failed."));
+      }
+      if (payload.validation) {
+        setSkillValidationResult(payload.validation);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function publishSkillBundleRequest(params: {
+    sourceId: string;
+    path: string;
+    originSourceId?: string;
+    skillName?: string;
+    message?: string;
+    overrideMode?: PublishMode;
+    overrideBaseBranch?: string;
+  }): Promise<void> {
+    const blockReason = getOfficialPublishBlockReason(params.sourceId, params.path, params.originSourceId);
+    if (blockReason) {
+      throw new Error(blockReason);
+    }
+
+    const res = await fetch("/api/v1/skills/publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceId: params.sourceId,
+        path: params.path,
+        skillName: params.skillName,
+        message: params.message,
+        overrideMode: params.overrideMode,
+        overrideBaseBranch: params.overrideBaseBranch,
+      }),
+    });
+    const payload = (await res.json()) as { result?: SkillPublishResult; error?: string };
+    if (!res.ok) {
+      throw new Error(asErrorMessage(payload, "Skill publish failed."));
+    }
+    if (payload.result) {
+      setSkillPublishResult(payload.result);
+    }
+    await fetchSources();
+    await fetchSkills();
+    setPublishComposerOpen(false);
+    setPublishAdvancedOpen(false);
+  }
+
+  async function runSkillPublish(): Promise<void> {
+    if (!editingSourceId) {
+      setError("Select a source for publishing.");
+      return;
+    }
+    if (!skillPublishPath.trim()) {
+      setError("Set a local skill path first.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setSkillPublishResult(null);
+    try {
+      await publishSkillBundleRequest({
+        sourceId: editingSourceId,
+        path: skillPublishPath.trim(),
+        originSourceId: publishOriginSourceId,
+        skillName: skillPublishName.trim() || undefined,
+        message: skillPublishMessage.trim() || undefined,
+        overrideMode: skillPublishOverrideMode !== "source-default" ? skillPublishOverrideMode : undefined,
+        overrideBaseBranch: skillPublishOverrideBaseBranch.trim() || undefined,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runQuickPublishFromCatalogSelection(): Promise<void> {
+    if (selectedVisibleSkillPublishCandidates.length === 0) {
+      setError("Select one visible local catalog skill first.");
+      return;
+    }
+    if (selectedVisibleSkillPublishCandidates.length > 1) {
+      setError("Select exactly one visible local catalog skill to quick publish.");
+      return;
+    }
+
+    const candidate = selectedVisibleSkillPublishCandidates[0];
+    setError("");
+    setSkillPublishResult(null);
+    preparePublishOverlay({
+      localPath: candidate.localPath,
+      skillName: candidate.skillName,
+      originSourceId: candidate.sourceId,
+    });
+  }
+
+  async function runPickFolderAndPublish(): Promise<void> {
+    setBusy(true);
+    setError("");
+    setSkillPublishResult(null);
+    try {
+      const pickerRes = await fetch("/api/v1/skills/pick", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          initialPath: skillPublishPath.trim() || undefined,
+        }),
+      });
+      const pickerPayload = (await pickerRes.json()) as { path?: string; error?: string };
+      if (!pickerRes.ok) {
+        throw new Error(asErrorMessage(pickerPayload, "Skill picker failed."));
+      }
+      const pickedPath = pickerPayload.path?.trim();
+      if (!pickedPath) {
+        return;
+      }
+      const pickedSkill = resolveSkillForPath(pickedPath);
+      preparePublishOverlay({
+        localPath: pickedPath,
+        skillName: pickedSkill?.skillName || skillPublishName.trim() || undefined,
+        originSourceId: pickedSkill?.sourceId,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runOfficialContribution(): Promise<void> {
+    if (!skillPublishPath.trim()) {
+      setError("Set a local skill path first.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setSkillPublishResult(null);
+    try {
+      const res = await fetch("/api/v1/skills/contribute-official", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceId: editingSourceId || undefined,
+          path: skillPublishPath.trim(),
+          skillName: skillPublishName.trim() || undefined,
+          message: skillPublishMessage.trim() || undefined,
+        }),
+      });
+      const payload = (await res.json()) as { result?: SkillPublishResult; error?: string };
+      if (!res.ok) {
+        throw new Error(asErrorMessage(payload, "Official contribution failed."));
+      }
+      if (payload.result) {
+        setSkillPublishResult(payload.result);
+      }
+      await fetchSources();
+      await fetchSkills();
+      setPublishComposerOpen(false);
+      setPublishAdvancedOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pickSkillPublishPath(): Promise<void> {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/v1/skills/pick", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          initialPath: skillPublishPath.trim() || undefined,
+        }),
+      });
+      const payload = (await res.json()) as { path?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(asErrorMessage(payload, "Skill picker failed."));
+      }
+      if (payload.path) {
+        const pickedPath = payload.path.trim();
+        setSkillPublishPath(pickedPath);
+        const matched = resolveSkillForPath(pickedPath);
+        setPublishOriginSourceId(matched?.sourceId);
+        if (matched?.skillName) {
+          setSkillPublishName(matched.skillName);
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function applySkillPublishCandidate(candidate: SkillPublishCandidate): void {
+    setError("");
+    setSkillPublishPath(candidate.localPath);
+    setSkillPublishName(candidate.skillName);
+    setPublishOriginSourceId(candidate.sourceId);
+    setSkillPickerOpen(false);
   }
 
   async function pickProjectPath(): Promise<void> {
@@ -786,6 +1287,26 @@ export function InstallerDashboard(): JSX.Element {
   }, []);
 
   useEffect(() => {
+    if (sources.length === 0) {
+      setEditingSourceId("");
+      return;
+    }
+    if (!editingSourceId || !sources.some((source) => source.id === editingSourceId)) {
+      setEditingSourceId(sources[0].id);
+    }
+  }, [sources, editingSourceId]);
+
+  useEffect(() => {
+    if (!editingSourceId) return;
+    const selected = sources.find((source) => source.id === editingSourceId);
+    if (!selected) return;
+    setSourcePublishDefaultMode(selected.publishDefaultMode || "branch-pr");
+    setSourceDefaultBaseBranch(selected.defaultBaseBranch || "main");
+    setSourceProviderHint(selected.providerHint || "unknown");
+    setSourceOfficialContributionEnabled(Boolean(selected.officialContributionEnabled));
+  }, [editingSourceId, sources]);
+
+  useEffect(() => {
     setSelectionCustomized(false);
     setHookSelectionCustomized(false);
     Promise.all([fetchInstallations(), fetchHookInstallations()]).catch((err) => setError(err instanceof Error ? err.message : String(err)));
@@ -809,11 +1330,55 @@ export function InstallerDashboard(): JSX.Element {
   }, [sourceFilter, sourceFilterOptions]);
 
   useEffect(() => {
+    if (scopeFilter === "all") return;
+    if (!scopeFilterOptions.includes(scopeFilter)) {
+      setScopeFilter("all");
+    }
+  }, [scopeFilter, scopeFilterOptions]);
+
+  useEffect(() => {
+    if (categoryFilter === "all") return;
+    if (!categoryFilterOptions.includes(categoryFilter)) {
+      setCategoryFilter("all");
+    }
+  }, [categoryFilter, categoryFilterOptions]);
+
+  useEffect(() => {
+    if (tagFilter === "all") return;
+    if (!tagFilterOptions.includes(tagFilter)) {
+      setTagFilter("all");
+    }
+  }, [tagFilter, tagFilterOptions]);
+
+  useEffect(() => {
     if (hookSourceFilter === "all") return;
     if (!hookSourceFilterOptions.includes(hookSourceFilter)) {
       setHookSourceFilter("all");
     }
   }, [hookSourceFilter, hookSourceFilterOptions]);
+
+  useEffect(() => {
+    if (!skillPickerOpen) return;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setSkillPickerOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [skillPickerOpen]);
+
+  useEffect(() => {
+    if (!publishComposerOpen && !publishAdvancedOpen) return;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setPublishComposerOpen(false);
+        setPublishAdvancedOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [publishComposerOpen, publishAdvancedOpen]);
 
   useEffect(() => {
     if (catalogLoading || skills.length === 0) return;
@@ -1096,6 +1661,58 @@ export function InstallerDashboard(): JSX.Element {
                 </button>
               </div>
             </section>
+
+            <section className="panel panel-publish panel-spacious">
+              <div className="publish-head">
+                <div>
+                  <h2>Skill Publishing</h2>
+                  <p className="subtle">Quick publish from selected skills or picked folders. Target and advanced settings appear only in overlays.</p>
+                </div>
+                <span className="publish-chip">{skillPublishCandidates.length} local bundles</span>
+              </div>
+
+              <div className="publish-quick-actions">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  disabled={busy || !quickPublishCandidate}
+                  onClick={runQuickPublishFromCatalogSelection}
+                >
+                  Publish
+                </button>
+                <button className="btn btn-secondary" type="button" disabled={busy} onClick={runPickFolderAndPublish}>
+                  Pick & Publish
+                </button>
+              </div>
+              <p className="publish-quick-hint subtle">
+                {selectedVisibleSkillPublishCandidates.length === 0 &&
+                  "Select one visible local catalog skill, then publish it in one click."}
+                {selectedVisibleSkillPublishCandidates.length === 1 &&
+                  `Ready to publish "${selectedVisibleSkillPublishCandidates[0].skillName}" from selected catalog skill.`}
+                {selectedVisibleSkillPublishCandidates.length > 1 &&
+                  "Multiple visible local catalog skills are selected. Keep one selected to enable one-click publish."}
+              </p>
+
+              {selectedPublishSource && (
+                <p className="publish-hint">
+                  Last target: <code>{selectedPublishSource.name || selectedPublishSource.id}</code> • flow{" "}
+                  <code>{selectedPublishSource.publishDefaultMode || "branch-pr"}</code>.
+                </p>
+              )}
+
+              {skillValidationResult && (
+                <details className="collapsible" open>
+                  <summary>Validation Result ({skillValidationResult.profile})</summary>
+                  <pre>{JSON.stringify(skillValidationResult, null, 2)}</pre>
+                </details>
+              )}
+              {skillPublishResult && (
+                <details className="collapsible" open>
+                  <summary>Publish Result</summary>
+                  <pre>{JSON.stringify(skillPublishResult, null, 2)}</pre>
+                </details>
+              )}
+            </section>
           </aside>
 
           <main className="catalog-column">
@@ -1153,6 +1770,72 @@ export function InstallerDashboard(): JSX.Element {
                       ))}
                     </div>
                   </div>
+                  <div className="source-filter">
+                    <span className="filter-label">Scope</span>
+                    <div className="source-chip-row">
+                      <button
+                        className={`chip chip-filter ${scopeFilter === "all" ? "is-active" : ""}`}
+                        type="button"
+                        onClick={() => setScopeFilter("all")}
+                      >
+                        all
+                      </button>
+                      {scopeFilterOptions.map((scopeValue) => (
+                        <button
+                          key={scopeValue}
+                          className={`chip chip-filter ${scopeFilter === scopeValue ? "is-active" : ""}`}
+                          type="button"
+                          onClick={() => setScopeFilter(scopeValue)}
+                        >
+                          {titleCase(scopeValue)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="source-filter">
+                    <span className="filter-label">Category</span>
+                    <div className="source-chip-row">
+                      <button
+                        className={`chip chip-filter ${categoryFilter === "all" ? "is-active" : ""}`}
+                        type="button"
+                        onClick={() => setCategoryFilter("all")}
+                      >
+                        all
+                      </button>
+                      {categoryFilterOptions.map((categoryValue) => (
+                        <button
+                          key={categoryValue}
+                          className={`chip chip-filter ${categoryFilter === categoryValue ? "is-active" : ""}`}
+                          type="button"
+                          onClick={() => setCategoryFilter(categoryValue)}
+                        >
+                          {titleCase(categoryValue)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="source-filter">
+                    <span className="filter-label">Tag</span>
+                    <div className="source-chip-row">
+                      <button
+                        className={`chip chip-filter ${tagFilter === "all" ? "is-active" : ""}`}
+                        type="button"
+                        onClick={() => setTagFilter("all")}
+                      >
+                        all
+                      </button>
+                      {tagFilterOptions.map((tagValue) => (
+                        <button
+                          key={tagValue}
+                          className={`chip chip-filter ${tagFilter === tagValue ? "is-active" : ""}`}
+                          type="button"
+                          onClick={() => setTagFilter(tagValue)}
+                        >
+                          {tagValue}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <label className="toggle">
                     <input type="checkbox" checked={installedOnly} onChange={(event) => setInstalledOnly(event.target.checked)} />
                     Installed only
@@ -1197,6 +1880,12 @@ export function InstallerDashboard(): JSX.Element {
                               </label>
                               <div className="skill-badges">
                                 <span className="badge badge-source">{sourceNameById.get(skill.sourceId) || skill.sourceId}</span>
+                                {skill.scope && <span className="badge">{titleCase(skill.scope)}</span>}
+                                {(skill.tags || []).slice(0, 2).map((tag) => (
+                                  <span key={`${skill.skillId}-tag-${tag}`} className="badge">
+                                    #{tag}
+                                  </span>
+                                ))}
                                 {isInstalled && <span className="badge">installed</span>}
                               </div>
                             </div>
@@ -1377,9 +2066,15 @@ export function InstallerDashboard(): JSX.Element {
                   <span>
                     roots: {source.skillsRoot || "(no /skills)"} / {source.hooksRoot || "(no /hooks)"}
                   </span>
+                  <span>
+                    publish: {source.publishDefaultMode} / base {source.defaultBaseBranch || "main"} / provider {source.providerHint}
+                  </span>
                   <span>{source.lastSyncAt ? `synced ${new Date(source.lastSyncAt).toLocaleString()}` : "never synced"}</span>
                   {source.lastError && <span className="source-error">{source.lastError}</span>}
                   <div className="source-actions">
+                    <button className="btn btn-inline" type="button" disabled={busy} onClick={() => setEditingSourceId(source.id)}>
+                      Select
+                    </button>
                     <button className="btn btn-inline" type="button" disabled={busy} onClick={() => refreshSource(source.id)}>
                       Refresh
                     </button>
@@ -1392,6 +2087,49 @@ export function InstallerDashboard(): JSX.Element {
                 </article>
               ))}
             </div>
+
+            <h2>Source Publish Settings</h2>
+            <span className="field-label">Selected Source</span>
+            <select className="input" value={editingSourceId} onChange={(event) => setEditingSourceId(event.target.value)}>
+              {sources.map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.name || source.id}
+                </option>
+              ))}
+            </select>
+            <span className="field-label">Default Publish Mode</span>
+            <select className="input" value={sourcePublishDefaultMode} onChange={(event) => setSourcePublishDefaultMode(event.target.value as "direct-push" | "branch-only" | "branch-pr")}>
+              <option value="branch-pr">branch-pr</option>
+              <option value="branch-only">branch-only</option>
+              <option value="direct-push">direct-push</option>
+            </select>
+            <span className="field-label">Default Base Branch</span>
+            <input
+              className="input"
+              placeholder="main"
+              value={sourceDefaultBaseBranch}
+              onChange={(event) => setSourceDefaultBaseBranch(event.target.value)}
+            />
+            <span className="field-label">Provider Hint</span>
+            <select className="input" value={sourceProviderHint} onChange={(event) => setSourceProviderHint(event.target.value as "github" | "gitlab" | "bitbucket" | "unknown")}>
+              <option value="unknown">unknown</option>
+              <option value="github">github</option>
+              <option value="gitlab">gitlab</option>
+              <option value="bitbucket">bitbucket</option>
+            </select>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={sourceOfficialContributionEnabled}
+                onChange={(event) => setSourceOfficialContributionEnabled(event.target.checked)}
+              />
+              Official contribution enabled
+            </label>
+            <button className="btn btn-secondary" type="button" disabled={busy || !editingSourceId} onClick={saveSourcePublishSettings}>
+              Save source publish settings
+            </button>
+
+            <h2>Add Repository</h2>
             <span className="field-label">Source Name</span>
             <input
               className="input"
@@ -1425,6 +2163,34 @@ export function InstallerDashboard(): JSX.Element {
                 />
               </>
             )}
+            <span className="field-label">Default Publish Mode (new source)</span>
+            <select className="input" value={sourcePublishDefaultMode} onChange={(event) => setSourcePublishDefaultMode(event.target.value as "direct-push" | "branch-only" | "branch-pr")}>
+              <option value="branch-pr">branch-pr</option>
+              <option value="branch-only">branch-only</option>
+              <option value="direct-push">direct-push</option>
+            </select>
+            <span className="field-label">Default Base Branch (new source)</span>
+            <input
+              className="input"
+              placeholder="main"
+              value={sourceDefaultBaseBranch}
+              onChange={(event) => setSourceDefaultBaseBranch(event.target.value)}
+            />
+            <span className="field-label">Provider Hint (new source)</span>
+            <select className="input" value={sourceProviderHint} onChange={(event) => setSourceProviderHint(event.target.value as "github" | "gitlab" | "bitbucket" | "unknown")}>
+              <option value="unknown">unknown</option>
+              <option value="github">github</option>
+              <option value="gitlab">gitlab</option>
+              <option value="bitbucket">bitbucket</option>
+            </select>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={sourceOfficialContributionEnabled}
+                onChange={(event) => setSourceOfficialContributionEnabled(event.target.checked)}
+              />
+              Official contribution enabled (new source)
+            </label>
             <button className="btn btn-secondary" type="button" disabled={busy || !sourceRepoUrl.trim()} onClick={addSourceFromForm}>
               Add repository
             </button>
@@ -1529,6 +2295,262 @@ export function InstallerDashboard(): JSX.Element {
             <pre>{hookReport ? JSON.stringify(hookReport, null, 2) : "No hook operation run yet."}</pre>
           </details>
         </section>
+      )}
+
+      {publishComposerOpen && (
+        <div className="publish-config-overlay" role="presentation" onClick={() => setPublishComposerOpen(false)}>
+          <section
+            className="publish-config-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose publish target"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="publish-picker-head">
+              <div>
+                <h3>Choose Publish Target</h3>
+                <p className="subtle">Select the source target in this overlay, then publish.</p>
+              </div>
+              <button className="btn btn-inline" type="button" onClick={() => setPublishComposerOpen(false)}>
+                Close
+              </button>
+            </div>
+            <label className="publish-field">
+              <span className="field-label">Target Source</span>
+              <select
+                className="input"
+                value={editingSourceId}
+                onChange={(event) => setEditingSourceId(event.target.value)}
+                aria-label="Publish target source"
+              >
+                {sources.map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.name || source.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="publish-hint">
+              Bundle path: <code>{skillPublishPath || "(not set)"}</code>
+            </p>
+            {publishBlockReason && <p className="source-error">{publishBlockReason}</p>}
+            <div className="publish-actions">
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={busy || !editingSourceId || !skillPublishPath.trim() || Boolean(publishBlockReason)}
+                onClick={runSkillPublish}
+              >
+                Publish
+              </button>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setPublishComposerOpen(false);
+                  setPublishAdvancedOpen(true);
+                }}
+              >
+                Advanced Settings
+              </button>
+              <button className="btn btn-tertiary" type="button" disabled={busy} onClick={() => setPublishComposerOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {publishAdvancedOpen && (
+        <div className="publish-config-overlay" role="presentation" onClick={() => setPublishAdvancedOpen(false)}>
+          <section
+            className="publish-config-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Advanced publish settings"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="publish-picker-head">
+              <div>
+                <h3>Advanced Settings</h3>
+                <p className="subtle">Adjust bundle path, metadata, validation, and contribution options here.</p>
+              </div>
+              <button className="btn btn-inline" type="button" onClick={() => setPublishAdvancedOpen(false)}>
+                Close
+              </button>
+            </div>
+
+            <div className="publish-grid">
+              <label className="publish-field publish-field-span">
+                <span className="field-label">Local Skill Path</span>
+                <div className="publish-path-row">
+                  <input
+                    className="input"
+                    name="advanced-local-skill-path"
+                    autoComplete="off"
+                    placeholder="/path/to/local/skill…"
+                    value={skillPublishPath}
+                    onChange={(event) => setSkillPublishPath(event.target.value)}
+                    aria-label="Local skill path"
+                  />
+                  <div className="publish-path-actions">
+                    <button className="btn btn-inline" type="button" disabled={busy} onClick={pickSkillPublishPath}>
+                      Pick Folder
+                    </button>
+                    <button
+                      className="btn btn-inline"
+                      type="button"
+                      disabled={busy || skillPublishCandidates.length === 0}
+                      onClick={() => {
+                        setSkillPickerQuery("");
+                        setSkillPickerOpen(true);
+                      }}
+                    >
+                      Select From Local Catalog
+                    </button>
+                  </div>
+                </div>
+              </label>
+
+              <label className="publish-field">
+                <span className="field-label">Skill Name Override (optional)</span>
+                <input
+                  className="input"
+                  name="advanced-skill-name"
+                  autoComplete="off"
+                  placeholder="my-skill…"
+                  value={skillPublishName}
+                  onChange={(event) => setSkillPublishName(event.target.value)}
+                />
+              </label>
+
+              <label className="publish-field">
+                <span className="field-label">Commit Message (optional)</span>
+                <input
+                  className="input"
+                  name="advanced-commit-message"
+                  autoComplete="off"
+                  placeholder="feat(skill): publish my-skill…"
+                  value={skillPublishMessage}
+                  onChange={(event) => setSkillPublishMessage(event.target.value)}
+                />
+              </label>
+
+              <label className="publish-field">
+                <span className="field-label">Publish Mode Override (optional)</span>
+                <select
+                  className="input"
+                  name="advanced-override-mode"
+                  value={skillPublishOverrideMode}
+                  onChange={(event) => setSkillPublishOverrideMode(event.target.value as "source-default" | PublishMode)}
+                >
+                  <option value="source-default">
+                    source default ({selectedPublishSource?.publishDefaultMode || "branch-pr"})
+                  </option>
+                  <option value="direct-push">direct-push</option>
+                  <option value="branch-only">branch-only</option>
+                  <option value="branch-pr">branch-pr</option>
+                </select>
+              </label>
+
+              <label className="publish-field">
+                <span className="field-label">Base Branch Override (optional)</span>
+                <input
+                  className="input"
+                  name="advanced-override-base-branch"
+                  autoComplete="off"
+                  placeholder={selectedPublishSource?.defaultBaseBranch || (selectedPublishSource?.official ? "dev" : "main")}
+                  value={skillPublishOverrideBaseBranch}
+                  onChange={(event) => setSkillPublishOverrideBaseBranch(event.target.value)}
+                />
+              </label>
+
+              <label className="publish-field">
+                <span className="field-label">Validation Profile</span>
+                <select className="input" value={skillValidationProfile} onChange={(event) => setSkillValidationProfile(event.target.value as "personal" | "official")}>
+                  <option value="personal">personal</option>
+                  <option value="official">official</option>
+                </select>
+              </label>
+            </div>
+
+            {publishBlockReason && <p className="source-error">{publishBlockReason}</p>}
+            <div className="publish-actions">
+              <button className="btn btn-secondary" type="button" disabled={busy || !skillPublishPath.trim()} onClick={runSkillValidation}>
+                Validate
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={busy || !skillPublishPath.trim() || !editingSourceId || Boolean(publishBlockReason)}
+                onClick={runSkillPublish}
+              >
+                Publish
+              </button>
+              <button className="btn btn-tertiary" type="button" disabled={busy || !skillPublishPath.trim()} onClick={runOfficialContribution}>
+                Contribute Official
+              </button>
+            </div>
+            <div className="publish-actions">
+              <button
+                className="btn btn-inline"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setPublishAdvancedOpen(false);
+                  setPublishComposerOpen(true);
+                }}
+              >
+                Back to Publish Target
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {skillPickerOpen && (
+        <div className="publish-picker-overlay" role="presentation" onClick={() => setSkillPickerOpen(false)}>
+          <section
+            className="publish-picker-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Select local skill bundle"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="publish-picker-head">
+              <div>
+                <h3>Select Local Skill Bundle</h3>
+                <p className="subtle">Pick a bundle discovered in your local catalog, then publish it without retyping paths.</p>
+              </div>
+              <button className="btn btn-inline" type="button" onClick={() => setSkillPickerOpen(false)}>
+                Close
+              </button>
+            </div>
+              <input
+                className="input input-search"
+                name="skill-picker-search"
+                autoComplete="off"
+                placeholder="Search by skill, source, or path…"
+                value={skillPickerQuery}
+                onChange={(event) => setSkillPickerQuery(event.target.value)}
+              aria-label="Search local skill bundles"
+            />
+            <div className="publish-picker-list">
+              {visibleSkillPublishCandidates.length === 0 ? (
+                <div className="empty-state">No local bundles match this search.</div>
+              ) : (
+                visibleSkillPublishCandidates.map((candidate) => (
+                  <button key={candidate.skillId} className="publish-picker-item" type="button" onClick={() => applySkillPublishCandidate(candidate)}>
+                    <span className="publish-picker-item-name">{candidate.skillName}</span>
+                    <span className="publish-picker-item-source">{candidate.sourceName}</span>
+                    <code>{candidate.localPath}</code>
+                  </button>
+                ))
+              )}
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

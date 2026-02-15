@@ -4,8 +4,9 @@
 1. [Installation Guide](installation-guide.md)
 2. [Configuration Guide](configuration-guide.md)
 3. [Workflow Guide](workflow-guide.md)
-4. [MCP Integration (Claude Code)](mcp-integration.md)
-5. [MCP Proxy (ICA-Owned)](mcp-proxy.md)
+4. [Skill Publishing Guide](skill-publishing-guide.md)
+5. [MCP Integration (Claude Code)](mcp-integration.md)
+6. [MCP Proxy (ICA-Owned)](mcp-proxy.md)
 
 ## Core Concepts
 - [Roles and Skills](skills-reference.md)

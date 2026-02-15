@@ -26,6 +26,15 @@
           "type": "boolean",
           "description": "Always activate PM role"
         },
+        "work_item_pipeline_enabled": {
+          "type": "boolean",
+          "description": "Automatically orchestrate create-work-items -> plan-work-items -> run-work-items for actionable findings/comments"
+        },
+        "work_item_pipeline_mode": {
+          "type": "string",
+          "enum": ["batch_auto", "batch_confirm", "item_confirm"],
+          "description": "Confirmation mode for actionable-finding ingestion when work item pipeline is enabled"
+        },
         "l3_settings": {
           "type": "object",
           "description": "L3 autonomous mode settings",

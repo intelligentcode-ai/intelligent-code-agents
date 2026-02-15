@@ -9,6 +9,7 @@ import { loadCatalogFromSources } from "../../installer-core/catalog";
 import { createCredentialProvider } from "../../installer-core/credentials";
 import { checkSourceAuth } from "../../installer-core/sourceAuth";
 import { syncSource } from "../../installer-core/sourceSync";
+import { contributeOfficialSkillBundle, publishSkillBundle, validateSkillBundle } from "../../installer-core/skillPublish";
 import { loadSources, removeSource, setSourceSyncStatus, updateSource } from "../../installer-core/sources";
 import { loadHookSources, removeHookSource, updateHookSource } from "../../installer-core/hookSources";
 import { syncHookSource } from "../../installer-core/hookSync";
@@ -20,7 +21,7 @@ import { loadInstallState } from "../../installer-core/state";
 import { discoverTargets, resolveTargetPaths } from "../../installer-core/targets";
 import { SUPPORTED_TARGETS } from "../../installer-core/constants";
 import { findRepoRoot } from "../../installer-core/repo";
-import { InstallRequest, InstallScope, InstallSelection, TargetPlatform } from "../../installer-core/types";
+import { InstallRequest, InstallScope, InstallSelection, PublishMode, TargetPlatform, ValidationProfile } from "../../installer-core/types";
 import {
   Capability,
   loadDashboardServerPlugins,
@@ -78,6 +79,14 @@ function parseTargets(value?: string): TargetPlatform[] {
     .filter((item): item is TargetPlatform => SUPPORTED_TARGETS.includes(item as TargetPlatform));
 
   return Array.from(new Set(parsed));
+}
+
+function normalizePathForMatch(value: string): string {
+  return value.trim().replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+function looksLikeOfficialSkillPath(localPath: string): boolean {
+  return normalizePathForMatch(localPath).includes("/official-skills/");
 }
 
 const HELPER_HOST = "127.0.0.1";
@@ -441,6 +450,10 @@ async function main(): Promise<void> {
         enabled: boolean;
         skillsRoot?: string;
         hooksRoot?: string;
+        publishDefaultMode?: PublishMode;
+        defaultBaseBranch?: string;
+        providerHint?: "github" | "gitlab" | "bitbucket" | "unknown";
+        officialContributionEnabled?: boolean;
         credentialRef?: string;
         removable: boolean;
         lastSyncAt?: string;
@@ -467,6 +480,10 @@ async function main(): Promise<void> {
         official: source.official,
         enabled: source.enabled,
         skillsRoot: source.skillsRoot,
+        publishDefaultMode: source.publishDefaultMode,
+        defaultBaseBranch: source.defaultBaseBranch,
+        providerHint: source.providerHint,
+        officialContributionEnabled: source.officialContributionEnabled,
         credentialRef: source.credentialRef,
         removable: source.removable,
         lastSyncAt: source.lastSyncAt || byId.get(source.id)?.lastSyncAt,
@@ -493,6 +510,10 @@ async function main(): Promise<void> {
         official: source.official,
         enabled: (byId.get(source.id)?.enabled ?? false) || source.enabled,
         hooksRoot: source.hooksRoot,
+        publishDefaultMode: byId.get(source.id)?.publishDefaultMode,
+        defaultBaseBranch: byId.get(source.id)?.defaultBaseBranch,
+        providerHint: byId.get(source.id)?.providerHint,
+        officialContributionEnabled: byId.get(source.id)?.officialContributionEnabled,
         credentialRef: source.credentialRef || byId.get(source.id)?.credentialRef,
         removable: (byId.get(source.id)?.removable ?? true) && source.removable,
         lastSyncAt: byId.get(source.id)?.lastSyncAt || source.lastSyncAt,
@@ -525,6 +546,18 @@ async function main(): Promise<void> {
         repoUrl,
         transport: typeof body.transport === "string" && (body.transport === "https" || body.transport === "ssh") ? body.transport : undefined,
         skillsRoot: typeof body.skillsRoot === "string" ? body.skillsRoot : undefined,
+        publishDefaultMode:
+          typeof body.publishDefaultMode === "string" &&
+          (body.publishDefaultMode === "direct-push" || body.publishDefaultMode === "branch-only" || body.publishDefaultMode === "branch-pr")
+            ? body.publishDefaultMode
+            : undefined,
+        defaultBaseBranch: typeof body.defaultBaseBranch === "string" ? body.defaultBaseBranch : undefined,
+        providerHint:
+          typeof body.providerHint === "string" &&
+          (body.providerHint === "github" || body.providerHint === "gitlab" || body.providerHint === "bitbucket" || body.providerHint === "unknown")
+            ? body.providerHint
+            : undefined,
+        officialContributionEnabled: typeof body.officialContributionEnabled === "boolean" ? body.officialContributionEnabled : undefined,
         hooksRoot: typeof body.hooksRoot === "string" ? body.hooksRoot : undefined,
         enabled: body.enabled !== false,
         removable: body.removable !== false,
@@ -566,6 +599,18 @@ async function main(): Promise<void> {
         repoUrl: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
         transport: typeof body.transport === "string" && (body.transport === "https" || body.transport === "ssh") ? body.transport : undefined,
         skillsRoot: typeof body.skillsRoot === "string" ? body.skillsRoot : undefined,
+        publishDefaultMode:
+          typeof body.publishDefaultMode === "string" &&
+          (body.publishDefaultMode === "direct-push" || body.publishDefaultMode === "branch-only" || body.publishDefaultMode === "branch-pr")
+            ? body.publishDefaultMode
+            : undefined,
+        defaultBaseBranch: typeof body.defaultBaseBranch === "string" ? body.defaultBaseBranch : undefined,
+        providerHint:
+          typeof body.providerHint === "string" &&
+          (body.providerHint === "github" || body.providerHint === "gitlab" || body.providerHint === "bitbucket" || body.providerHint === "unknown")
+            ? body.providerHint
+            : undefined,
+        officialContributionEnabled: typeof body.officialContributionEnabled === "boolean" ? body.officialContributionEnabled : undefined,
         enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
         credentialRef: typeof body.credentialRef === "string" ? body.credentialRef : undefined,
         removable: typeof body.removable === "boolean" ? body.removable : undefined,
@@ -733,6 +778,130 @@ async function main(): Promise<void> {
       refreshed.push(item);
     }
     return { refreshed };
+  });
+
+  app.post("/api/v1/skills/validate", async (request, reply) => {
+    const body = (request.body && typeof request.body === "object" ? (request.body as Record<string, unknown>) : {}) as Record<
+      string,
+      unknown
+    >;
+    const localPath = typeof body.path === "string" ? body.path.trim() : "";
+    if (!localPath) {
+      return reply.code(400).send({ error: "path is required." });
+    }
+    const profile = (typeof body.profile === "string" ? body.profile : "personal") as ValidationProfile;
+    if (profile !== "personal" && profile !== "official") {
+      return reply.code(400).send({ error: "profile must be 'personal' or 'official'." });
+    }
+
+    try {
+      const validation = await validateSkillBundle(
+        {
+          localPath,
+          skillName: typeof body.skillName === "string" ? body.skillName : undefined,
+        },
+        profile,
+      );
+      return { validation };
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post("/api/v1/skills/publish", async (request, reply) => {
+    const body = (request.body && typeof request.body === "object" ? (request.body as Record<string, unknown>) : {}) as Record<
+      string,
+      unknown
+    >;
+    const sourceId = typeof body.sourceId === "string" ? body.sourceId.trim() : "";
+    const localPath = typeof body.path === "string" ? body.path.trim() : "";
+    const overrideMode = typeof body.overrideMode === "string" ? body.overrideMode.trim() : "";
+    const overrideBaseBranch = typeof body.overrideBaseBranch === "string" ? body.overrideBaseBranch.trim() : "";
+    if (!sourceId) {
+      return reply.code(400).send({ error: "sourceId is required." });
+    }
+    if (!localPath) {
+      return reply.code(400).send({ error: "path is required." });
+    }
+    if (overrideMode && overrideMode !== "direct-push" && overrideMode !== "branch-only" && overrideMode !== "branch-pr") {
+      return reply.code(400).send({ error: "overrideMode must be direct-push, branch-only, or branch-pr." });
+    }
+    try {
+      const sources = await loadSources();
+      const targetSource = sources.find((source) => source.id === sourceId);
+      if (!targetSource) {
+        return reply.code(404).send({ error: `Unknown source '${sourceId}'.` });
+      }
+
+      const catalog = await loadCatalogFromSources(repoRoot, false);
+      const normalizedLocalPath = normalizePathForMatch(localPath);
+      const matchedSkill = catalog.skills.find((skill) => normalizePathForMatch(skill.sourcePath || "") === normalizedLocalPath);
+      const matchedSource = matchedSkill ? sources.find((source) => source.id === matchedSkill.sourceId) : undefined;
+      const officialBundle = Boolean(matchedSource?.official) || looksLikeOfficialSkillPath(localPath);
+      if (officialBundle && !targetSource.official) {
+        return reply.code(400).send({ error: "Official skills can only be published to official sources." });
+      }
+
+      const result = await publishSkillBundle(
+        {
+          sourceId,
+          bundle: {
+            localPath,
+            skillName: typeof body.skillName === "string" ? body.skillName : undefined,
+          },
+          commitMessage: typeof body.message === "string" ? body.message : undefined,
+          overrideMode: overrideMode ? (overrideMode as PublishMode) : undefined,
+          overrideBaseBranch: overrideBaseBranch || undefined,
+        },
+        createCredentialProvider(),
+      );
+      return { result };
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post("/api/v1/skills/contribute-official", async (request, reply) => {
+    const body = (request.body && typeof request.body === "object" ? (request.body as Record<string, unknown>) : {}) as Record<
+      string,
+      unknown
+    >;
+    const localPath = typeof body.path === "string" ? body.path.trim() : "";
+    if (!localPath) {
+      return reply.code(400).send({ error: "path is required." });
+    }
+    try {
+      const result = await contributeOfficialSkillBundle(
+        {
+          sourceId: typeof body.sourceId === "string" ? body.sourceId : undefined,
+          bundle: {
+            localPath,
+            skillName: typeof body.skillName === "string" ? body.skillName : undefined,
+          },
+          commitMessage: typeof body.message === "string" ? body.message : undefined,
+        },
+        createCredentialProvider(),
+      );
+      return { result };
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post("/api/v1/skills/pick", async (request, reply) => {
+    const body = (request.body && typeof request.body === "object" ? (request.body as Record<string, unknown>) : {}) as Record<
+      string,
+      unknown
+    >;
+    try {
+      await ensureHelperRunning(repoRoot);
+      const payload = await helperRequest("/pick-directory", {
+        initialPath: typeof body.initialPath === "string" ? body.initialPath : process.cwd(),
+      });
+      return payload;
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+    }
   });
 
   app.post("/api/v1/projects/pick", async (request, reply) => {

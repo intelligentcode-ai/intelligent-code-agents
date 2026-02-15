@@ -28,9 +28,11 @@ ICA supports multiple skill repositories side-by-side.
 
 - Add official and custom repos (HTTPS/SSH)
 - Keep each source cached locally under `~/.ica/<source-id>/skills`
+- Keep each source publish workspace under `~/.ica/source-workspaces/<source-id>/repo`
 - Select skills explicitly as `<source>/<skill>` to avoid ambiguity
 - Remove a source without deleting already installed skills (they are marked orphaned)
 - Use the same model in CLI and dashboard
+- Configure per-source publishing defaults: `direct-push`, `branch-only`, or `branch-pr`
 
 ## Dashboard Preview
 
@@ -96,7 +98,10 @@ Commands:
 - `ica sources remove --id=...`
 - `ica sources auth --id=... --token=...`
 - `ica sources refresh [--id=...]`
-- `ica sources update --id=... --name=... --repo-url=...`
+- `ica sources update --id=... --name=... --repo-url=... --publish-default-mode=branch-pr --default-base-branch=main --provider-hint=github --official-contribution-enabled=false`
+- `ica skills validate --path=/path/to/skill --profile=personal`
+- `ica skills publish --source=<source-id> --path=/path/to/skill --message="feat(skill): publish my-skill"`
+- `ica skills contribute-official --path=/path/to/skill --message="Add my-skill"`
 - `ica container mount-project --project-path=/path --confirm`
 
 Source-qualified example:
@@ -109,6 +114,17 @@ node dist/src/installer-cli/index.js install --yes \
 ```
 
 Legacy `--skills=<name>` is still accepted and resolves against the official source.
+
+## Skill Publishing and Official Contribution
+
+- `ica skills validate` supports `personal` and `official` profiles
+- Personal publishing uses the source's configured default mode:
+  - `direct-push`: commits to base branch and pushes
+  - `branch-only`: pushes a feature branch
+  - `branch-pr`: pushes a feature branch and attempts PR creation when provider integration is available
+- Official contribution uses strict validation and PR-oriented flow (defaults to official source base branch `dev`)
+- Skill bundles are copied recursively and support `SKILL.md` + additional resources/assets/scripts/other files
+- Source settings include `officialContributionEnabled` to mark official contribution targets
 
 Custom repositories are persisted in `~/.ica/sources.json` (or `$ICA_STATE_HOME/sources.json` when set).
 
@@ -193,6 +209,7 @@ Tag releases from `main` (`vX.Y.Z`). The `release-sign` workflow:
 ## Documentation
 
 - [Installation Guide](docs/installation-guide.md)
+- [Skill Publishing Guide](docs/skill-publishing-guide.md)
 - [Configuration Guide](docs/configuration-guide.md)
 - [Workflow Guide](docs/workflow-guide.md)
 - [Release Signing](docs/release-signing.md)

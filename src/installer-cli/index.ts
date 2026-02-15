@@ -18,10 +18,11 @@ import { loadHookCatalogFromSources, HookInstallSelection } from "../installer-c
 import { executeHookOperation, HookInstallRequest, HookTargetPlatform } from "../installer-core/hookExecutor";
 import { loadHookInstallState } from "../installer-core/hookState";
 import { registerRepository } from "../installer-core/repositories";
+import { contributeOfficialSkillBundle, publishSkillBundle, validateSkillBundle } from "../installer-core/skillPublish";
 import { loadInstallState } from "../installer-core/state";
 import { parseTargets, resolveTargetPaths } from "../installer-core/targets";
 import { findRepoRoot } from "../installer-core/repo";
-import { InstallMode, InstallRequest, InstallScope, InstallSelection, OperationKind, TargetPlatform } from "../installer-core/types";
+import { InstallMode, InstallRequest, InstallScope, InstallSelection, OperationKind, PublishMode, TargetPlatform, ValidationProfile } from "../installer-core/types";
 
 interface ParsedArgs {
   command: string;
@@ -218,6 +219,53 @@ async function ensureHelperRunning(repoRoot: string): Promise<void> {
   await waitForHelperReady();
 }
 
+function openBrowser(url: string): void {
+  let command = "";
+  let args: string[] = [];
+
+  if (process.platform === "darwin") {
+    command = "open";
+    args = [url];
+  } else if (process.platform === "win32") {
+    command = "cmd";
+    args = ["/c", "start", "", url];
+  } else {
+    command = "xdg-open";
+    args = [url];
+  }
+
+  try {
+    const child = spawn(command, args, { detached: true, stdio: "ignore" });
+    child.unref();
+  } catch (error) {
+    process.stderr.write(`Unable to open browser automatically: ${error instanceof Error ? error.message : String(error)}\n`);
+  }
+}
+
+function parseServePort(rawValue: string, flagName: string): number {
+  const parsed = Number(rawValue.trim());
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new Error(`Invalid --${flagName} value '${rawValue}'.`);
+  }
+  return parsed;
+}
+
+async function waitForDashboardReady(url: string, child: ReturnType<typeof spawn>, retries = 50): Promise<void> {
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    if (child.exitCode !== null) {
+      throw new Error(`Dashboard process exited before becoming ready (code ${child.exitCode}).`);
+    }
+    try {
+      const response = await fetch(url);
+      if (response.ok) return;
+    } catch {
+      // retry
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error(`Dashboard did not become ready in time at ${url}.`);
+}
+
 function printHelp(): void {
   output.write(`ICA Installer CLI\n\n`);
   output.write(`Commands:\n`);
@@ -231,15 +279,22 @@ function printHelp(): void {
   output.write(`  ica sources add [--repo-url=<url> | --repo-path=<path>] [--name=<name>] [--id=<id>] [--transport=https|ssh]\n`);
   output.write(`  ica sources remove --id=<source-id>\n`);
   output.write(
-    `  ica sources update --id=<source-id> [--name=<name>] [--repo-url=<url>] [--transport=https|ssh] [--skills-root=/skills] [--hooks-root=/hooks] [--enabled=true|false]\n`,
+    `  ica sources update --id=<source-id> [--name=<name>] [--repo-url=<url>] [--transport=https|ssh] [--skills-root=/skills] [--hooks-root=/hooks] [--enabled=true|false] [--publish-default-mode=direct-push|branch-only|branch-pr] [--default-base-branch=main] [--provider-hint=github|gitlab|bitbucket|unknown]\n`,
   );
   output.write(`  ica sources auth --id=<source-id> [--token=<pat-or-api-key>]\n`);
   output.write(`  ica sources refresh [--id=<source-id>]\n\n`);
+  output.write(`  ica skills validate --path=<local-skill-dir> [--profile=personal|official]\n`);
+  output.write(
+    `  ica skills publish --source=<source-id> --path=<local-skill-dir> [--message=<commit-message>] [--override-mode=direct-push|branch-only|branch-pr] [--override-base-branch=<branch>]\n`,
+  );
+  output.write(`  ica skills contribute-official --path=<local-skill-dir> [--source=<source-id>] [--message=<commit-message>]\n\n`);
   output.write(`  ica hooks list [--targets=claude,gemini] [--scope=user|project] [--project-path=/path]\n`);
   output.write(`  ica hooks catalog [--json]\n`);
   output.write(`  ica hooks install [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks uninstall [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks sync [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n\n`);
+  output.write(`  ica serve [--host=127.0.0.1] [--ui-port=4173] [--open=true|false]\n`);
+  output.write(`  ica launch (alias for serve; deprecated)\n\n`);
   output.write(`  Note: repository registration is unified. Adding one source auto-registers both skills and hooks mirrors.\n\n`);
   output.write(`  ica container mount-project --project-path=<path> --confirm [--container-name=<name>] [--image=<image>] [--port=<host:container>] [--json]\n\n`);
   output.write(`Common flags:\n`);
@@ -257,6 +312,7 @@ function printHelp(): void {
   output.write(`  --force\n`);
   output.write(`  --yes\n`);
   output.write(`  --json\n`);
+  output.write(`  --refresh (for catalog: force live source refresh)\n`);
 }
 
 async function promptInteractive(command: OperationKind, options: Record<string, string | boolean>): Promise<InstallRequest> {
@@ -480,6 +536,10 @@ async function runSources(positionals: string[], options: Record<string, string 
       repoUrl: string;
       transport: "https" | "ssh";
       name: string;
+      publishDefaultMode?: PublishMode;
+      defaultBaseBranch?: string;
+      providerHint?: "github" | "gitlab" | "bitbucket" | "unknown";
+      officialContributionEnabled?: boolean;
       skills?: Awaited<ReturnType<typeof loadSources>>[number];
       hooks?: Awaited<ReturnType<typeof loadHookSources>>[number];
     }>
@@ -493,6 +553,10 @@ async function runSources(positionals: string[], options: Record<string, string 
         repoUrl: string;
         transport: "https" | "ssh";
         name: string;
+        publishDefaultMode?: PublishMode;
+        defaultBaseBranch?: string;
+        providerHint?: "github" | "gitlab" | "bitbucket" | "unknown";
+        officialContributionEnabled?: boolean;
         skills?: Awaited<ReturnType<typeof loadSources>>[number];
         hooks?: Awaited<ReturnType<typeof loadHookSources>>[number];
       }
@@ -509,6 +573,10 @@ async function runSources(positionals: string[], options: Record<string, string 
         repoUrl: source.repoUrl,
         transport: source.transport,
         name: source.name,
+        publishDefaultMode: source.publishDefaultMode,
+        defaultBaseBranch: source.defaultBaseBranch,
+        providerHint: source.providerHint,
+        officialContributionEnabled: source.officialContributionEnabled,
         skills: source,
       });
     }
@@ -523,6 +591,10 @@ async function runSources(positionals: string[], options: Record<string, string 
         repoUrl: source.repoUrl,
         transport: source.transport,
         name: source.name,
+        publishDefaultMode: byId.get(source.id)?.publishDefaultMode,
+        defaultBaseBranch: byId.get(source.id)?.defaultBaseBranch,
+        providerHint: byId.get(source.id)?.providerHint,
+        officialContributionEnabled: byId.get(source.id)?.officialContributionEnabled,
         hooks: source,
       });
     }
@@ -542,6 +614,10 @@ async function runSources(positionals: string[], options: Record<string, string 
       output.write(`  repo: ${repo.repoUrl}\n`);
       if (repo.skills) {
         output.write(`  skillsRoot: ${repo.skills.skillsRoot}\n`);
+        output.write(`  publishDefaultMode: ${repo.skills.publishDefaultMode}\n`);
+        output.write(`  defaultBaseBranch: ${repo.skills.defaultBaseBranch || "(default)"}\n`);
+        output.write(`  providerHint: ${repo.skills.providerHint}\n`);
+        output.write(`  officialContributionEnabled: ${repo.skills.officialContributionEnabled ? "true" : "false"}\n`);
         output.write(`  skillsSynced: ${repo.skills.lastSyncAt || "(never)"}\n`);
         if (repo.skills.lastError) output.write(`  skillsError: ${repo.skills.lastError}\n`);
       }
@@ -570,6 +646,13 @@ async function runSources(positionals: string[], options: Record<string, string 
         repoUrl,
         transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
         skillsRoot: stringOption(options, "skills-root", "") || undefined,
+        publishDefaultMode: (stringOption(options, "publish-default-mode", "") as PublishMode) || undefined,
+        defaultBaseBranch: stringOption(options, "default-base-branch", "") || undefined,
+        providerHint: (stringOption(options, "provider-hint", "") as "github" | "gitlab" | "bitbucket" | "unknown") || undefined,
+        officialContributionEnabled:
+          options["official-contribution-enabled"] !== undefined
+            ? boolOption(options, "official-contribution-enabled", false)
+            : undefined,
         hooksRoot: stringOption(options, "hooks-root", "") || undefined,
         enabled: !stringOption(options, "enabled", "true").toLowerCase().startsWith("f"),
         removable: true,
@@ -639,6 +722,13 @@ async function runSources(positionals: string[], options: Record<string, string 
       repoUrl,
       transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
       skillsRoot: stringOption(options, "skills-root", "") || undefined,
+      publishDefaultMode: (stringOption(options, "publish-default-mode", "") as PublishMode) || undefined,
+      defaultBaseBranch: stringOption(options, "default-base-branch", "") || undefined,
+      providerHint: (stringOption(options, "provider-hint", "") as "github" | "gitlab" | "bitbucket" | "unknown") || undefined,
+      officialContributionEnabled:
+        options["official-contribution-enabled"] !== undefined
+          ? boolOption(options, "official-contribution-enabled", false)
+          : undefined,
       enabled:
         options.enabled !== undefined
           ? !stringOption(options, "enabled", "true").toLowerCase().startsWith("f")
@@ -870,6 +960,63 @@ async function runHooks(positionals: string[], options: Record<string, string | 
   }
 }
 
+async function runServe(options: Record<string, string | boolean>): Promise<void> {
+  const repoRoot = findRepoRoot(__dirname);
+  const host = stringOption(options, "host", "127.0.0.1").trim() || "127.0.0.1";
+  const uiPort = parseServePort(stringOption(options, "ui-port", stringOption(options, "port", "4173")), "ui-port");
+
+  const apiPortRaw = stringOption(options, "api-port", "").trim();
+  if (apiPortRaw) {
+    output.write("Notice: --api-port is ignored by the local dashboard server.\n");
+  }
+  if (options["image"] !== undefined || options["build-image"] !== undefined) {
+    output.write("Notice: --image/--build-image are ignored in local serve mode.\n");
+  }
+
+  const dashboardScript = path.join(repoRoot, "dist", "src", "installer-dashboard", "server", "index.js");
+  if (!fs.existsSync(dashboardScript)) {
+    throw new Error("Dashboard server is not built. Run: npm run build");
+  }
+
+  const dashboardUrl = `http://${host}:${uiPort}`;
+  const child = spawn(process.execPath, [dashboardScript], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      ICA_DASHBOARD_HOST: host,
+      ICA_DASHBOARD_PORT: String(uiPort),
+    },
+    stdio: "inherit",
+  });
+
+  const onSigint = () => child.kill("SIGINT");
+  const onSigterm = () => child.kill("SIGTERM");
+  process.on("SIGINT", onSigint);
+  process.on("SIGTERM", onSigterm);
+
+  try {
+    await waitForDashboardReady(dashboardUrl, child);
+    output.write(`Dashboard ready: ${dashboardUrl}\n`);
+    if (boolOption(options, "open", false)) {
+      openBrowser(dashboardUrl);
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("exit", (code) => {
+        if (code === 0 || code === null) {
+          resolve();
+          return;
+        }
+        reject(new Error(`Dashboard exited with code ${code}.`));
+      });
+    });
+  } finally {
+    process.off("SIGINT", onSigint);
+    process.off("SIGTERM", onSigterm);
+  }
+}
+
 async function runContainer(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
   const action = (positionals[0] || "mount-project").toLowerCase();
   if (action !== "mount-project") {
@@ -900,6 +1047,112 @@ async function runContainer(positionals: string[], options: Record<string, strin
   if (payload.command) {
     output.write(`Command: ${String(payload.command)}\n`);
   }
+}
+
+async function runSkills(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
+  const action = (positionals[0] || "validate").toLowerCase();
+  const json = boolOption(options, "json", false);
+  const credentials = createCredentialProvider();
+
+  if (action === "validate") {
+    const skillPath = stringOption(options, "path", "").trim();
+    if (!skillPath) {
+      throw new Error("Missing required option --path");
+    }
+    const profile = (stringOption(options, "profile", "personal").trim() || "personal") as ValidationProfile;
+    if (profile !== "personal" && profile !== "official") {
+      throw new Error("Invalid --profile. Supported: personal|official");
+    }
+
+    const result = await validateSkillBundle({ localPath: skillPath }, profile);
+    if (json) {
+      output.write(`${JSON.stringify(result, null, 2)}\n`);
+      return;
+    }
+    output.write(`Profile: ${result.profile}\n`);
+    output.write(`Detected files: ${result.detectedFiles.length}\n`);
+    if (result.warnings.length > 0) {
+      output.write(`Warnings:\n`);
+      for (const warning of result.warnings) {
+        output.write(`  - ${warning}\n`);
+      }
+    }
+    if (result.errors.length > 0) {
+      output.write(`Errors:\n`);
+      for (const err of result.errors) {
+        output.write(`  - ${err}\n`);
+      }
+      throw new Error("Validation failed.");
+    }
+    output.write(`Validation passed.\n`);
+    return;
+  }
+
+  if (action === "publish") {
+    const sourceId = stringOption(options, "source", stringOption(options, "id", "")).trim();
+    const skillPath = stringOption(options, "path", "").trim();
+    const overrideMode = stringOption(options, "override-mode", "").trim();
+    const overrideBaseBranch = stringOption(options, "override-base-branch", "").trim();
+    if (!sourceId) throw new Error("Missing required option --source");
+    if (!skillPath) throw new Error("Missing required option --path");
+    if (overrideMode && overrideMode !== "direct-push" && overrideMode !== "branch-only" && overrideMode !== "branch-pr") {
+      throw new Error("Invalid --override-mode. Supported: direct-push|branch-only|branch-pr");
+    }
+
+    const result = await publishSkillBundle(
+      {
+        sourceId,
+        bundle: {
+          localPath: skillPath,
+          skillName: stringOption(options, "skill-name", "").trim() || undefined,
+        },
+        commitMessage: stringOption(options, "message", "").trim() || undefined,
+        overrideMode: overrideMode ? (overrideMode as PublishMode) : undefined,
+        overrideBaseBranch: overrideBaseBranch || undefined,
+      },
+      credentials,
+    );
+    if (json) {
+      output.write(`${JSON.stringify(result, null, 2)}\n`);
+      return;
+    }
+    output.write(`Published using mode '${result.mode}'.\n`);
+    output.write(`Branch: ${result.branch}\n`);
+    output.write(`Commit: ${result.commitSha}\n`);
+    output.write(`Pushed remote: ${result.pushedRemote}\n`);
+    if (result.prUrl) output.write(`PR: ${result.prUrl}\n`);
+    if (result.compareUrl) output.write(`Compare: ${result.compareUrl}\n`);
+    return;
+  }
+
+  if (action === "contribute-official") {
+    const skillPath = stringOption(options, "path", "").trim();
+    if (!skillPath) throw new Error("Missing required option --path");
+    const result = await contributeOfficialSkillBundle(
+      {
+        sourceId: stringOption(options, "source", "").trim() || undefined,
+        bundle: {
+          localPath: skillPath,
+          skillName: stringOption(options, "skill-name", "").trim() || undefined,
+        },
+        commitMessage: stringOption(options, "message", "").trim() || undefined,
+      },
+      credentials,
+    );
+    if (json) {
+      output.write(`${JSON.stringify(result, null, 2)}\n`);
+      return;
+    }
+    output.write(`Official contribution prepared.\n`);
+    output.write(`Branch: ${result.branch}\n`);
+    output.write(`Commit: ${result.commitSha}\n`);
+    output.write(`Pushed remote: ${result.pushedRemote}\n`);
+    if (result.prUrl) output.write(`PR: ${result.prUrl}\n`);
+    if (result.compareUrl) output.write(`Compare: ${result.compareUrl}\n`);
+    return;
+  }
+
+  throw new Error(`Unknown skills action '${action}'. Supported: validate|publish|contribute-official`);
 }
 
 async function main(): Promise<void> {
@@ -933,6 +1186,22 @@ async function main(): Promise<void> {
 
   if (normalized === "hooks") {
     await runHooks(positionals, options);
+    return;
+  }
+
+  if (normalized === "skills") {
+    await runSkills(positionals, options);
+    return;
+  }
+
+  if (normalized === "serve") {
+    await runServe(options);
+    return;
+  }
+
+  if (normalized === "launch") {
+    output.write("Deprecation notice: `ica launch` is now an alias of `ica serve` and will be removed in a future release.\n");
+    await runServe(options);
     return;
   }
 

@@ -66,6 +66,25 @@ Notes:
 
 ## Key Settings
 
+### Autonomy + Work-Item Orchestration
+- `autonomy.level` (string) — L1/L2/L3 autonomy mode
+- `autonomy.work_item_pipeline_enabled` (bool, default `true`) — auto-run `create-work-items` -> `plan-work-items` -> `run-work-items` when actionable findings/comments are detected
+- `autonomy.work_item_pipeline_mode` (string, default `batch_auto`) — confirmation behavior for actionable finding ingestion
+  - `batch_auto`: no extra confirmation
+  - `batch_confirm`: one grouped confirmation
+  - `item_confirm`: per-item confirmation
+
+Example:
+
+```json
+{
+  "autonomy": {
+    "work_item_pipeline_enabled": true,
+    "work_item_pipeline_mode": "batch_auto"
+  }
+}
+```
+
 ### Git
 - `git.privacy` (bool) — strip AI mentions from commits/PRs
 - `git.privacy_patterns` (array)
@@ -88,3 +107,24 @@ Notes:
 
 ### Models
 Model selection is **user‑controlled via Claude Code settings** (`.claude/settings.json` or `~/.claude/settings.json`) or `/model`.
+
+## Source Registry Publish Settings
+
+Skill publishing defaults are stored in the source registry (`~/.ica/sources.json` or `$ICA_STATE_HOME/sources.json`), not in `ica.config.json`.
+
+Per-source publish fields:
+
+- `publishDefaultMode`: `direct-push` | `branch-only` | `branch-pr`
+- `defaultBaseBranch`: target branch for publish operations
+- `providerHint`: `github` | `gitlab` | `bitbucket` | `unknown`
+- `officialContributionEnabled`: marks a source as eligible for official contribution flow
+
+Update via CLI:
+
+```bash
+node dist/src/installer-cli/index.js sources update --id=my-source \
+  --publish-default-mode=branch-pr \
+  --default-base-branch=main \
+  --provider-hint=github \
+  --official-contribution-enabled=false
+```

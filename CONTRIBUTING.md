@@ -53,6 +53,25 @@ We welcome contributions in many forms:
 4. Test your changes thoroughly
 5. Submit a pull request to the `dev` branch
 
+### Contributing Skills to Official Source
+
+If you are contributing a skill bundle, you can validate and propose via ICA:
+
+```bash
+node dist/src/installer-cli/index.js skills validate --path=/path/to/skill --profile=official
+node dist/src/installer-cli/index.js skills contribute-official --path=/path/to/skill --message="Add my-skill"
+```
+
+Expected skill structure:
+- required: `SKILL.md`
+- optional: `scripts/`, `references/`, `assets/`, and other files needed by the skill
+
+Official contribution validation requires `SKILL.md` frontmatter fields:
+- `name`
+- `description`
+- `category`
+- `version`
+
 ## Branching Strategy
 
 ### Branch Structure

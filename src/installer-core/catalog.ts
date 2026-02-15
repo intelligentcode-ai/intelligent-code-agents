@@ -3,7 +3,7 @@ import path from "node:path";
 import { SkillCatalog, SkillCatalogEntry, SkillResource, TargetPlatform } from "./types";
 import { buildMultiSourceCatalog } from "./catalogMultiSource";
 import { isSkillBlocked } from "./skillBlocklist";
-import { DEFAULT_SKILLS_ROOT, OFFICIAL_SOURCE_ID, OFFICIAL_SOURCE_NAME, OFFICIAL_SOURCE_URL } from "./sources";
+import { DEFAULT_PUBLISH_MODE, DEFAULT_SKILLS_ROOT, OFFICIAL_SOURCE_ID, OFFICIAL_SOURCE_NAME, OFFICIAL_SOURCE_URL } from "./sources";
 
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
 interface LocalCatalogEntry {
@@ -64,22 +64,30 @@ function inferCategory(skillName: string): string {
 
 function collectResources(skillDir: string): SkillResource[] {
   const resources: SkillResource[] = [];
-  const directories: Array<SkillResource["type"]> = ["references", "scripts", "assets"];
+  const walk = (current: string): void => {
+    const entries = fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      if (entry.name === ".git") continue;
+      const absolute = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        walk(absolute);
+        continue;
+      }
+      if (!(entry.isFile() || entry.isSymbolicLink())) continue;
+      if (entry.name === "SKILL.md") continue;
 
-  for (const resourceType of directories) {
-    const location = path.join(skillDir, resourceType);
-    if (!fs.existsSync(location)) continue;
-
-    for (const file of fs
-      .readdirSync(location, { withFileTypes: true })
-      .filter((entry) => entry.isFile() || entry.isSymbolicLink())
-      .sort((a, b) => a.name.localeCompare(b.name))) {
+      const relative = path.relative(skillDir, absolute).replace(/\\/g, "/");
+      const topLevel = relative.split("/", 1)[0];
+      const resourceType: SkillResource["type"] =
+        topLevel === "references" || topLevel === "scripts" || topLevel === "assets" ? topLevel : "other";
       resources.push({
         type: resourceType,
-        path: path.join("skills", path.basename(skillDir), resourceType, file.name),
+        path: path.join("skills", path.basename(skillDir), relative).replace(/\\/g, "/"),
       });
     }
-  }
+  };
+  walk(skillDir);
+  resources.sort((a, b) => a.path.localeCompare(b.path));
 
   return resources;
 }
@@ -133,6 +141,10 @@ export function buildDefaultSourceCatalog(version: string, sourceDateEpoch?: str
         official: true,
         enabled: true,
         skillsRoot: DEFAULT_SKILLS_ROOT,
+        publishDefaultMode: DEFAULT_PUBLISH_MODE,
+        defaultBaseBranch: "dev",
+        providerHint: "github",
+        officialContributionEnabled: true,
         removable: true,
       },
     ],

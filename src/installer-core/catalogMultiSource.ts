@@ -13,18 +13,78 @@ interface CatalogOptions {
   refresh: boolean;
 }
 
-function parseFrontmatter(content: string): Record<string, string> {
-  const match = content.match(FRONTMATTER_RE);
-  if (!match) return {};
-  const map: Record<string, string> = {};
-  for (const line of match[1].split("\n")) {
-    const idx = line.indexOf(":");
-    if (idx === -1) continue;
-    const key = line.slice(0, idx).trim();
-    const value = line.slice(idx + 1).trim();
-    if (key) map[key] = value;
+interface ParsedFrontmatter {
+  values: Record<string, string>;
+  lists: Record<string, string[]>;
+}
+
+function cleanFrontmatterValue(value: string): string {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
   }
-  return map;
+  return trimmed;
+}
+
+function parseFrontmatter(content: string): ParsedFrontmatter {
+  const match = content.match(FRONTMATTER_RE);
+  if (!match) return { values: {}, lists: {} };
+  const values: Record<string, string> = {};
+  const lists: Record<string, string[]> = {};
+  let currentListKey: string | null = null;
+
+  for (const rawLine of match[1].split("\n")) {
+    const line = rawLine.replace(/\r$/, "");
+    const keyMatch = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (keyMatch) {
+      const key = keyMatch[1].trim();
+      const rawValue = keyMatch[2].trim();
+      if (!key) {
+        currentListKey = null;
+        continue;
+      }
+
+      if (rawValue.length === 0) {
+        currentListKey = key;
+        if (!lists[key]) lists[key] = [];
+        continue;
+      }
+
+      if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
+        const entries = rawValue
+          .slice(1, -1)
+          .split(",")
+          .map((entry) => cleanFrontmatterValue(entry))
+          .filter(Boolean);
+        if (entries.length > 0) {
+          lists[key] = entries;
+        }
+      } else {
+        values[key] = cleanFrontmatterValue(rawValue);
+      }
+      currentListKey = null;
+      continue;
+    }
+
+    const listMatch = line.match(/^\s*-\s*(.+)$/);
+    if (currentListKey && listMatch) {
+      const value = cleanFrontmatterValue(listMatch[1]);
+      if (value) {
+        if (!lists[currentListKey]) lists[currentListKey] = [];
+        lists[currentListKey].push(value);
+      }
+      continue;
+    }
+
+    if (line.trim()) {
+      currentListKey = null;
+    }
+  }
+
+  return { values, lists };
 }
 
 function inferCategory(skillName: string): string {
@@ -56,23 +116,30 @@ function inferCategory(skillName: string): string {
 
 function collectResources(skillDir: string, skillName: string): SkillResource[] {
   const resources: SkillResource[] = [];
-  const directories: Array<SkillResource["type"]> = ["references", "scripts", "assets"];
-  for (const type of directories) {
-    const base = path.join(skillDir, type);
-    if (!fs.existsSync(base)) continue;
+  const walk = (current: string): void => {
+    const entries = fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      if (entry.name === ".git") continue;
+      const absolute = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        walk(absolute);
+        continue;
+      }
+      if (!(entry.isFile() || entry.isSymbolicLink())) continue;
+      if (entry.name === "SKILL.md") continue;
 
-    const files = fs
-      .readdirSync(base, { withFileTypes: true })
-      .filter((entry) => entry.isFile() || entry.isSymbolicLink())
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    for (const file of files) {
+      const relative = path.relative(skillDir, absolute).replace(/\\/g, "/");
+      const topLevel = relative.split("/", 1)[0];
+      const type: SkillResource["type"] =
+        topLevel === "references" || topLevel === "scripts" || topLevel === "assets" ? topLevel : "other";
       resources.push({
         type,
-        path: path.join("skills", skillName, type, file.name).replace(/\\/g, "/"),
+        path: path.join("skills", skillName, relative).replace(/\\/g, "/"),
       });
     }
-  }
+  };
+  walk(skillDir);
+  resources.sort((a, b) => a.path.localeCompare(b.path));
   return resources;
 }
 
@@ -88,7 +155,8 @@ function toCatalogSkill(source: SkillSource, skillDir: string): CatalogSkill | n
   const skillFile = path.join(skillDir, "SKILL.md");
   if (!fs.existsSync(skillFile)) return null;
   const content = fs.readFileSync(skillFile, "utf8");
-  const frontmatter = parseFrontmatter(content);
+  const parsedFrontmatter = parseFrontmatter(content);
+  const frontmatter = parsedFrontmatter.values;
   const skillName = frontmatter.name || path.basename(skillDir);
   if (isSkillBlocked(skillName)) {
     return null;
@@ -96,6 +164,14 @@ function toCatalogSkill(source: SkillSource, skillDir: string): CatalogSkill | n
   const skillId = `${source.id}/${skillName}`;
   const stat = fs.statSync(skillFile);
   const explicitCategory = (frontmatter.category || "").trim().toLowerCase();
+  const explicitScope = (frontmatter.scope || "").trim().toLowerCase();
+  const tags = Array.from(
+    new Set(
+      (parsedFrontmatter.lists.tags || [])
+        .map((tag) => tag.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  );
 
   return {
     skillId,
@@ -106,6 +182,8 @@ function toCatalogSkill(source: SkillSource, skillDir: string): CatalogSkill | n
     name: skillName,
     description: frontmatter.description || "",
     category: explicitCategory || inferCategory(skillName),
+    scope: explicitScope || undefined,
+    tags: tags.length > 0 ? tags : undefined,
     dependencies: [],
     compatibleTargets: ["claude", "codex", "cursor", "gemini", "antigravity"] satisfies TargetPlatform[],
     resources: collectResources(skillDir, skillName),

@@ -7,11 +7,12 @@
     "ica": "dist/src/installer-cli/index.js"
   },
   "scripts": {
+    "clean:compiled-tests": "node -e \"const fs=require('fs');fs.rmSync('dist/tests',{recursive:true,force:true});\"",
     "build": "tsc -p tsconfig.json && node dist/src/installer-core/catalog/generateCatalog.js && npm run build:dashboard:web",
     "build:dashboard:web": "vite build --config src/installer-dashboard/web/vite.config.ts",
     "dev:dashboard:web": "vite --config src/installer-dashboard/web/vite.config.ts",
     "start:dashboard": "node dist/src/installer-dashboard/server/index.js",
-    "build:quick": "tsc -p tsconfig.json && node dist/src/installer-core/catalog/generateCatalog.js",
+    "build:quick": "npm run clean:compiled-tests && tsc -p tsconfig.json && node dist/src/installer-core/catalog/generateCatalog.js",
     "skill:trigger-check": "node scripts/skill-trigger-check.mjs",
     "test": "npm run build:quick && node --test dist/tests/installer/*.test.js && bash tests/run-tests.sh"
   },

@@ -1,12 +1,14 @@
 import os from "node:os";
 import path from "node:path";
 import { ensureDir, pathExists, readText, writeText } from "./fs";
-import { SourceTransport, SkillSource } from "./types";
+import { GitProvider, PublishMode, SourceTransport, SkillSource } from "./types";
 
 export const OFFICIAL_SOURCE_ID = "official-skills";
 export const OFFICIAL_SOURCE_NAME = "official";
 export const OFFICIAL_SOURCE_URL = "https://github.com/intelligentcode-ai/skills.git";
 export const DEFAULT_SKILLS_ROOT = "/skills";
+export const DEFAULT_PUBLISH_MODE: PublishMode = "branch-pr";
+export const DEFAULT_BASE_BRANCH = "main";
 
 interface AddOrUpdateSourceInput {
   id?: string;
@@ -16,6 +18,10 @@ interface AddOrUpdateSourceInput {
   official?: boolean;
   enabled?: boolean;
   skillsRoot?: string;
+  publishDefaultMode?: PublishMode;
+  defaultBaseBranch?: string;
+  providerHint?: GitProvider;
+  officialContributionEnabled?: boolean;
   credentialRef?: string;
   removable?: boolean;
 }
@@ -33,6 +39,26 @@ function detectTransport(repoUrl: string): SourceTransport {
     return "ssh";
   }
   return "https";
+}
+
+function normalizePublishDefaultMode(mode?: string): PublishMode {
+  if (mode === "direct-push" || mode === "branch-only" || mode === "branch-pr") {
+    return mode;
+  }
+  return DEFAULT_PUBLISH_MODE;
+}
+
+function normalizeDefaultBaseBranch(branch?: string): string | undefined {
+  const next = (branch || "").trim();
+  return next || undefined;
+}
+
+export function detectGitProvider(repoUrl: string): GitProvider {
+  const normalized = repoUrl.trim().toLowerCase();
+  if (normalized.includes("github.com")) return "github";
+  if (normalized.includes("gitlab.com")) return "gitlab";
+  if (normalized.includes("bitbucket.org")) return "bitbucket";
+  return "unknown";
 }
 
 function slug(value: string): string {
@@ -66,14 +92,19 @@ function uniqueSourceId(baseId: string, existing: Set<string>): string {
 }
 
 function defaultSource(source?: Partial<SkillSource>): SkillSource {
+  const repoUrl = source?.repoUrl || OFFICIAL_SOURCE_URL;
   return {
     id: source?.id || OFFICIAL_SOURCE_ID,
     name: source?.name || OFFICIAL_SOURCE_NAME,
-    repoUrl: source?.repoUrl || OFFICIAL_SOURCE_URL,
-    transport: source?.transport || detectTransport(source?.repoUrl || OFFICIAL_SOURCE_URL),
+    repoUrl,
+    transport: source?.transport || detectTransport(repoUrl),
     official: source?.official ?? true,
     enabled: source?.enabled ?? true,
     skillsRoot: normalizeSkillsRoot(source?.skillsRoot),
+    publishDefaultMode: normalizePublishDefaultMode(source?.publishDefaultMode),
+    defaultBaseBranch: normalizeDefaultBaseBranch(source?.defaultBaseBranch) || (source?.official ? "dev" : DEFAULT_BASE_BRANCH),
+    providerHint: source?.providerHint || detectGitProvider(repoUrl),
+    officialContributionEnabled: source?.officialContributionEnabled ?? Boolean(source?.official),
     credentialRef: source?.credentialRef,
     removable: source?.removable ?? true,
     lastSyncAt: source?.lastSyncAt,
@@ -107,19 +138,29 @@ export function getSourceRepoPath(sourceId: string): string {
   return path.join(getSourceCacheRoot(), sourceId, "repo");
 }
 
+export function getSourceWorkspaceRepoPath(sourceId: string): string {
+  return path.join(getIcaStateRoot(), "source-workspaces", sourceId, "repo");
+}
+
 export function getSourceSkillsPath(sourceId: string): string {
   return path.join(getSourceRoot(sourceId), "skills");
 }
 
-function normalizeSource(source: SkillSource): SkillSource {
+function normalizeSource(source: Partial<SkillSource> & { id: string; repoUrl: string }): SkillSource {
+  const repoUrl = source.repoUrl.trim();
+  const official = Boolean(source.official);
   return {
     ...source,
     id: slug(source.id),
     name: source.name?.trim() || source.id,
-    repoUrl: source.repoUrl.trim(),
-    transport: source.transport || detectTransport(source.repoUrl),
+    repoUrl,
+    transport: source.transport || detectTransport(repoUrl),
     skillsRoot: normalizeSkillsRoot(source.skillsRoot),
-    official: Boolean(source.official),
+    publishDefaultMode: normalizePublishDefaultMode(source.publishDefaultMode),
+    defaultBaseBranch: normalizeDefaultBaseBranch(source.defaultBaseBranch) || (official ? "dev" : DEFAULT_BASE_BRANCH),
+    providerHint: source.providerHint || detectGitProvider(repoUrl),
+    officialContributionEnabled: source.officialContributionEnabled ?? official,
+    official,
     enabled: source.enabled !== false,
     removable: source.removable !== false,
     credentialRef: source.credentialRef?.trim() || undefined,
@@ -138,9 +179,13 @@ export async function loadSources(): Promise<SkillSource[]> {
   }
 
   try {
-    const raw = JSON.parse(await readText(sourcesFile)) as { sources?: SkillSource[] };
+    const raw = JSON.parse(await readText(sourcesFile)) as { sources?: Array<Partial<SkillSource>> };
     const parsed = Array.isArray(raw.sources) ? raw.sources : [];
-    const normalized = parsed.map((source) => normalizeSource(source));
+    const normalized = parsed
+      .filter((source): source is Partial<SkillSource> & { id: string; repoUrl: string } => {
+        return Boolean(source && typeof source.id === "string" && typeof source.repoUrl === "string");
+      })
+      .map((source) => normalizeSource(source));
 
     if (!normalized.find((source) => source.official)) {
       normalized.unshift(defaultSource());
@@ -172,6 +217,10 @@ export async function addSource(input: AddOrUpdateSourceInput): Promise<SkillSou
     official: input.official ?? false,
     enabled: input.enabled ?? true,
     skillsRoot: normalizeSkillsRoot(input.skillsRoot),
+    publishDefaultMode: normalizePublishDefaultMode(input.publishDefaultMode),
+    defaultBaseBranch: normalizeDefaultBaseBranch(input.defaultBaseBranch),
+    providerHint: input.providerHint || detectGitProvider(input.repoUrl),
+    officialContributionEnabled: input.officialContributionEnabled ?? Boolean(input.official),
     credentialRef: input.credentialRef,
     removable: input.removable ?? true,
   });
@@ -196,6 +245,10 @@ export async function updateSource(sourceId: string, patch: Partial<AddOrUpdateS
     transport: patch.transport ?? current.transport,
     enabled: patch.enabled ?? current.enabled,
     skillsRoot: patch.skillsRoot ?? current.skillsRoot,
+    publishDefaultMode: patch.publishDefaultMode ?? current.publishDefaultMode,
+    defaultBaseBranch: patch.defaultBaseBranch ?? current.defaultBaseBranch,
+    providerHint: patch.providerHint ?? current.providerHint,
+    officialContributionEnabled: patch.officialContributionEnabled ?? current.officialContributionEnabled,
     credentialRef: patch.credentialRef ?? current.credentialRef,
     removable: patch.removable ?? current.removable,
     official: patch.official ?? current.official,

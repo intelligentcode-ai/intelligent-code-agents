@@ -12,7 +12,19 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "name", "repoUrl", "transport", "official", "enabled", "skillsRoot", "removable"],
+        "required": [
+          "id",
+          "name",
+          "repoUrl",
+          "transport",
+          "official",
+          "enabled",
+          "skillsRoot",
+          "publishDefaultMode",
+          "providerHint",
+          "officialContributionEnabled",
+          "removable"
+        ],
         "properties": {
           "id": { "type": "string" },
           "name": { "type": "string" },
@@ -21,6 +33,10 @@
           "official": { "type": "boolean" },
           "enabled": { "type": "boolean" },
           "skillsRoot": { "type": "string" },
+          "publishDefaultMode": { "type": "string", "enum": ["direct-push", "branch-only", "branch-pr"] },
+          "defaultBaseBranch": { "type": "string" },
+          "providerHint": { "type": "string", "enum": ["github", "gitlab", "bitbucket", "unknown"] },
+          "officialContributionEnabled": { "type": "boolean" },
           "credentialRef": { "type": "string" },
           "removable": { "type": "boolean" },
           "lastSyncAt": { "type": "string", "format": "date-time" },
@@ -58,6 +74,8 @@
           "name": { "type": "string" },
           "description": { "type": "string" },
           "category": { "type": "string" },
+          "scope": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "string" } },
           "dependencies": { "type": "array", "items": { "type": "string" } },
           "compatibleTargets": {
             "type": "array",
@@ -72,7 +90,7 @@
               "type": "object",
               "required": ["type", "path"],
               "properties": {
-                "type": { "type": "string", "enum": ["references", "scripts", "assets"] },
+                "type": { "type": "string", "enum": ["references", "scripts", "assets", "other"] },
                 "path": { "type": "string" }
               }
             }

@@ -6,3 +6,4 @@ Deployment documentation in this repo now reflects only:
 - verified bootstrap installers
 - `ica` CLI workflows
 - dashboard workflows
+- skill publishing and official contribution workflows

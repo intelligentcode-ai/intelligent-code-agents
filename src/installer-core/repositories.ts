@@ -2,6 +2,7 @@ import { CredentialProvider } from "./credentials";
 import { addHookSource, HookSource, loadHookSources, updateHookSource } from "./hookSources";
 import { syncHookSource } from "./hookSync";
 import { addSource, loadSources, updateSource } from "./sources";
+import { GitProvider, PublishMode } from "./types";
 import { SkillSource } from "./types";
 import { SourceTransport } from "./types";
 import { syncSource } from "./sourceSync";
@@ -15,6 +16,10 @@ export interface RepositoryRegistrationInput {
   removable?: boolean;
   official?: boolean;
   skillsRoot?: string;
+  publishDefaultMode?: PublishMode;
+  defaultBaseBranch?: string;
+  providerHint?: GitProvider;
+  officialContributionEnabled?: boolean;
   hooksRoot?: string;
   token?: string;
 }
@@ -54,6 +59,10 @@ async function upsertSkillSource(input: RepositoryRegistrationInput): Promise<Sk
         transport: sourceTransport(input),
         enabled: input.enabled,
         skillsRoot: input.skillsRoot,
+        publishDefaultMode: input.publishDefaultMode,
+        defaultBaseBranch: input.defaultBaseBranch,
+        providerHint: input.providerHint,
+        officialContributionEnabled: input.officialContributionEnabled,
         removable: input.removable,
         official: input.official,
       });
@@ -67,6 +76,10 @@ async function upsertSkillSource(input: RepositoryRegistrationInput): Promise<Sk
     transport: sourceTransport(input),
     enabled: input.enabled,
     skillsRoot: input.skillsRoot,
+    publishDefaultMode: input.publishDefaultMode,
+    defaultBaseBranch: input.defaultBaseBranch,
+    providerHint: input.providerHint,
+    officialContributionEnabled: input.officialContributionEnabled,
     removable: input.removable,
     official: input.official,
   });
