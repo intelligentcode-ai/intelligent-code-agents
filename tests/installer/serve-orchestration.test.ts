@@ -35,6 +35,17 @@ test("serve reclaims internal static UI port when reuse mode is active", () => {
   );
 });
 
+test("serve only reclaims API/UI ports for ICA-owned processes", () => {
+  const cliPath = path.join(repoRoot, "src/installer-cli/index.ts");
+  const source = fs.readFileSync(cliPath, "utf8");
+
+  assert.match(
+    source,
+    /await isIcaOwnedServePid\(pid\)/,
+    "serve should verify process ownership before terminating listeners on configured host ports",
+  );
+});
+
 test("serve configures BFF with API key injection upstream, not browser runtime config", () => {
   const cliPath = path.join(repoRoot, "src/installer-cli/index.ts");
   const source = fs.readFileSync(cliPath, "utf8");

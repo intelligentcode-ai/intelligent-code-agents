@@ -232,6 +232,25 @@ function canSignalPid(pid: number): boolean {
   }
 }
 
+async function isIcaOwnedServePid(pid: number): Promise<boolean> {
+  if (process.platform === "win32") {
+    // Keep previous behavior on Windows where lightweight commandline checks are less portable.
+    return true;
+  }
+  try {
+    const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "command="], { maxBuffer: 1024 * 1024 });
+    const command = (stdout || "").toLowerCase();
+    return (
+      command.includes("installer-api/server/index.js") ||
+      command.includes("installer-bff/server/index.js") ||
+      command.includes("dist/src/installer-api/server/index.js") ||
+      command.includes("dist/src/installer-bff/server/index.js")
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function waitForPortAvailable(port: number, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -253,6 +272,14 @@ async function reclaimLoopbackPort(port: number, flagName: "ui-port" | "api-port
     throw new Error(
       `Requested --${flagName}=${port} is in use, but ICA could not identify the owning process to stop it automatically.`,
     );
+  }
+
+  for (const pid of pids) {
+    if (!(await isIcaOwnedServePid(pid))) {
+      throw new Error(
+        `Requested --${flagName}=${port} is in use by non-ICA process (pid ${pid}). Stop it manually or choose a different port.`,
+      );
+    }
   }
 
   output.write(`Notice: ${flagName} ${port} is busy; stopping existing process on that port.\n`);
