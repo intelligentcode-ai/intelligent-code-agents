@@ -22,6 +22,8 @@ Skills are the primary interface for specialized capabilities. They are:
 - Local `src/skills/*/SKILL.md` fallback has been removed as part of the repo split
 - Installed to your agent home `skills/` directory (for example `~/.claude/skills/` or `~/.codex/skills/`)
 - Invoked by skill name and intent (tool-dependent), with source-qualified IDs available as `<source>/<skill>`
+- Source publish settings support per-source defaults (`direct-push` | `branch-only` | `branch-pr`) and provider hints
+- Write-capable publish workspaces are separated from read-only sync caches under `~/.ica/source-workspaces/<source-id>/repo`
 
 If one repository references another inside Git metadata, the precise term is **Git submodule** (not "subrepo").
 

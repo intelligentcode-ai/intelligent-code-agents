@@ -2,12 +2,13 @@ import os from "node:os";
 import path from "node:path";
 import { ensureDir, pathExists, readText, writeText } from "./fs";
 import { redactSensitive, stripUrlCredentials } from "./security";
-import { SourceTransport, SkillSource } from "./types";
+import { GitProvider, PublishMode, SourceTransport, SkillSource } from "./types";
 
 export const OFFICIAL_SOURCE_ID = "official-skills";
 export const OFFICIAL_SOURCE_NAME = "official";
 export const OFFICIAL_SOURCE_URL = "https://github.com/intelligentcode-ai/skills.git";
 export const DEFAULT_SKILLS_ROOT = "/skills";
+export const DEFAULT_PUBLISH_MODE: PublishMode = "branch-pr";
 
 interface AddOrUpdateSourceInput {
   id?: string;
@@ -17,6 +18,10 @@ interface AddOrUpdateSourceInput {
   official?: boolean;
   enabled?: boolean;
   skillsRoot?: string;
+  publishDefaultMode?: PublishMode;
+  defaultBaseBranch?: string;
+  providerHint?: GitProvider;
+  officialContributionEnabled?: boolean;
   credentialRef?: string;
   removable?: boolean;
 }
@@ -57,6 +62,37 @@ function sourceIdFromInput(input: AddOrUpdateSourceInput): string {
   return fromRepo || `source-${Date.now()}`;
 }
 
+function normalizePublishDefaultMode(mode?: string): PublishMode {
+  if (mode === "direct-push" || mode === "branch-only" || mode === "branch-pr") {
+    return mode;
+  }
+  return DEFAULT_PUBLISH_MODE;
+}
+
+function detectProviderFromUrl(repoUrl: string): GitProvider {
+  const normalized = repoUrl.toLowerCase();
+  if (normalized.includes("github.com")) return "github";
+  if (normalized.includes("gitlab.com")) return "gitlab";
+  if (normalized.includes("bitbucket.org")) return "bitbucket";
+  return "unknown";
+}
+
+export function detectGitProvider(repoUrl: string): GitProvider {
+  return detectProviderFromUrl(repoUrl);
+}
+
+function normalizeProviderHint(providerHint: string | undefined, repoUrl: string): GitProvider {
+  if (providerHint === "github" || providerHint === "gitlab" || providerHint === "bitbucket" || providerHint === "unknown") {
+    return providerHint;
+  }
+  return detectProviderFromUrl(repoUrl);
+}
+
+function normalizeBaseBranch(branch: string | undefined): string | undefined {
+  const value = (branch || "").trim();
+  return value || undefined;
+}
+
 function uniqueSourceId(baseId: string, existing: Set<string>): string {
   if (!existing.has(baseId)) return baseId;
   let counter = 2;
@@ -67,14 +103,20 @@ function uniqueSourceId(baseId: string, existing: Set<string>): string {
 }
 
 function defaultSource(source?: Partial<SkillSource>): SkillSource {
+  const repoUrl = source?.repoUrl || OFFICIAL_SOURCE_URL;
+  const official = source?.official ?? true;
   return {
     id: source?.id || OFFICIAL_SOURCE_ID,
     name: source?.name || OFFICIAL_SOURCE_NAME,
-    repoUrl: source?.repoUrl || OFFICIAL_SOURCE_URL,
-    transport: source?.transport || detectTransport(source?.repoUrl || OFFICIAL_SOURCE_URL),
-    official: source?.official ?? true,
+    repoUrl,
+    transport: source?.transport || detectTransport(repoUrl),
+    official,
     enabled: source?.enabled ?? true,
     skillsRoot: normalizeSkillsRoot(source?.skillsRoot),
+    publishDefaultMode: normalizePublishDefaultMode(source?.publishDefaultMode),
+    defaultBaseBranch: normalizeBaseBranch(source?.defaultBaseBranch) || (official ? "dev" : "main"),
+    providerHint: normalizeProviderHint(source?.providerHint, repoUrl),
+    officialContributionEnabled: source?.officialContributionEnabled ?? official,
     credentialRef: source?.credentialRef,
     removable: source?.removable ?? true,
     lastSyncAt: source?.lastSyncAt,
@@ -108,12 +150,21 @@ export function getSourceRepoPath(sourceId: string): string {
   return path.join(getSourceCacheRoot(), sourceId, "repo");
 }
 
+export function getSourceWorkspaceRoot(): string {
+  return path.join(getIcaStateRoot(), "source-workspaces");
+}
+
+export function getSourceWorkspaceRepoPath(sourceId: string): string {
+  return path.join(getSourceWorkspaceRoot(), sourceId, "repo");
+}
+
 export function getSourceSkillsPath(sourceId: string): string {
   return path.join(getSourceRoot(sourceId), "skills");
 }
 
 function normalizeSource(source: SkillSource): SkillSource {
   const cleanRepoUrl = stripUrlCredentials(source.repoUrl.trim());
+  const official = Boolean(source.official);
   return {
     ...source,
     id: slug(source.id),
@@ -121,9 +172,13 @@ function normalizeSource(source: SkillSource): SkillSource {
     repoUrl: cleanRepoUrl,
     transport: source.transport || detectTransport(source.repoUrl),
     skillsRoot: normalizeSkillsRoot(source.skillsRoot),
-    official: Boolean(source.official),
+    official,
     enabled: source.enabled !== false,
     removable: source.removable !== false,
+    publishDefaultMode: normalizePublishDefaultMode(source.publishDefaultMode),
+    defaultBaseBranch: normalizeBaseBranch(source.defaultBaseBranch) || (official ? "dev" : "main"),
+    providerHint: normalizeProviderHint(source.providerHint, cleanRepoUrl),
+    officialContributionEnabled: source.officialContributionEnabled ?? official,
     credentialRef: source.credentialRef?.trim() || undefined,
     lastSyncAt: source.lastSyncAt,
     lastError: source.lastError ? redactSensitive(source.lastError) : undefined,
@@ -174,6 +229,10 @@ export async function addSource(input: AddOrUpdateSourceInput): Promise<SkillSou
     official: input.official ?? false,
     enabled: input.enabled ?? true,
     skillsRoot: normalizeSkillsRoot(input.skillsRoot),
+    publishDefaultMode: normalizePublishDefaultMode(input.publishDefaultMode),
+    defaultBaseBranch: normalizeBaseBranch(input.defaultBaseBranch),
+    providerHint: normalizeProviderHint(input.providerHint, input.repoUrl),
+    officialContributionEnabled: input.officialContributionEnabled ?? Boolean(input.official),
     credentialRef: input.credentialRef,
     removable: input.removable ?? true,
   });
@@ -198,6 +257,10 @@ export async function updateSource(sourceId: string, patch: Partial<AddOrUpdateS
     transport: patch.transport ?? current.transport,
     enabled: patch.enabled ?? current.enabled,
     skillsRoot: patch.skillsRoot ?? current.skillsRoot,
+    publishDefaultMode: patch.publishDefaultMode ?? current.publishDefaultMode,
+    defaultBaseBranch: patch.defaultBaseBranch ?? current.defaultBaseBranch,
+    providerHint: patch.providerHint ?? current.providerHint,
+    officialContributionEnabled: patch.officialContributionEnabled ?? current.officialContributionEnabled,
     credentialRef: patch.credentialRef ?? current.credentialRef,
     removable: patch.removable ?? current.removable,
     official: patch.official ?? current.official,

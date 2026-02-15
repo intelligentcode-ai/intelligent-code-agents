@@ -16,7 +16,7 @@ function mergeHooks(settings: Record<string, unknown>, installPath: string): Rec
 
   filtered.push(
     {
-      matcher: { tools: ["BashTool", "Bash"] },
+      matcher: "^(BashTool|Bash)$",
       hooks: [
         {
           type: "command",
@@ -26,7 +26,7 @@ function mergeHooks(settings: Record<string, unknown>, installPath: string): Rec
       ],
     },
     {
-      matcher: { tools: ["FileWriteTool", "FileEditTool", "Write", "Edit"] },
+      matcher: "^(FileWriteTool|FileEditTool|Write|Edit)$",
       hooks: [
         {
           type: "command",
