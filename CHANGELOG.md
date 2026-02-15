@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.2.0] - 2026-02-15
+
+### Added
+- Unified skill publishing pipeline for full skill bundles (content + assets/scripts/references) across personal and official contribution flows.
+- CLI skill publishing commands: `ica skills validate`, `ica skills publish`, and `ica skills contribute-official`.
+- Source-level publish configuration fields (`publishDefaultMode`, `defaultBaseBranch`, `providerHint`, `officialContributionEnabled`) across source registration and update paths.
+- Publish validation profiles (`personal` and `official`) with stricter checks for official contribution paths.
+
+### Changed
+- Preserved the current serve/BFF orchestration contract from `dev` while integrating publishing workflow changes.
+- Updated dashboard publishing UX to keep quick actions primary and move target/advanced options into overlays.
+- Strengthened source/catalog compatibility to keep modern cache/snapshot fallback behavior while supporting publish metadata.
+
+### Fixed
+- Restored missing CLI skill-publish command surface after merge conflict recovery.
+- Fixed source helper/export regressions required by the publish workspace path and provider detection logic.
+- Restored publish-related source defaults and migration behavior while preserving credential redaction and URL sanitization.
+
 ## [12.1.1] - 2026-02-15
 
 ### Added
