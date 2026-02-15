@@ -91,6 +91,12 @@ Example:
 - `git.branch_protection` (bool)
 - `git.default_branch` (string)
 - `git.require_pr_for_main` (bool)
+- `git.worktree_branch_behavior` (string, optional) — controls isolation for implementation work
+  - `always_new`: always create a dedicated worktree + `codex/*` branch
+  - `ask`: ask per scoped work unit
+  - `current_branch`: allow current branch flow (still subject to safety rules)
+
+If `git.worktree_branch_behavior` is not set, process/commit/release flows must ask for preferred behavior and persist it in project/user `ica.config.json`.
 
 ### Paths
 - `paths.story_path`, `paths.bug_path`, `paths.memory_path`

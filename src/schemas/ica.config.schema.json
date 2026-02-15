@@ -85,6 +85,11 @@
         "validate_commits": {
           "type": "boolean",
           "description": "Validate commit messages"
+        },
+        "worktree_branch_behavior": {
+          "type": "string",
+          "enum": ["always_new", "ask", "current_branch"],
+          "description": "Branch/worktree isolation policy for implementation work. If unset, process/commit/release skills must ask and persist behavior."
         }
       }
     },
