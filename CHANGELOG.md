@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.3.0] - 2026-02-15
+
+### Added
+- Hybrid hook manifest metadata support with authoritative `HOOK.json` parsing and `HOOK.md` frontmatter fallback in installer catalog loading.
+
+### Changed
+- Hook metadata parsing now normalizes `compatibleTargets` and registration target aliases to improve cross-agent compatibility handling.
+
+### Fixed
+- Target installs now skip incompatible hooks deterministically instead of treating all hook metadata as universally installable.
+- Restored missing CLI export surface required for installer test/build compatibility in current `dev` baseline.
+
 ## [12.2.0] - 2026-02-15
 
 ### Added
