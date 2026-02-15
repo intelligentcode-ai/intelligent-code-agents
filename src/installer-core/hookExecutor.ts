@@ -3,6 +3,7 @@ import { copyPath, ensureDir, removePath, trySymlinkDirectory } from "./fs";
 import { loadHookCatalogFromSources, findHookById, resolveHookSelections, HookInstallSelection } from "./hookCatalog";
 import { appendHookHistory, createEmptyHookState, loadHookInstallState, ManagedHookState, saveHookInstallState } from "./hookState";
 import { parseTargets, resolveTargetPaths } from "./targets";
+import { computeDirectoryDigest } from "./contentDigest";
 
 export type HookTargetPlatform = "claude" | "gemini";
 export type HookInstallScope = "user" | "project";
@@ -56,6 +57,34 @@ function pushWarning(report: HookTargetOperationReport, code: string, message: s
 
 function pushError(report: HookTargetOperationReport, code: string, message: string): void {
   report.errors.push({ code, message });
+}
+
+function verifyHookSourceIntegrity(hook: NonNullable<ReturnType<typeof findHookById>>, report: HookTargetOperationReport): string {
+  const actual = computeDirectoryDigest(hook.sourcePath);
+  const expected = hook.contentDigest || actual.digest;
+
+  if (!hook.contentDigest) {
+    pushWarning(
+      report,
+      "MISSING_HOOK_DIGEST",
+      `Hook '${hook.hookId}' did not provide a catalog content digest; verified using runtime source digest only.`,
+    );
+  }
+
+  if (actual.digest !== expected) {
+    throw new Error(
+      `Integrity verification failed for '${hook.hookId}'. Expected ${expected}, received ${actual.digest}.`,
+    );
+  }
+
+  return expected;
+}
+
+function verifyInstalledHookIntegrity(destinationPath: string, expectedDigest: string): void {
+  const installed = computeDirectoryDigest(destinationPath);
+  if (installed.digest !== expectedDigest) {
+    throw new Error(`Installed hook digest mismatch at '${destinationPath}'. Expected ${expectedDigest}, received ${installed.digest}.`);
+  }
 }
 
 function defaultTargetReport(target: HookTargetPlatform, installPath: string, operation: HookOperation): HookTargetOperationReport {
@@ -171,6 +200,7 @@ async function installOrSyncTarget(repoRoot: string, request: HookInstallRequest
 
     const destination = path.join(hooksDir, hook.name);
     await removePath(destination);
+    const expectedDigest = verifyHookSourceIntegrity(hook, report);
 
     let effectiveMode: HookInstallMode = request.mode;
     if (request.mode === "symlink") {
@@ -185,6 +215,10 @@ async function installOrSyncTarget(repoRoot: string, request: HookInstallRequest
       await copyPath(hook.sourcePath, destination);
     }
 
+    if (effectiveMode === "copy") {
+      verifyInstalledHookIntegrity(destination, expectedDigest);
+    }
+
     const managed: ManagedHookState = {
       name: hook.name,
       hookName: hook.hookName,
@@ -192,6 +226,7 @@ async function installOrSyncTarget(repoRoot: string, request: HookInstallRequest
       sourceId: hook.sourceId,
       sourceUrl: hook.sourceUrl,
       sourceRevision: catalog.sources.find((source) => source.id === hook.sourceId)?.revision,
+      sourceContentDigest: expectedDigest,
       orphaned: false,
       installMode: request.mode,
       effectiveMode,

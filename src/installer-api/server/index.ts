@@ -18,8 +18,10 @@ import { executeHookOperation, HookInstallRequest, HookTargetPlatform } from "..
 import { loadHookInstallState } from "../../installer-core/hookState";
 import { registerRepository } from "../../installer-core/repositories";
 import { redactSensitive, safeErrorMessage } from "../../installer-core/security";
+import { refreshSourcesAndHooks } from "../../installer-core/sourceRefresh";
 import { loadInstallState } from "../../installer-core/state";
 import { discoverTargets, resolveTargetPaths } from "../../installer-core/targets";
+import { checkForAppUpdate } from "../../installer-core/updateCheck";
 import { SUPPORTED_TARGETS } from "../../installer-core/constants";
 import { findRepoRoot } from "../../installer-core/repo";
 import { InstallRequest, InstallScope, InstallSelection, TargetPlatform } from "../../installer-core/types";
@@ -93,6 +95,7 @@ interface InstallerApiDependencies {
   loadHookSources: typeof loadHookSources;
   syncSource: typeof syncSource;
   syncHookSource: typeof syncHookSource;
+  checkForAppUpdate: typeof checkForAppUpdate;
 }
 
 export interface InstallerApiServerOptions {
@@ -321,6 +324,7 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
   const apiKey = options.apiKey || process.env.ICA_API_KEY || "";
   const wsTicketTtlMs = options.wsTicketTtlMs ?? Number(process.env.ICA_WS_TICKET_TTL_MS || "60000");
   const wsHeartbeatMs = options.wsHeartbeatMs ?? Number(process.env.ICA_WS_HEARTBEAT_MS || "15000");
+  const autoRefreshMinutes = Math.max(0, Number(process.env.ICA_SOURCE_REFRESH_INTERVAL_MINUTES || "60"));
   const deps: InstallerApiDependencies = {
     executeOperation,
     executeHookOperation,
@@ -330,6 +334,7 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
     loadHookSources,
     syncSource,
     syncHookSource,
+    checkForAppUpdate,
     ...(options.dependencies || {}),
   };
 
@@ -429,11 +434,13 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
   });
 
   app.get("/api/v1/health", async () => {
+    const update = await deps.checkForAppUpdate(installerVersion);
     return {
       ok: true,
       service: "ica-installer-api",
       version: installerVersion,
       timestamp: new Date().toISOString(),
+      update,
     };
   });
 
@@ -853,31 +860,29 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
 
   app.post("/api/v1/sources/:id/refresh", async (request, reply) => {
     const params = request.params as { id: string };
-    const skillSource = (await deps.loadSources()).find((item) => item.id === params.id);
-    const hookSource = (await deps.loadHookSources()).find((item) => item.id === params.id);
-    if (!skillSource && !hookSource) {
-      return reply.code(404).send({ error: `Unknown source '${params.id}'.` });
-    }
     const opId = `op_${crypto.randomUUID()}`;
     realtime.emit("source", "source.refresh.started", { sourceId: params.id }, opId);
-    const credentialProvider = createCredentialProvider();
     try {
-      const refreshed: Array<{ type: "skills" | "hooks"; revision?: string; localPath?: string; error?: string }> = [];
-      if (skillSource) {
-        try {
-          const result = await deps.syncSource(skillSource, credentialProvider);
-          refreshed.push({ type: "skills", revision: result.revision, localPath: result.localPath });
-        } catch (error) {
-          refreshed.push({ type: "skills", error: sanitizeError(error) });
-        }
+      const result = await refreshSourcesAndHooks(
+        {
+          credentials: createCredentialProvider(),
+          loadSources: deps.loadSources,
+          loadHookSources: deps.loadHookSources,
+          syncSource: deps.syncSource,
+          syncHookSource: deps.syncHookSource,
+        },
+        { sourceId: params.id, onlyEnabled: false },
+      );
+      if (!result.matched) {
+        return reply.code(404).send({ error: `Unknown source '${params.id}'.` });
       }
-      if (hookSource) {
-        try {
-          const result = await deps.syncHookSource(hookSource, credentialProvider);
-          refreshed.push({ type: "hooks", revision: result.revision, localPath: result.localPath });
-        } catch (error) {
-          refreshed.push({ type: "hooks", error: sanitizeError(error) });
-        }
+      const item = result.refreshed[0];
+      const refreshed: Array<{ type: "skills" | "hooks"; revision?: string; localPath?: string; error?: string }> = [];
+      if (item.skills) {
+        refreshed.push({ type: "skills", ...item.skills });
+      }
+      if (item.hooks) {
+        refreshed.push({ type: "hooks", ...item.hooks });
       }
       realtime.emit("source", "source.refresh.completed", { sourceId: params.id, refreshed }, opId);
       return { sourceId: params.id, refreshed, operationId: opId };
@@ -891,47 +896,14 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
     const opId = `op_${crypto.randomUUID()}`;
     realtime.emit("source", "source.refresh.started", { sourceId: "all" }, opId);
     try {
-      const credentialProvider = createCredentialProvider();
-      const skillSources = (await deps.loadSources()).filter((source) => source.enabled);
-      const hookSources = (await deps.loadHookSources()).filter((source) => source.enabled);
-      const byId = new Map<string, { skills?: typeof skillSources[number]; hooks?: typeof hookSources[number] }>();
-      for (const source of skillSources) {
-        byId.set(source.id, { ...(byId.get(source.id) || {}), skills: source });
-      }
-      for (const source of hookSources) {
-        byId.set(source.id, { ...(byId.get(source.id) || {}), hooks: source });
-      }
-
-      const refreshed: Array<{
-        sourceId: string;
-        skills?: { revision?: string; localPath?: string; error?: string };
-        hooks?: { revision?: string; localPath?: string; error?: string };
-      }> = [];
-      for (const [sourceId, entry] of byId.entries()) {
-        const item: {
-          sourceId: string;
-          skills?: { revision?: string; localPath?: string; error?: string };
-          hooks?: { revision?: string; localPath?: string; error?: string };
-        } = { sourceId };
-
-        if (entry.skills) {
-          try {
-            const result = await deps.syncSource(entry.skills, credentialProvider);
-            item.skills = { revision: result.revision, localPath: result.localPath };
-          } catch (error) {
-            item.skills = { error: sanitizeError(error) };
-          }
-        }
-        if (entry.hooks) {
-          try {
-            const result = await deps.syncHookSource(entry.hooks, credentialProvider);
-            item.hooks = { revision: result.revision, localPath: result.localPath };
-          } catch (error) {
-            item.hooks = { error: sanitizeError(error) };
-          }
-        }
-        refreshed.push(item);
-      }
+      const result = await refreshSourcesAndHooks({
+        credentials: createCredentialProvider(),
+        loadSources: deps.loadSources,
+        loadHookSources: deps.loadHookSources,
+        syncSource: deps.syncSource,
+        syncHookSource: deps.syncHookSource,
+      });
+      const refreshed = result.refreshed;
       realtime.emit("source", "source.refresh.completed", { sourceId: "all", refreshed }, opId);
       return { refreshed, operationId: opId };
     } catch (error) {
@@ -1216,6 +1188,42 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
       throw error;
     }
   });
+
+  let refreshInFlight = false;
+  const runAutoRefresh = async (trigger: "startup" | "interval"): Promise<void> => {
+    if (refreshInFlight) {
+      return;
+    }
+    refreshInFlight = true;
+    const opId = `op_${crypto.randomUUID()}`;
+    realtime.emit("source", "source.refresh.started", { sourceId: "all", trigger }, opId);
+    try {
+      const result = await refreshSourcesAndHooks({
+        credentials: createCredentialProvider(),
+        loadSources: deps.loadSources,
+        loadHookSources: deps.loadHookSources,
+        syncSource: deps.syncSource,
+        syncHookSource: deps.syncHookSource,
+      });
+      realtime.emit("source", "source.refresh.completed", { sourceId: "all", refreshed: result.refreshed, trigger }, opId);
+    } catch (error) {
+      realtime.emit("source", "source.refresh.failed", { sourceId: "all", error: sanitizeError(error), trigger }, opId);
+    } finally {
+      refreshInFlight = false;
+    }
+  };
+
+  if (autoRefreshMinutes > 0) {
+    void runAutoRefresh("startup");
+    const intervalMs = autoRefreshMinutes * 60_000;
+    const timer = setInterval(() => {
+      void runAutoRefresh("interval");
+    }, intervalMs);
+    timer.unref();
+    app.addHook("onClose", async () => {
+      clearInterval(timer);
+    });
+  }
   return app;
 }
 

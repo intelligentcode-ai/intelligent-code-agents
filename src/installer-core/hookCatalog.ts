@@ -5,6 +5,7 @@ import { ensureHookSourceRegistry, HookSource, setHookSourceSyncStatus } from ".
 import { safeErrorMessage } from "./security";
 import { syncHookSource } from "./hookSync";
 import { TargetPlatform } from "./types";
+import { computeDirectoryDigest } from "./contentDigest";
 
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
 
@@ -19,6 +20,8 @@ export interface CatalogHook {
   sourcePath: string;
   version?: string;
   updatedAt?: string;
+  contentDigest?: string;
+  contentFileCount?: number;
   compatibleTargets: Array<Extract<TargetPlatform, "claude" | "gemini">>;
 }
 
@@ -76,6 +79,7 @@ function toCatalogHook(source: HookSource, hookDir: string): CatalogHook | null 
 
   const hookName = frontmatter.name || path.basename(hookDir);
   const hookId = `${source.id}/${hookName}`;
+  const digest = computeDirectoryDigest(hookDir);
 
   return {
     hookId,
@@ -88,6 +92,8 @@ function toCatalogHook(source: HookSource, hookDir: string): CatalogHook | null 
     sourcePath: hookDir,
     version: frontmatter.version,
     updatedAt: stat.mtime.toISOString(),
+    contentDigest: digest.digest,
+    contentFileCount: digest.fileCount,
     compatibleTargets: ["claude", "gemini"],
   };
 }

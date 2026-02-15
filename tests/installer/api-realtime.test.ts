@@ -343,6 +343,44 @@ test("origin allowlist helper allows localhost UI origins and blocks foreign ori
   assert.equal(isAllowedUiOrigin(allowlist, undefined), true);
 });
 
+test("health endpoint includes update-check metadata", async (t) => {
+  const app = await createInstallerApiServer({
+    apiKey: API_KEY,
+    dependencies: ({
+      loadCatalogFromSources: async () => createCatalogFixture(),
+      loadHookCatalogFromSources: async () => createHookCatalogFixture(),
+      loadSources: async () => [],
+      loadHookSources: async () => [],
+      checkForAppUpdate: async () => ({
+        currentVersion: "12.1.0",
+        latestVersion: "12.2.0",
+        latestReleaseUrl: "https://github.com/intelligentcode-ai/intelligent-code-agents/releases/tag/v12.2.0",
+        checkedAt: "2026-02-15T00:00:00.000Z",
+        updateAvailable: true,
+      }),
+    }) as never,
+  });
+  t.after(async () => {
+    await app.close();
+  });
+
+  const res = await app.inject({
+    method: "GET",
+    url: "/api/v1/health",
+    headers: {
+      "x-ica-api-key": API_KEY,
+    },
+  });
+  assert.equal(res.statusCode, 200);
+  const payload = res.json() as {
+    version?: string;
+    update?: { latestVersion?: string; updateAvailable?: boolean };
+  };
+  assert.match(String(payload.version || ""), /^\d+\.\d+\.\d+/);
+  assert.equal(payload.update?.latestVersion, "12.2.0");
+  assert.equal(payload.update?.updateAvailable, true);
+});
+
 test("catalog failures return structured retryable JSON error", async (t) => {
   const app = await createInstallerApiServer({
     apiKey: API_KEY,

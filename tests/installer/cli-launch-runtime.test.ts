@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   parseServeImageBuildMode,
+  parseServeRefreshMinutes,
   parseServeReusePorts,
   shouldBuildDashboardImage,
   redactCliErrorMessage,
@@ -18,6 +19,11 @@ test("parseServeReusePorts normalizes truthy and falsey flags", () => {
   assert.equal(parseServeReusePorts("yes"), true);
   assert.equal(parseServeReusePorts("0"), false);
   assert.equal(parseServeReusePorts("off"), false);
+});
+
+test("parseServeRefreshMinutes validates numeric values", () => {
+  assert.equal(parseServeRefreshMinutes("60"), 60);
+  assert.equal(parseServeRefreshMinutes("0"), 0);
 });
 
 test("shouldBuildDashboardImage skips GHCR auto-build and redacts CLI secrets", () => {

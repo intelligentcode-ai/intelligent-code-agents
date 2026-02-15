@@ -39,6 +39,8 @@ type Skill = {
   resources: Array<{ type: string; path: string }>;
   version?: string;
   updatedAt?: string;
+  contentDigest?: string;
+  contentFileCount?: number;
 };
 
 type InstallationSkill = {
@@ -132,7 +134,24 @@ type DashboardMode = "light" | "dark";
 type DashboardAccent = "slate" | "blue" | "red" | "green" | "amber";
 type DashboardBackground = "slate" | "ocean" | "sand" | "forest" | "wine";
 type LegacyDashboardTheme = "light" | "dark" | "blue" | "red" | "green";
-type HealthPayload = { version?: string; error?: string };
+type HealthPayload = {
+  version?: string;
+  update?: {
+    currentVersion?: string;
+    latestVersion?: string;
+    latestReleaseUrl?: string;
+    checkedAt?: string;
+    updateAvailable?: boolean;
+    error?: string;
+  };
+  error?: string;
+};
+type SkillChangeNotice = {
+  added: number;
+  removed: number;
+  changed: number;
+  checkedAt: string;
+};
 
 const allTargets: Target[] = ["claude", "codex", "cursor", "gemini", "antigravity"];
 const modeStorageKey = "ica.dashboard.mode";
@@ -157,6 +176,9 @@ const backgroundOptions: Array<{ id: DashboardBackground; label: string }> = [
   { id: "forest", label: "Forest" },
   { id: "wine", label: "Wine" },
 ];
+const rawUpdateCheckMinutes =
+  Number((import.meta as { env?: Record<string, string | undefined> }).env?.VITE_ICA_UPDATE_CHECK_MINUTES || "60");
+const updateCheckMinutes = Number.isFinite(rawUpdateCheckMinutes) && rawUpdateCheckMinutes > 0 ? Math.floor(rawUpdateCheckMinutes) : 60;
 
 function isDashboardMode(value: string | null): value is DashboardMode {
   return value === "light" || value === "dark";
@@ -230,6 +252,15 @@ function titleCase(value: string): string {
     .replace(/\b[a-z]/g, (match) => match.toUpperCase());
 }
 
+function buildSkillSnapshot(items: Skill[]): Map<string, string> {
+  const snapshot = new Map<string, string>();
+  for (const skill of items) {
+    const key = `${skill.version || ""}|${skill.contentDigest || ""}|${skill.updatedAt || ""}`;
+    snapshot.set(skill.skillId, key);
+  }
+  return snapshot;
+}
+
 export function InstallerDashboard(): JSX.Element {
   const [sources, setSources] = useState<Source[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -251,6 +282,9 @@ export function InstallerDashboard(): JSX.Element {
   const [startupWarnings, setStartupWarnings] = useState<string[]>([]);
   const [liveStatus, setLiveStatus] = useState<RealtimeStatus>("http-only");
   const [appVersion, setAppVersion] = useState<string>("unknown");
+  const [appUpdate, setAppUpdate] = useState<HealthPayload["update"] | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [skillChangeNotice, setSkillChangeNotice] = useState<SkillChangeNotice | null>(null);
   const [apiReachable, setApiReachable] = useState(false);
   const [startupRunId, setStartupRunId] = useState(0);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -279,6 +313,8 @@ export function InstallerDashboard(): JSX.Element {
   const appearanceTriggerRef = useRef<HTMLButtonElement | null>(null);
   const refreshInstallationsRef = useRef<() => Promise<void>>(async () => undefined);
   const refreshCatalogRef = useRef<() => Promise<void>>(async () => undefined);
+  const updateCheckRef = useRef<() => Promise<void>>(async () => undefined);
+  const skillSnapshotRef = useRef<Map<string, string> | null>(null);
 
   const selectedTargetList = useMemo(() => Array.from(targets).sort(), [targets]);
   const selectedHookTargetList = useMemo(
@@ -454,7 +490,40 @@ export function InstallerDashboard(): JSX.Element {
         throw new Error(asErrorMessage(payload, "Failed to load skills catalog."));
       }
       setCatalogLoadingProgress(88);
-      setSkills(Array.isArray(payload.skills) ? payload.skills : []);
+      const nextSkills = Array.isArray(payload.skills) ? payload.skills : [];
+      setSkills(nextSkills);
+      const nextSnapshot = buildSkillSnapshot(nextSkills);
+      const previousSnapshot = skillSnapshotRef.current;
+      if (previousSnapshot && previousSnapshot.size > 0) {
+        let added = 0;
+        let removed = 0;
+        let changed = 0;
+
+        for (const skillId of nextSnapshot.keys()) {
+          if (!previousSnapshot.has(skillId)) {
+            added += 1;
+            continue;
+          }
+          if (previousSnapshot.get(skillId) !== nextSnapshot.get(skillId)) {
+            changed += 1;
+          }
+        }
+        for (const skillId of previousSnapshot.keys()) {
+          if (!nextSnapshot.has(skillId)) {
+            removed += 1;
+          }
+        }
+
+        if (added > 0 || removed > 0 || changed > 0) {
+          setSkillChangeNotice({
+            added,
+            removed,
+            changed,
+            checkedAt: new Date().toISOString(),
+          });
+        }
+      }
+      skillSnapshotRef.current = nextSnapshot;
       if (payload.stale) {
         const source = payload.catalogSource || "fallback";
         setCatalogWarning(payload.staleReason || `Catalog is currently served from ${source}.`);
@@ -506,6 +575,7 @@ export function InstallerDashboard(): JSX.Element {
     const version = typeof payload.version === "string" && payload.version.trim() ? payload.version.trim() : "unknown";
     setApiReachable(true);
     setAppVersion(version);
+    setAppUpdate(payload.update && typeof payload.update === "object" ? payload.update : null);
   }
 
   async function fetchInstallations(): Promise<void> {
@@ -560,6 +630,10 @@ export function InstallerDashboard(): JSX.Element {
   refreshCatalogRef.current = async () => {
     await fetchSources();
     await Promise.all([fetchSkills(), fetchHooks()]);
+  };
+
+  updateCheckRef.current = async () => {
+    await runUpdateCheck();
   };
 
   function setSkillsSelection(skillIds: string[], shouldSelect: boolean): void {
@@ -771,11 +845,39 @@ export function InstallerDashboard(): JSX.Element {
     }
   }
 
+  async function runUpdateCheck(): Promise<void> {
+    if (updateChecking) {
+      return;
+    }
+    setUpdateChecking(true);
+    setError("");
+    try {
+      const res = await apiFetch("/api/v1/sources/refresh-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(asErrorMessage(payload, "Source refresh failed."));
+      }
+      await Promise.all([fetchApiVersion(), fetchSources(), fetchSkills(), fetchHooks(), fetchInstallations(), fetchHookInstallations()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUpdateChecking(false);
+    }
+  }
+
   async function refreshSource(sourceId?: string): Promise<void> {
+    if (!sourceId) {
+      await runUpdateCheck();
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      const endpoint = sourceId ? `/api/v1/sources/${sourceId}/refresh` : "/api/v1/sources/refresh-all";
+      const endpoint = `/api/v1/sources/${sourceId}/refresh`;
       const res = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -913,6 +1015,20 @@ export function InstallerDashboard(): JSX.Element {
       stopRealtime();
     };
   }, []);
+
+  useEffect(() => {
+    if (!apiReachable || updateCheckMinutes <= 0) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void updateCheckRef.current().catch((err) =>
+        addStartupWarning(`Scheduled update check: ${err instanceof Error ? err.message : String(err)}`),
+      );
+    }, updateCheckMinutes * 60 * 1000);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [apiReachable]);
 
   useEffect(() => {
     if (selectionCustomized) return;
@@ -1073,6 +1189,44 @@ export function InstallerDashboard(): JSX.Element {
           <strong>Startup warnings:</strong> {startupWarnings.join(" | ")}
         </section>
       )}
+      {!apiUnavailable && appUpdate?.updateAvailable && (
+        <section className="update-banner" role="status" aria-live="polite">
+          <div className="update-banner-copy">
+            <strong>New ICA app version available</strong>
+            <span>
+              Current v{appVersion} • Latest v{appUpdate.latestVersion}
+            </span>
+          </div>
+          <div className="update-banner-actions">
+            {appUpdate.latestReleaseUrl && (
+              <a className="btn btn-ghost" href={appUpdate.latestReleaseUrl} target="_blank" rel="noreferrer noopener">
+                View release
+              </a>
+            )}
+            <button className="btn btn-primary" type="button" disabled={updateChecking} onClick={() => void runUpdateCheck()}>
+              {updateChecking ? "Checking…" : "Refresh"}
+            </button>
+          </div>
+        </section>
+      )}
+      {!apiUnavailable && skillChangeNotice && (
+        <section className="update-banner update-banner-skills" role="status" aria-live="polite">
+          <div className="update-banner-copy">
+            <strong>Skills repository changed</strong>
+            <span>
+              +{skillChangeNotice.added} added • -{skillChangeNotice.removed} removed • {skillChangeNotice.changed} updated
+            </span>
+          </div>
+          <div className="update-banner-actions">
+            <button className="btn btn-primary" type="button" disabled={updateChecking} onClick={() => void runUpdateCheck()}>
+              {updateChecking ? "Checking…" : "Refresh"}
+            </button>
+            <button className="btn btn-ghost" type="button" onClick={() => setSkillChangeNotice(null)}>
+              Dismiss
+            </button>
+          </div>
+        </section>
+      )}
       {catalogLoading && (
         <section className="status status-info" role="status" aria-live="polite">
           <div className="status-head">
@@ -1126,6 +1280,9 @@ export function InstallerDashboard(): JSX.Element {
           </button>
         </nav>
         <div className="toolbar-actions">
+          <button className="btn btn-ghost" type="button" disabled={updateChecking} onClick={() => void runUpdateCheck()}>
+            {updateChecking ? "Checking…" : "Refresh"}
+          </button>
           <button
             ref={appearanceTriggerRef}
             className={`btn btn-ghost appearance-toggle ${appearanceOpen ? "is-active" : ""}`}

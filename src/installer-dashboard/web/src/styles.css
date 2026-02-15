@@ -573,6 +573,49 @@ input[type="radio"]:focus-visible {
   transition: width 170ms ease;
 }
 
+.update-banner {
+  margin: 0 0 var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
+  border-radius: 14px;
+  padding: var(--space-4) var(--space-5);
+  background:
+    linear-gradient(110deg, color-mix(in srgb, var(--accent-soft) 88%, transparent) 0%, color-mix(in srgb, var(--surface) 80%, transparent) 100%),
+    repeating-linear-gradient(135deg, transparent 0 14px, color-mix(in srgb, var(--accent) 6%, transparent) 14px 15px);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.update-banner-skills {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--line));
+  background:
+    radial-gradient(circle at 85% 10%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 45%),
+    linear-gradient(125deg, color-mix(in srgb, var(--accent-soft) 90%, transparent) 0%, color-mix(in srgb, var(--surface) 80%, transparent) 100%);
+}
+
+.update-banner-copy {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.update-banner-copy strong {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.update-banner-copy span {
+  color: var(--text-soft);
+  font-size: 0.86rem;
+}
+
+.update-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .tab-nav {
   display: flex;
   gap: var(--space-3);
@@ -1670,6 +1713,11 @@ pre {
   .appearance-popover {
     width: min(32rem, calc(100vw - 2rem));
   }
+
+  .update-banner {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1708,6 +1756,11 @@ pre {
 
   .appearance-toggle {
     width: fit-content;
+  }
+
+  .update-banner-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .theme-group {

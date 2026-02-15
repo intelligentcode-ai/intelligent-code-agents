@@ -20,8 +20,10 @@ import { loadHookCatalogFromSources, HookInstallSelection } from "../installer-c
 import { executeHookOperation, HookInstallRequest, HookTargetPlatform } from "../installer-core/hookExecutor";
 import { loadHookInstallState } from "../installer-core/hookState";
 import { registerRepository } from "../installer-core/repositories";
+import { refreshSourcesAndHooks } from "../installer-core/sourceRefresh";
 import { loadInstallState } from "../installer-core/state";
 import { parseTargets, resolveTargetPaths } from "../installer-core/targets";
+import { checkForAppUpdate } from "../installer-core/updateCheck";
 import { findRepoRoot } from "../installer-core/repo";
 import { InstallMode, InstallRequest, InstallScope, InstallSelection, OperationKind, TargetPlatform } from "../installer-core/types";
 
@@ -301,6 +303,15 @@ export function parseServeReusePorts(rawValue: string): ServeReusePortsMode {
   throw new Error(`Invalid --reuse-ports value '${rawValue}'. Supported: true|false`);
 }
 
+export function parseServeRefreshMinutes(rawValue: string): number {
+  const trimmed = rawValue.trim();
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`Invalid --sources-refresh-minutes value '${rawValue}'. Use 0 to disable or a positive number.`);
+  }
+  return Math.floor(parsed);
+}
+
 export function shouldBuildDashboardImage(input: {
   mode: ServeImageBuildMode;
   image: string;
@@ -320,6 +331,17 @@ export function shouldBuildDashboardImage(input: {
     return false;
   }
   return input.image === input.defaultImage;
+}
+
+export function shouldFallbackToSourceBuild(pullErrorMessage: string): boolean {
+  const normalized = pullErrorMessage.toLowerCase();
+  return (
+    normalized.includes("no matching manifest") ||
+    normalized.includes("no match for platform in manifest") ||
+    normalized.includes("manifest unknown") ||
+    normalized.includes("manifest not found") ||
+    normalized.includes("not found: manifest")
+  );
 }
 
 function toDockerRunArgs(base: {
@@ -401,6 +423,37 @@ async function dockerInspect(containerName: string): Promise<boolean> {
   }
 }
 
+async function reclaimDockerPublishedPort(port: number, expectedContainerName: string): Promise<number> {
+  try {
+    const { stdout } = await execFileAsync(
+      "docker",
+      ["ps", "--filter", `publish=${port}`, "--format", "{{.ID}} {{.Names}}"],
+      {
+        maxBuffer: 4 * 1024 * 1024,
+      },
+    );
+    const ids = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (ids.length === 0) {
+      return 0;
+    }
+    let removed = 0;
+    for (const row of ids) {
+      const [id, name] = row.split(/\s+/, 2);
+      if (!id || !name || name !== expectedContainerName) {
+        continue;
+      }
+      await execFileAsync("docker", ["rm", "-f", id], { maxBuffer: 8 * 1024 * 1024 });
+      removed += 1;
+    }
+    return removed;
+  } catch {
+    return 0;
+  }
+}
+
 async function dockerImageExists(image: string): Promise<boolean> {
   try {
     await execFileAsync("docker", ["image", "inspect", image], { maxBuffer: 8 * 1024 * 1024 });
@@ -416,6 +469,16 @@ async function ensureDashboardImage(options: {
   mode: ServeImageBuildMode;
   defaultImage: string;
 }): Promise<void> {
+  const dockerfilePath = path.join(options.repoRoot, "src", "installer-dashboard", "Dockerfile");
+  const buildFromSource = async (): Promise<void> => {
+    if (!fs.existsSync(dockerfilePath)) {
+      throw new Error(`Dashboard Dockerfile not found at ${dockerfilePath}. Provide --image=<image> or run with --build-image=never.`);
+    }
+    output.write(`Building dashboard image '${options.image}' from source...\n`);
+    await execFileAsync("docker", ["build", "-f", dockerfilePath, "-t", options.image, options.repoRoot], { maxBuffer: 16 * 1024 * 1024 });
+    output.write(`Built dashboard image '${options.image}'.\n`);
+  };
+
   const imageExists = await dockerImageExists(options.image);
   const shouldBuild = shouldBuildDashboardImage({
     mode: options.mode,
@@ -426,19 +489,21 @@ async function ensureDashboardImage(options: {
   if (!shouldBuild) {
     if (!imageExists && options.image.trim().toLowerCase().startsWith("ghcr.io/")) {
       output.write(`Pulling dashboard image '${options.image}'...\n`);
-      await execFileAsync("docker", ["pull", options.image], { maxBuffer: 16 * 1024 * 1024 });
+      try {
+        await execFileAsync("docker", ["pull", options.image], { maxBuffer: 16 * 1024 * 1024 });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const canFallback = options.mode !== "never" && fs.existsSync(dockerfilePath) && shouldFallbackToSourceBuild(message);
+        if (!canFallback) {
+          throw error;
+        }
+        output.write("Dashboard image pull failed for this platform; falling back to source build.\n");
+        await buildFromSource();
+      }
     }
     return;
   }
-
-  const dockerfilePath = path.join(options.repoRoot, "src", "installer-dashboard", "Dockerfile");
-  if (!fs.existsSync(dockerfilePath)) {
-    throw new Error(`Dashboard Dockerfile not found at ${dockerfilePath}. Provide --image=<image> or run with --build-image=never.`);
-  }
-
-  output.write(`Building dashboard image '${options.image}' from source...\n`);
-  await execFileAsync("docker", ["build", "-f", dockerfilePath, "-t", options.image, options.repoRoot], { maxBuffer: 16 * 1024 * 1024 });
-  output.write(`Built dashboard image '${options.image}'.\n`);
+  await buildFromSource();
 }
 
 function printHelp(): void {
@@ -484,6 +549,52 @@ function printHelp(): void {
   output.write(`  --yes\n`);
   output.write(`  --json\n`);
   output.write(`  --refresh (for catalog: force live source refresh)\n`);
+  output.write(`  --sources-refresh-minutes=60 (serve only; set 0 to disable periodic source refresh)\n`);
+}
+
+function resolveInstallerVersion(repoRoot: string): string {
+  const versionFile = path.join(repoRoot, "VERSION");
+  if (!fs.existsSync(versionFile)) {
+    return "0.0.0";
+  }
+  try {
+    const value = fs.readFileSync(versionFile, "utf8").trim();
+    return value || "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+async function maybePrintUpdateNotifier(repoRoot: string, options: Record<string, string | boolean>): Promise<void> {
+  if (boolOption(options, "json", false)) {
+    return;
+  }
+  const currentVersion = resolveInstallerVersion(repoRoot);
+  const update = await checkForAppUpdate(currentVersion);
+  if (!update.updateAvailable || !update.latestVersion) {
+    return;
+  }
+  const targetVersion = update.latestVersion.replace(/^v/i, "");
+  const link = update.latestReleaseUrl || "https://github.com/intelligentcode-ai/intelligent-code-agents/releases/latest";
+  output.write(`Update available: ICA ${targetVersion} (current ${currentVersion}). ${link}\n`);
+}
+
+async function refreshSourcesOnCliStart(): Promise<void> {
+  try {
+    const result = await refreshSourcesAndHooks({
+      credentials: createCredentialProvider(),
+      loadSources,
+      loadHookSources,
+      syncSource,
+      syncHookSource,
+    });
+    const errors = result.refreshed.flatMap((entry) => [entry.skills?.error, entry.hooks?.error]).filter((item): item is string => Boolean(item));
+    if (errors.length > 0) {
+      output.write(`Warning: startup source refresh completed with ${errors.length} error(s).\n`);
+    }
+  } catch (error) {
+    output.write(`Warning: startup source refresh failed: ${error instanceof Error ? error.message : String(error)}\n`);
+  }
 }
 
 function openBrowser(url: string): void {
@@ -985,44 +1096,24 @@ async function runSources(positionals: string[], options: Record<string, string 
 
   if (action === "refresh") {
     const sourceId = stringOption(options, "id", "").trim();
-    const repositories = await loadRepositoryRows();
-    const targets = sourceId
-      ? repositories.filter((repo) => repo.id === sourceId)
-      : repositories.filter((repo) => repo.skills?.enabled !== false || repo.hooks?.enabled !== false);
-    if (targets.length === 0) {
+    const result = await refreshSourcesAndHooks(
+      {
+        credentials: credentialProvider,
+        loadSources,
+        loadHookSources,
+        syncSource,
+        syncHookSource,
+      },
+      { sourceId, onlyEnabled: true },
+    );
+    if (!result.matched) {
       throw new Error(sourceId ? `Unknown source '${sourceId}'` : "No enabled sources found.");
     }
-
-    const refreshed: Array<{
-      id: string;
-      skills?: { revision?: string; localPath?: string; error?: string };
-      hooks?: { revision?: string; localPath?: string; error?: string };
-    }> = [];
-    for (const repo of targets) {
-      const item: {
-        id: string;
-        skills?: { revision?: string; localPath?: string; error?: string };
-        hooks?: { revision?: string; localPath?: string; error?: string };
-      } = { id: repo.id };
-
-      if (repo.skills) {
-        try {
-          const result = await syncSource(repo.skills, credentialProvider);
-          item.skills = { revision: result.revision, localPath: result.localPath };
-        } catch (error) {
-          item.skills = { error: error instanceof Error ? error.message : String(error) };
-        }
-      }
-      if (repo.hooks) {
-        try {
-          const result = await syncHookSource(repo.hooks, credentialProvider);
-          item.hooks = { revision: result.revision, localPath: result.localPath };
-        } catch (error) {
-          item.hooks = { error: error instanceof Error ? error.message : String(error) };
-        }
-      }
-      refreshed.push(item);
-    }
+    const refreshed = result.refreshed.map((item) => ({
+      id: item.sourceId,
+      skills: item.skills,
+      hooks: item.hooks,
+    }));
     output.write(json ? `${JSON.stringify(refreshed, null, 2)}\n` : `Refreshed ${refreshed.length} repositories.\n`);
     return;
   }
@@ -1160,8 +1251,22 @@ async function runServe(options: Record<string, string | boolean>): Promise<void
   if (uiPortInput === apiPortInput) {
     throw new Error("API and UI ports must be different. Choose distinct --api-port and --ui-port values.");
   }
+  const containerName = stringOption(options, "container-name", process.env.ICA_DASHBOARD_CONTAINER_NAME || "ica-dashboard");
+  const image = stringOption(options, "image", process.env.ICA_DASHBOARD_IMAGE || DEFAULT_DASHBOARD_IMAGE);
+  const buildMode = parseServeImageBuildMode(stringOption(options, "build-image", process.env.ICA_DASHBOARD_BUILD_IMAGE || "auto"));
+  const sourcesRefreshMinutes = parseServeRefreshMinutes(
+    stringOption(options, "sources-refresh-minutes", process.env.ICA_SOURCE_REFRESH_INTERVAL_MINUTES || "60"),
+  );
+  if (!(await commandExists("docker"))) {
+    throw new Error("Docker CLI is not available.");
+  }
+  if (await dockerInspect(containerName)) {
+    await execFileAsync("docker", ["rm", "-f", containerName], { maxBuffer: 8 * 1024 * 1024 });
+  }
+
   let apiPort = apiPortInput;
   let uiPort = uiPortInput;
+  let uiContainerPort = 0;
   if (reusePorts) {
     await reclaimLoopbackPort(apiPort, "api-port");
     await reclaimLoopbackPort(uiPort, "ui-port");
@@ -1178,12 +1283,23 @@ async function runServe(options: Record<string, string | boolean>): Promise<void
       blockedPorts: new Set([apiPort]),
     });
   }
-  const uiContainerPort = await allocateLoopbackPort({
-    preferredPort: uiPort + 1,
-    explicit: false,
-    flagName: "ui-port",
-    blockedPorts: new Set([apiPort, uiPort]),
-  });
+  const preferredInternalUiPort = Math.max(uiPort, apiPort) + 1;
+  if (reusePorts) {
+    uiContainerPort = preferredInternalUiPort;
+    await reclaimDockerPublishedPort(uiContainerPort, containerName);
+    if (!(await isLoopbackPortAvailable(uiContainerPort))) {
+      throw new Error(
+        `Requested internal dashboard port ${uiContainerPort} is in use by another process. Choose a different --ui-port.`,
+      );
+    }
+  } else {
+    uiContainerPort = await allocateLoopbackPort({
+      preferredPort: preferredInternalUiPort,
+      explicit: false,
+      flagName: "ui-port",
+      blockedPorts: new Set([apiPort, uiPort]),
+    });
+  }
 
   const apiScript = path.join(repoRoot, "dist", "src", "installer-api", "server", "index.js");
   const bffScript = path.join(repoRoot, "dist", "src", "installer-bff", "server", "index.js");
@@ -1193,23 +1309,12 @@ async function runServe(options: Record<string, string | boolean>): Promise<void
   if (!fs.existsSync(bffScript)) {
     throw new Error("ICA dashboard BFF runtime is not built. Run: npm run build");
   }
-  if (!(await commandExists("docker"))) {
-    throw new Error("Docker CLI is not available.");
-  }
-
-  const containerName = stringOption(options, "container-name", process.env.ICA_DASHBOARD_CONTAINER_NAME || "ica-dashboard");
-  const image = stringOption(options, "image", process.env.ICA_DASHBOARD_IMAGE || DEFAULT_DASHBOARD_IMAGE);
-  const buildMode = parseServeImageBuildMode(stringOption(options, "build-image", process.env.ICA_DASHBOARD_BUILD_IMAGE || "auto"));
   const apiKey = crypto.randomBytes(24).toString("hex");
   const hostForUrl = host.includes(":") ? `[${host}]` : host;
   const apiBaseUrl = `http://${hostForUrl}:${apiPort}`;
   const staticOrigin = `http://${hostForUrl}:${uiContainerPort}`;
   const dashboardUrl = `http://${hostForUrl}:${uiPort}`;
   const open = boolOption(options, "open", false);
-
-  if (await dockerInspect(containerName)) {
-    await execFileAsync("docker", ["rm", "-f", containerName], { maxBuffer: 8 * 1024 * 1024 });
-  }
 
   await ensureDashboardImage({
     repoRoot,
@@ -1226,6 +1331,7 @@ async function runServe(options: Record<string, string | boolean>): Promise<void
       ICA_API_PORT: String(apiPort),
       ICA_API_KEY: apiKey,
       ICA_UI_PORT: String(uiPort),
+      ICA_SOURCE_REFRESH_INTERVAL_MINUTES: String(sourcesRefreshMinutes),
     },
   });
   let shutdownRequested = false;
@@ -1288,6 +1394,11 @@ async function runServe(options: Record<string, string | boolean>): Promise<void
     output.write(`ICA dashboard listening at ${dashboardUrl}\n`);
     output.write(`Dashboard proxy: http://${hostForUrl}:${uiPort} -> ${staticOrigin} + ${apiBaseUrl}\n`);
     output.write(`Container: ${containerName} (${(dockerRunResult.stdout || "").trim()})\n`);
+    output.write(
+      sourcesRefreshMinutes > 0
+        ? `Source auto-refresh: every ${sourcesRefreshMinutes} minute(s)\n`
+        : "Source auto-refresh: disabled\n",
+    );
     if (open) {
       openBrowser(dashboardUrl);
     }
@@ -1331,6 +1442,12 @@ async function runLaunch(options: Record<string, string | boolean>): Promise<voi
 async function main(): Promise<void> {
   const { command, options, positionals } = parseArgv(process.argv.slice(2));
   const normalized = command.toLowerCase();
+  const repoRoot = findRepoRoot(__dirname);
+
+  if (normalized !== "help") {
+    await refreshSourcesOnCliStart();
+    await maybePrintUpdateNotifier(repoRoot, options);
+  }
 
   if (["install", "uninstall", "sync"].includes(normalized)) {
     await runOperation(normalized as OperationKind, options);

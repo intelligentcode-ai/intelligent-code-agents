@@ -51,6 +51,33 @@ async function runGitWithLockRetry(args: string[], cwd?: string, maxAttempts = 5
   throw new Error("git command failed unexpectedly");
 }
 
+async function hasRemoteBranch(repoPath: string, branch: string): Promise<boolean> {
+  try {
+    await runGit(["show-ref", "--verify", "--quiet", `refs/remotes/origin/${branch}`], repoPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureOriginFetchRefspec(repoPath: string): Promise<void> {
+  const wildcardRefspec = "+refs/heads/*:refs/remotes/origin/*";
+  const configured = await runGit(["config", "--get-all", "remote.origin.fetch"], repoPath).catch(() => "");
+  const current = configured
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (current.length === 1 && current[0] === wildcardRefspec) {
+    return;
+  }
+
+  if (current.length > 0) {
+    await runGitWithLockRetry(["config", "--unset-all", "remote.origin.fetch"], repoPath);
+  }
+  await runGitWithLockRetry(["config", "--add", "remote.origin.fetch", wildcardRefspec], repoPath);
+}
+
 async function withSourceSyncLock<T>(sourceId: string, task: () => Promise<T>): Promise<T> {
   const previous = sourceSyncLocks.get(sourceId) || Promise.resolve();
   let releaseLock = () => {};
@@ -73,6 +100,16 @@ async function withSourceSyncLock<T>(sourceId: string, task: () => Promise<T>): 
 
 async function detectDefaultBranch(repoPath: string): Promise<string> {
   try {
+    const symRef = await runGit(["ls-remote", "--symref", "origin", "HEAD"], repoPath);
+    const match = symRef.match(/ref:\s+refs\/heads\/([^\s]+)\s+HEAD/i);
+    if (match?.[1]) {
+      return match[1];
+    }
+  } catch {
+    // Fall through to local remote-tracking refs.
+  }
+
+  try {
     const value = await runGit(["rev-parse", "--abbrev-ref", "origin/HEAD"], repoPath);
     if (value.startsWith("origin/")) {
       return value.slice("origin/".length);
@@ -81,12 +118,23 @@ async function detectDefaultBranch(repoPath: string): Promise<string> {
     // Fall through to common defaults.
   }
 
-  try {
-    await runGit(["show-ref", "--verify", "--quiet", "refs/remotes/origin/main"], repoPath);
-    return "main";
-  } catch {
-    return "master";
+  const preferred = ["main", "master"];
+  for (const branch of preferred) {
+    if (await hasRemoteBranch(repoPath, branch)) {
+      return branch;
+    }
   }
+
+  const discovered = await runGit(["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin"], repoPath).catch(() => "");
+  for (const ref of discovered.split(/\r?\n/)) {
+    const trimmed = ref.trim();
+    if (!trimmed || trimmed === "origin/HEAD" || !trimmed.startsWith("origin/")) {
+      continue;
+    }
+    return trimmed.slice("origin/".length);
+  }
+
+  throw new Error("Unable to determine source default branch from origin.");
 }
 
 async function setOriginUrl(repoPath: string, repoUrl: string): Promise<void> {
@@ -155,15 +203,18 @@ export async function syncSource(source: SkillSource, credentials: CredentialPro
     try {
       if (!hasGitRepo) {
         await runGit(["clone", "--depth", "1", remoteUrl, repoPath], sourceRoot);
+        await ensureOriginFetchRefspec(repoPath);
+        await runGit(["fetch", "origin", "--prune"], repoPath);
         await setOriginUrl(repoPath, plainRemote);
       } else {
         await setOriginUrl(repoPath, remoteUrl);
-        await runGit(["fetch", "--all", "--prune"], repoPath);
+        await ensureOriginFetchRefspec(repoPath);
+        await runGit(["fetch", "origin", "--prune"], repoPath);
         await setOriginUrl(repoPath, plainRemote);
       }
 
       const branch = await detectDefaultBranch(repoPath);
-      await runGit(["checkout", "-f", branch], repoPath);
+      await runGit(["checkout", "-f", "-B", branch, `origin/${branch}`], repoPath);
       await runGit(["reset", "--hard", `origin/${branch}`], repoPath);
       const revision = await runGit(["rev-parse", "HEAD"], repoPath);
       const skillsPath = await mirrorSkillsToStateStore(source, repoPath);
