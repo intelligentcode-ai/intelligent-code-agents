@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.1.1] - 2026-02-15
+
+### Added
+- Source refresh orchestration shared across CLI/API startup and on-demand refresh calls, including configurable scheduled refresh during `ica serve`.
+- Dashboard update banners for new ICA versions and skills repository changes with a manual `Refresh` action.
+- Source and hook content digest computation plus install-time integrity verification for copied content.
+- Threat model artifact for installer source/serve trust boundaries (`intelligent-code-agents-threat-model.md`).
+
+### Changed
+- `ica serve` now rebuilds from local dashboard sources when GHCR pull fails due platform-manifest availability.
+- Dashboard image publish workflow now targets both `linux/amd64` and `linux/arm64`.
+- Source sync default-branch handling now repairs stale refspec setups and resolves modern default branches (`main` first-class support).
+
+### Fixed
+- `ica serve` now safely replaces previous dashboard runtime without falling back to alternate host ports.
+- Internal dashboard port reclaim is scoped to the managed dashboard container instead of removing unrelated containers.
+- Host API/UI port reclaim now refuses to terminate non-ICA processes and returns actionable guidance instead.
+
 ## [12.1.0] - 2026-02-14
 
 ### Added
