@@ -6,6 +6,8 @@ import { execFileSync } from "node:child_process";
 
 const repoRoot = process.cwd();
 const checkerScript = path.join(repoRoot, "scripts", "skill-trigger-check.mjs");
+const privateSkillsRoot = path.join(repoRoot, "private-skills", "skills");
+const hasPrivateSkills = fs.existsSync(privateSkillsRoot);
 
 function runChecker(skillPath: string): { ok: true; stdout: string } | { ok: false; stdout: string; stderr: string } {
   try {
@@ -63,16 +65,16 @@ const adoptedSkills = [
 ];
 
 for (const skill of adoptedSkills) {
-  test(`adopted skill exists: ${skill.name}`, () => {
+  test(`adopted skill exists: ${skill.name}`, { skip: !hasPrivateSkills }, () => {
     assert.equal(fs.existsSync(skill.path), true, `${skill.name} should exist at ${skill.path}`);
   });
 
-  test(`adopted skill passes trigger checks: ${skill.name}`, () => {
+  test(`adopted skill passes trigger checks: ${skill.name}`, { skip: !hasPrivateSkills }, () => {
     const result = runChecker(skill.path);
     assert.equal(result.ok, true, `${skill.name} should pass skill-trigger-check`);
   });
 
-  test(`adopted skill includes TDD acceptance coverage: ${skill.name}`, () => {
+  test(`adopted skill includes TDD acceptance coverage: ${skill.name}`, { skip: !hasPrivateSkills }, () => {
     const text = fs.readFileSync(skill.path, "utf8");
     for (const phrase of skill.expectedPhrases) {
       assert.match(text, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
