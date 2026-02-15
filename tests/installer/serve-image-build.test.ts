@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseServeImageBuildMode, parseServeReusePorts, redactCliErrorMessage, shouldBuildDashboardImage } from "../../src/installer-cli/index";
+import {
+  parseServeImageBuildMode,
+  parseServeReusePorts,
+  redactCliErrorMessage,
+  shouldBuildDashboardImage,
+  shouldFallbackToSourceBuild,
+} from "../../src/installer-cli/index";
 
 test("parseServeImageBuildMode accepts auto/always/never", () => {
   assert.equal(parseServeImageBuildMode("auto"), "auto");
@@ -95,6 +101,17 @@ test("shouldBuildDashboardImage honors always and never", () => {
     }),
     false,
   );
+});
+
+test("shouldFallbackToSourceBuild detects platform-manifest pull failures", () => {
+  assert.equal(
+    shouldFallbackToSourceBuild(
+      "no matching manifest for linux/arm64/v8 in the manifest list entries: no match for platform in manifest",
+    ),
+    true,
+  );
+  assert.equal(shouldFallbackToSourceBuild("manifest unknown: manifest unknown"), true);
+  assert.equal(shouldFallbackToSourceBuild("network timeout while contacting registry"), false);
 });
 
 test("redactCliErrorMessage masks API keys and token flags", () => {

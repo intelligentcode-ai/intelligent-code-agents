@@ -7,6 +7,7 @@ import { isSkillBlocked } from "./skillBlocklist";
 import { DEFAULT_SKILLS_ROOT, OFFICIAL_SOURCE_ID, OFFICIAL_SOURCE_NAME, OFFICIAL_SOURCE_URL, getIcaStateRoot } from "./sources";
 import { frontmatterList, frontmatterString, parseFrontmatter } from "./skillMetadata";
 import { pathExists, writeText } from "./fs";
+import { computeDirectoryDigest } from "./contentDigest";
 
 interface LocalCatalogEntry {
   name: string;
@@ -22,6 +23,8 @@ interface LocalCatalogEntry {
   compatibleTargets: TargetPlatform[];
   resources: SkillResource[];
   sourcePath: string;
+  contentDigest?: string;
+  contentFileCount?: number;
 }
 
 interface CacheRecord {
@@ -101,6 +104,7 @@ function toCatalogEntry(skillDir: string, repoRoot: string): LocalCatalogEntry |
   const author = frontmatterString(frontmatter, "author");
   const contactEmail = frontmatterString(frontmatter, "contact-email") || frontmatterString(frontmatter, "contactEmail");
   const website = frontmatterString(frontmatter, "website");
+  const digest = computeDirectoryDigest(skillDir);
 
   return {
     name,
@@ -116,6 +120,8 @@ function toCatalogEntry(skillDir: string, repoRoot: string): LocalCatalogEntry |
     compatibleTargets: ["claude", "codex", "cursor", "gemini", "antigravity"] satisfies TargetPlatform[],
     resources: collectResources(skillDir),
     sourcePath: path.relative(repoRoot, skillDir).replace(/\\/g, "/"),
+    contentDigest: digest.digest,
+    contentFileCount: digest.fileCount,
   };
 }
 

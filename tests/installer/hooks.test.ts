@@ -9,6 +9,7 @@ import {
   addHookSource,
   ensureHookSourceRegistry,
   getHookSourceHooksPath,
+  getHookSourceRepoPath,
   getHookSourcesFilePath,
   loadHookSources,
   setHookSourceSyncStatus,
@@ -162,6 +163,8 @@ test("install and uninstall selected hooks in project and user scope", async () 
     const catalog = await loadHookCatalogFromSources(repoRoot, false);
     const selected = catalog.hooks.find((hook) => hook.hookId === "ops-hooks/guard");
     assert.ok(selected);
+    assert.match(String(selected?.contentDigest || ""), /^sha256:[a-f0-9]{64}$/);
+    assert.equal(typeof selected?.contentFileCount, "number");
 
     const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-hooks-project-"));
     const installReport = await executeHookOperation(repoRoot, {
@@ -184,6 +187,7 @@ test("install and uninstall selected hooks in project and user scope", async () 
     const claudeState = await loadHookInstallState(path.join(projectRoot, ".claude"));
     assert.ok(claudeState);
     assert.equal(claudeState?.managedHooks.length, 1);
+    assert.match(String(claudeState?.managedHooks[0].sourceContentDigest || ""), /^sha256:[a-f0-9]{64}$/);
 
     const uninstallReport = await executeHookOperation(repoRoot, {
       operation: "uninstall",
@@ -202,5 +206,46 @@ test("install and uninstall selected hooks in project and user scope", async () 
     });
     assert.equal(uninstallReport.targets[0].errors.length, 0);
     assert.ok(uninstallReport.targets[0].removedHooks.includes("ops-hooks/guard"));
+  });
+});
+
+test("syncHookSource repairs stale master refspec and keeps syncing main-based hook sources", async () => {
+  const stateHome = fs.mkdtempSync(path.join(os.tmpdir(), "ica-hooks-state-"));
+  const repoBase = fs.mkdtempSync(path.join(os.tmpdir(), "ica-hooks-repo-"));
+  const repoDir = path.join(repoBase, "repo");
+  fs.mkdirSync(path.join(repoDir, "hooks", "guard"), { recursive: true });
+  fs.writeFileSync(path.join(repoDir, "hooks", "guard", "HOOK.md"), "---\nname: guard\ndescription: v1\nversion: 1.0.0\n---\n", "utf8");
+  initRepo(repoDir);
+  execFileSync("git", ["branch", "-M", "main"], { cwd: repoDir });
+
+  await withStateHome(stateHome, async () => {
+    const source = await addHookSource({
+      id: "main-hook-refspec-source",
+      name: "main-hook-refspec-source",
+      repoUrl: `file://${repoDir}`,
+      transport: "https",
+      hooksRoot: "/hooks",
+      enabled: true,
+      removable: true,
+    });
+
+    const first = await syncHookSource(source, createCredentialProvider());
+    assert.ok(fs.existsSync(path.join(first.hooksPath, "guard", "HOOK.md")));
+
+    const localRepo = getHookSourceRepoPath(source.id);
+    execFileSync("git", ["config", "--replace-all", "remote.origin.fetch", "+refs/heads/master:refs/remotes/origin/master"], {
+      cwd: localRepo,
+    });
+    execFileSync("git", ["update-ref", "-d", "refs/remotes/origin/main"], { cwd: localRepo });
+
+    fs.writeFileSync(path.join(repoDir, "hooks", "guard", "HOOK.md"), "---\nname: guard\ndescription: v2\nversion: 2.0.0\n---\n", "utf8");
+    execFileSync("git", ["add", "."], { cwd: repoDir });
+    execFileSync("git", ["-c", "user.name=ICA Test", "-c", "user.email=ica-test@example.com", "commit", "-q", "-m", "update"], {
+      cwd: repoDir,
+    });
+
+    const second = await syncHookSource(source, createCredentialProvider());
+    const syncedHook = fs.readFileSync(path.join(second.hooksPath, "guard", "HOOK.md"), "utf8");
+    assert.match(syncedHook, /version:\s*2\.0\.0/i);
   });
 });

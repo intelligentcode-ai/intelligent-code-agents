@@ -8,6 +8,7 @@ import { mergeMcpConfig } from "./mcp";
 import { computePlannerDelta } from "./planner";
 import { assertPathWithin, redactSensitive } from "./security";
 import { appendHistory, createEmptyState, getStatePath, loadInstallState, reconcileLegacyManagedSkills, saveInstallState } from "./state";
+import { computeDirectoryDigest } from "./contentDigest";
 import {
   InstallRequest,
   InstallState,
@@ -80,6 +81,34 @@ function pushWarning(report: TargetOperationReport, code: string, message: strin
 
 function pushError(report: TargetOperationReport, code: string, message: string): void {
   report.errors.push({ code, message: redactSensitive(message) });
+}
+
+function verifySkillSourceIntegrity(skill: SkillCatalog["skills"][number], report: TargetOperationReport): string {
+  const actual = computeDirectoryDigest(skill.sourcePath);
+  const expected = skill.contentDigest || actual.digest;
+
+  if (!skill.contentDigest) {
+    pushWarning(
+      report,
+      "MISSING_SKILL_DIGEST",
+      `Skill '${skill.skillId}' did not provide a catalog content digest; verified using runtime source digest only.`,
+    );
+  }
+
+  if (actual.digest !== expected) {
+    throw new Error(
+      `Integrity verification failed for '${skill.skillId}'. Expected ${expected}, received ${actual.digest}.`,
+    );
+  }
+
+  return expected;
+}
+
+function verifyInstalledSkillIntegrity(destinationPath: string, expectedDigest: string): void {
+  const installed = computeDirectoryDigest(destinationPath);
+  if (installed.digest !== expectedDigest) {
+    throw new Error(`Installed skill digest mismatch at '${destinationPath}'. Expected ${expectedDigest}, received ${installed.digest}.`);
+  }
 }
 
 async function removeTrackedPath(installPath: string, candidatePath: string): Promise<void> {
@@ -201,6 +230,7 @@ async function installOrSyncTarget(
 
     const destination = path.join(skillsDir, skill.name);
     await removePath(destination);
+    const expectedDigest = verifySkillSourceIntegrity(skill, report);
 
     let effectiveMode = request.mode;
     if (request.mode === "symlink") {
@@ -215,6 +245,10 @@ async function installOrSyncTarget(
       await copyPath(skill.sourcePath, destination);
     }
 
+    if (effectiveMode === "copy") {
+      verifyInstalledSkillIntegrity(destination, expectedDigest);
+    }
+
     const managed: ManagedSkillState = {
       name: skill.name,
       skillName: skill.skillName,
@@ -222,6 +256,7 @@ async function installOrSyncTarget(
       sourceId: skill.sourceId,
       sourceUrl: skill.sourceUrl,
       sourceRevision: catalog.sources.find((source) => source.id === skill.sourceId)?.revision,
+      sourceContentDigest: expectedDigest,
       orphaned: false,
       installMode: request.mode,
       effectiveMode,

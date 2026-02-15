@@ -10,6 +10,7 @@ export interface ManagedHookState {
   sourceId: string;
   sourceUrl: string;
   sourceRevision?: string;
+  sourceContentDigest?: string;
   orphaned?: boolean;
   installMode: "symlink" | "copy";
   effectiveMode: "symlink" | "copy";
