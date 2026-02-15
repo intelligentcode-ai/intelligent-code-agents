@@ -7,6 +7,7 @@ import { syncSource } from "./sourceSync";
 import { CatalogSkill, InstallSelection, SkillCatalog, SkillResource, SkillSource, TargetPlatform } from "./types";
 import { isSkillBlocked } from "./skillBlocklist";
 import { frontmatterList, frontmatterString, parseFrontmatter } from "./skillMetadata";
+import { computeDirectoryDigest } from "./contentDigest";
 
 interface CatalogOptions {
   repoVersion: string;
@@ -137,6 +138,7 @@ function toCatalogSkill(source: SkillSource, skillDir: string): CatalogSkill | n
   const author = frontmatterString(frontmatter, "author");
   const contactEmail = frontmatterString(frontmatter, "contact-email") || frontmatterString(frontmatter, "contactEmail");
   const website = frontmatterString(frontmatter, "website");
+  const digest = computeDirectoryDigest(skillDir);
 
   return {
     skillId,
@@ -159,6 +161,8 @@ function toCatalogSkill(source: SkillSource, skillDir: string): CatalogSkill | n
     sourcePath: skillDir,
     version: frontmatterString(frontmatter, "version"),
     updatedAt: stat.mtime.toISOString(),
+    contentDigest: digest.digest,
+    contentFileCount: digest.fileCount,
   };
 }
 
@@ -178,6 +182,7 @@ function toCatalogSkillFromIndex(source: SkillSource, root: string, entry: Skill
   const scope = (entry.scope || "").trim().toLowerCase() || undefined;
   const subcategory = (entry.subcategory || "").trim().toLowerCase() || undefined;
   const tags = normalizeTags(entry.tags);
+  const digest = computeDirectoryDigest(skillDir);
 
   return {
     skillId: `${source.id}/${skillName}`,
@@ -200,6 +205,8 @@ function toCatalogSkillFromIndex(source: SkillSource, root: string, entry: Skill
     sourcePath: skillDir,
     version: entry.version?.trim() || undefined,
     updatedAt: stat.mtime.toISOString(),
+    contentDigest: digest.digest,
+    contentFileCount: digest.fileCount,
   };
 }
 

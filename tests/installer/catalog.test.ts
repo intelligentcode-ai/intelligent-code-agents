@@ -35,6 +35,8 @@ test("buildLocalCatalog resource discovery ignores directories and sorts files",
     { type: "scripts", path: "skills/demo/scripts/alpha.py" },
     { type: "scripts", path: "skills/demo/scripts/zeta.py" },
   ]);
+  assert.match(String(catalog.skills[0].contentDigest || ""), /^sha256:[a-f0-9]{64}$/);
+  assert.equal(typeof catalog.skills[0].contentFileCount, "number");
 });
 
 test("buildLocalCatalog excludes blocked ICA command skills", () => {

@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 import {
   addSource,
   ensureSourceRegistry,
+  getSourceRepoPath,
   getSourcesFilePath,
   loadSources,
   OFFICIAL_SOURCE_ID,
@@ -64,6 +65,59 @@ test("ensureSourceRegistry bootstraps official source", async () => {
   try {
     const sources = await ensureSourceRegistry();
     assert.ok(sources.some((source) => source.id === OFFICIAL_SOURCE_ID));
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ICA_STATE_HOME;
+    } else {
+      process.env.ICA_STATE_HOME = previous;
+    }
+  }
+});
+
+test("syncSource repairs stale master refspec and keeps syncing main-based sources", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-sources-test-"));
+  const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-source-repo-"));
+  const repoDir = path.join(sourceRoot, "repo");
+  const previous = process.env.ICA_STATE_HOME;
+  process.env.ICA_STATE_HOME = tempRoot;
+
+  try {
+    fs.mkdirSync(path.join(repoDir, "skills", "demo"), { recursive: true });
+    fs.writeFileSync(path.join(repoDir, "skills", "demo", "SKILL.md"), "---\nname: demo\ndescription: v1\nversion: 1.0.0\n---\n", "utf8");
+    execFileSync("git", ["init", "-q", "--initial-branch=main"], { cwd: repoDir });
+    execFileSync("git", ["add", "."], { cwd: repoDir });
+    execFileSync("git", ["-c", "user.name=ICA Test", "-c", "user.email=ica-test@example.com", "commit", "-q", "-m", "seed"], {
+      cwd: repoDir,
+    });
+
+    const source = await addSource({
+      id: "main-refspec-source",
+      name: "main-refspec-source",
+      repoUrl: `file://${repoDir}`,
+      transport: "https",
+      skillsRoot: "/skills",
+      enabled: true,
+      removable: true,
+    });
+
+    const first = await syncSource(source, createCredentialProvider());
+    assert.ok(fs.existsSync(path.join(first.skillsPath, "demo", "SKILL.md")));
+
+    const localRepo = getSourceRepoPath(source.id);
+    execFileSync("git", ["config", "--replace-all", "remote.origin.fetch", "+refs/heads/master:refs/remotes/origin/master"], {
+      cwd: localRepo,
+    });
+    execFileSync("git", ["update-ref", "-d", "refs/remotes/origin/main"], { cwd: localRepo });
+
+    fs.writeFileSync(path.join(repoDir, "skills", "demo", "SKILL.md"), "---\nname: demo\ndescription: v2\nversion: 2.0.0\n---\n", "utf8");
+    execFileSync("git", ["add", "."], { cwd: repoDir });
+    execFileSync("git", ["-c", "user.name=ICA Test", "-c", "user.email=ica-test@example.com", "commit", "-q", "-m", "update"], {
+      cwd: repoDir,
+    });
+
+    const second = await syncSource(source, createCredentialProvider());
+    const syncedSkill = fs.readFileSync(path.join(second.skillsPath, "demo", "SKILL.md"), "utf8");
+    assert.match(syncedSkill, /version:\s*2\.0\.0/i);
   } finally {
     if (previous === undefined) {
       delete process.env.ICA_STATE_HOME;

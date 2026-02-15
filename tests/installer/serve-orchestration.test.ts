@@ -19,8 +19,31 @@ test("serve maps frontend container to localhost-only internal port without bind
   const cliPath = path.join(repoRoot, "src/installer-cli/index.ts");
   const source = fs.readFileSync(cliPath, "utf8");
 
+  assert.match(source, /Math\.max\(uiPort,\s*apiPort\)\s*\+\s*1/, "serve should pick a non-conflicting default internal UI port");
   assert.match(source, /127\.0\.0\.1:\$\{uiContainerPort\}:80/, "serve should publish container on loopback only");
   assert.doesNotMatch(source, /\b-v\b|\s--volume\b/, "serve docker run args should not include bind mounts");
+});
+
+test("serve reclaims internal static UI port when reuse mode is active", () => {
+  const cliPath = path.join(repoRoot, "src/installer-cli/index.ts");
+  const source = fs.readFileSync(cliPath, "utf8");
+
+  assert.match(
+    source,
+    /await reclaimDockerPublishedPort\(uiContainerPort,\s*containerName\)/,
+    "serve should reclaim existing dashboard containers bound to the internal static UI port",
+  );
+});
+
+test("serve only reclaims API/UI ports for ICA-owned processes", () => {
+  const cliPath = path.join(repoRoot, "src/installer-cli/index.ts");
+  const source = fs.readFileSync(cliPath, "utf8");
+
+  assert.match(
+    source,
+    /await isIcaOwnedServePid\(pid\)/,
+    "serve should verify process ownership before terminating listeners on configured host ports",
+  );
 });
 
 test("serve configures BFF with API key injection upstream, not browser runtime config", () => {

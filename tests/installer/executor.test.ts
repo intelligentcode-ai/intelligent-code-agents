@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { executeOperation } from "../../src/installer-core/executor";
 import { createCredentialProvider } from "../../src/installer-core/credentials";
 import { syncSource } from "../../src/installer-core/sourceSync";
-import { addSource } from "../../src/installer-core/sources";
+import { addSource, getSourceSkillsPath } from "../../src/installer-core/sources";
 import { loadInstallState } from "../../src/installer-core/state";
 
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -92,6 +92,7 @@ test("install and uninstall selected skill in project scope", async () => {
     const state = await loadInstallState(installPath);
     assert.ok(state);
     assert.equal(state?.managedSkills.length, 1);
+    assert.match(String(state?.managedSkills[0].sourceContentDigest || ""), /^sha256:[a-f0-9]{64}$/);
 
     const uninstallReport = await executeOperation(repoRoot, {
       operation: "uninstall",
@@ -153,6 +154,53 @@ test("symlink mode records effective mode", async () => {
     const managed = state?.managedSkills.find((skill) => skill.skillId === `${sourceId}/architect`);
     assert.ok(managed);
     assert.ok(managed?.effectiveMode === "symlink" || managed?.effectiveMode === "copy");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ICA_STATE_HOME;
+    } else {
+      process.env.ICA_STATE_HOME = previous;
+    }
+  }
+});
+
+test("install fails when skill content digest changes after catalog load", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-installer-test-"));
+  const { sourceId, tempStateRoot } = await setupExternalSkillsSource("digest-mismatch");
+  const previous = process.env.ICA_STATE_HOME;
+  process.env.ICA_STATE_HOME = tempStateRoot;
+
+  try {
+    const report = await executeOperation(
+      repoRoot,
+      {
+        operation: "install",
+        targets: ["codex"],
+        scope: "project",
+        projectPath: tempRoot,
+        mode: "copy",
+        skills: [],
+        skillSelections: [
+          {
+            sourceId,
+            skillName: "developer",
+            skillId: `${sourceId}/developer`,
+          },
+        ],
+        removeUnselected: false,
+        installClaudeIntegration: false,
+      },
+      {
+        hooks: {
+          onBeforeInstall: async () => {
+            const mirroredSkillFile = path.join(getSourceSkillsPath(sourceId), "developer", "SKILL.md");
+            fs.appendFileSync(mirroredSkillFile, "\n# tampered in test\n", "utf8");
+          },
+        },
+      },
+    );
+
+    assert.equal(report.targets[0].errors.length, 1);
+    assert.match(report.targets[0].errors[0].message, /integrity verification failed/i);
   } finally {
     if (previous === undefined) {
       delete process.env.ICA_STATE_HOME;

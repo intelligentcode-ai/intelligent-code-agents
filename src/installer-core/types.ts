@@ -50,6 +50,8 @@ export interface CatalogSkill {
   sourcePath: string;
   version?: string;
   updatedAt?: string;
+  contentDigest?: string;
+  contentFileCount?: number;
 }
 
 export interface SkillCatalog {
@@ -99,6 +101,7 @@ export interface ManagedSkillState {
   sourceId: string;
   sourceUrl: string;
   sourceRevision?: string;
+  sourceContentDigest?: string;
   orphaned?: boolean;
   installMode: InstallMode;
   effectiveMode: InstallMode;
