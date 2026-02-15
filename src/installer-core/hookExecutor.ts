@@ -187,6 +187,16 @@ async function installOrSyncTarget(repoRoot: string, request: HookInstallRequest
       continue;
     }
 
+    if (!hook.compatibleTargets.includes(report.target)) {
+      report.skippedHooks.push(hook.hookId);
+      pushWarning(
+        report,
+        "HOOK_TARGET_INCOMPATIBLE",
+        `Skipped '${hook.hookId}' for target '${report.target}' (compatible targets: ${hook.compatibleTargets.join(", ")}).`,
+      );
+      continue;
+    }
+
     if (selectedNames.has(hook.hookName)) {
       report.skippedHooks.push(hook.hookId);
       pushWarning(

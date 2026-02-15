@@ -249,3 +249,113 @@ test("syncHookSource repairs stale master refspec and keeps syncing main-based h
     assert.match(syncedHook, /version:\s*2\.0\.0/i);
   });
 });
+
+test("hook catalog reads machine metadata from HOOK.json when present", async () => {
+  const stateHome = fs.mkdtempSync(path.join(os.tmpdir(), "ica-hooks-state-"));
+  const repoBase = fs.mkdtempSync(path.join(os.tmpdir(), "ica-hooks-repo-"));
+  const repoDir = path.join(repoBase, "repo");
+  fs.mkdirSync(path.join(repoDir, "hooks", "machine-hook"), { recursive: true });
+  fs.writeFileSync(
+    path.join(repoDir, "hooks", "machine-hook", "HOOK.json"),
+    JSON.stringify(
+      {
+        name: "machine-hook",
+        description: "Machine-readable hook manifest",
+        version: "1.0.0",
+        compatibleTargets: ["claude"],
+        registrations: {
+          claude: [
+            {
+              event: "PreToolUse",
+              matcher: "^(BashTool|Bash)$",
+              command: "machine-hook.js",
+            },
+          ],
+        },
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+  fs.writeFileSync(path.join(repoDir, "hooks", "machine-hook", "machine-hook.js"), "console.log('ok')\n", "utf8");
+  fs.writeFileSync(path.join(repoDir, "hooks", "machine-hook", "HOOK.md"), "---\nname: legacy-name\ndescription: legacy\n---\n", "utf8");
+  initRepo(repoDir);
+
+  await withStateHome(stateHome, async () => {
+    const source = await addHookSource({
+      id: "machine-hooks",
+      name: "machine-hooks",
+      repoUrl: `file://${repoDir}`,
+      transport: "https",
+      hooksRoot: "/hooks",
+      enabled: true,
+      removable: true,
+    });
+    await syncHookSource(source, createCredentialProvider());
+    const catalog = await loadHookCatalogFromSources(repoRoot, false);
+    const hook = catalog.hooks.find((item) => item.hookId === "machine-hooks/machine-hook");
+    assert.ok(hook);
+    assert.equal(hook?.description, "Machine-readable hook manifest");
+    assert.deepEqual(hook?.compatibleTargets, ["claude"]);
+  });
+});
+
+test("hook install skips hooks incompatible with selected target", async () => {
+  const stateHome = fs.mkdtempSync(path.join(os.tmpdir(), "ica-hooks-state-"));
+  const repoBase = fs.mkdtempSync(path.join(os.tmpdir(), "ica-hooks-repo-"));
+  const repoDir = path.join(repoBase, "repo");
+  fs.mkdirSync(path.join(repoDir, "hooks", "claude-only"), { recursive: true });
+  fs.writeFileSync(
+    path.join(repoDir, "hooks", "claude-only", "HOOK.json"),
+    JSON.stringify(
+      {
+        name: "claude-only",
+        description: "Claude only hook",
+        version: "1.0.0",
+        compatibleTargets: ["claude"],
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+  fs.writeFileSync(path.join(repoDir, "hooks", "claude-only", "index.js"), "console.log('hook')\n", "utf8");
+  initRepo(repoDir);
+
+  await withStateHome(stateHome, async () => {
+    const source = await addHookSource({
+      id: "targeted-hooks",
+      name: "targeted-hooks",
+      repoUrl: `file://${repoDir}`,
+      transport: "https",
+      hooksRoot: "/hooks",
+      enabled: true,
+      removable: true,
+    });
+    await syncHookSource(source, createCredentialProvider());
+
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-hooks-project-"));
+    const installReport = await executeHookOperation(repoRoot, {
+      operation: "install",
+      targets: ["gemini"],
+      scope: "project",
+      projectPath: projectRoot,
+      mode: "copy",
+      hooks: [],
+      hookSelections: [
+        {
+          sourceId: "targeted-hooks",
+          hookName: "claude-only",
+          hookId: "targeted-hooks/claude-only",
+        },
+      ],
+    });
+
+    const geminiReport = installReport.targets.find((entry) => entry.target === "gemini");
+    assert.ok(geminiReport);
+    assert.equal(geminiReport?.appliedHooks.length, 0);
+    assert.ok(geminiReport?.skippedHooks.includes("targeted-hooks/claude-only"));
+    assert.ok(geminiReport?.warnings.some((item) => item.code === "HOOK_TARGET_INCOMPATIBLE"));
+  });
+});

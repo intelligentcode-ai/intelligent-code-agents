@@ -8,6 +8,22 @@ import { TargetPlatform } from "./types";
 import { computeDirectoryDigest } from "./contentDigest";
 
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
+const HOOK_TARGETS = ["claude", "gemini"] as const;
+type HookTargetPlatform = (typeof HOOK_TARGETS)[number];
+
+interface HookRegistration {
+  event: string;
+  matcher?: string;
+  command?: string;
+}
+
+interface HookManifest {
+  name?: string;
+  description?: string;
+  version?: string;
+  compatibleTargets?: HookTargetPlatform[];
+  registrations?: Partial<Record<HookTargetPlatform, HookRegistration[]>>;
+}
 
 export interface CatalogHook {
   hookId: string;
@@ -23,6 +39,8 @@ export interface CatalogHook {
   contentDigest?: string;
   contentFileCount?: number;
   compatibleTargets: Array<Extract<TargetPlatform, "claude" | "gemini">>;
+  metadataFormat?: "json" | "markdown" | "directory";
+  registrations?: Partial<Record<HookTargetPlatform, HookRegistration[]>>;
 }
 
 export interface HookCatalog {
@@ -42,6 +60,96 @@ export interface HookInstallSelection {
 interface CatalogOptions {
   repoVersion: string;
   refresh: boolean;
+}
+
+function isHookTarget(value: string): value is HookTargetPlatform {
+  return HOOK_TARGETS.includes(value as HookTargetPlatform);
+}
+
+function normalizeTargets(values: string[]): HookTargetPlatform[] {
+  const filtered = values.map((value) => value.trim()).filter((value) => value.length > 0).filter(isHookTarget);
+  return Array.from(new Set(filtered));
+}
+
+function parseFrontmatterList(raw: string | undefined): string[] {
+  if (!raw) return [];
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    return trimmed
+      .slice(1, -1)
+      .split(",")
+      .map((item) => item.replace(/^["']|["']$/g, "").trim())
+      .filter((item) => item.length > 0);
+  }
+  return trimmed
+    .split(",")
+    .map((item) => item.replace(/^["']|["']$/g, "").trim())
+    .filter((item) => item.length > 0);
+}
+
+function normalizeRegistrations(value: unknown): Partial<Record<HookTargetPlatform, HookRegistration[]>> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const input = value as Record<string, unknown>;
+  const normalized: Partial<Record<HookTargetPlatform, HookRegistration[]>> = {};
+
+  for (const target of HOOK_TARGETS) {
+    const entries = input[target];
+    if (!Array.isArray(entries)) continue;
+    const parsed: HookRegistration[] = [];
+    for (const entry of entries) {
+      if (!entry || typeof entry !== "object") continue;
+      const item = entry as Record<string, unknown>;
+      const event = typeof item.event === "string" ? item.event.trim() : "";
+      if (!event) continue;
+      parsed.push({
+        event,
+        matcher: typeof item.matcher === "string" ? item.matcher : undefined,
+        command: typeof item.command === "string" ? item.command : undefined,
+      });
+    }
+
+    if (parsed.length > 0) {
+      normalized[target] = parsed;
+    }
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function parseHookManifest(hookDir: string): HookManifest {
+  const hookJsonPath = path.join(hookDir, "HOOK.json");
+  const hookMdPath = path.join(hookDir, "HOOK.md");
+  let frontmatter: Record<string, string> = {};
+
+  if (fs.existsSync(hookMdPath)) {
+    const content = fs.readFileSync(hookMdPath, "utf8");
+    frontmatter = parseFrontmatter(content);
+  }
+
+  if (fs.existsSync(hookJsonPath)) {
+    const parsed = JSON.parse(fs.readFileSync(hookJsonPath, "utf8")) as Record<string, unknown>;
+    const targetsFromJson = Array.isArray(parsed.compatibleTargets)
+      ? normalizeTargets(parsed.compatibleTargets.filter((item): item is string => typeof item === "string"))
+      : [];
+    const targetsFromMd = normalizeTargets(parseFrontmatterList(frontmatter.targets));
+    const compatibleTargets = targetsFromJson.length > 0 ? targetsFromJson : (targetsFromMd.length > 0 ? targetsFromMd : [...HOOK_TARGETS]);
+
+    return {
+      name: typeof parsed.name === "string" ? parsed.name : frontmatter.name,
+      description: typeof parsed.description === "string" ? parsed.description : (frontmatter.description || ""),
+      version: typeof parsed.version === "string" ? parsed.version : frontmatter.version,
+      compatibleTargets,
+      registrations: normalizeRegistrations(parsed.registrations),
+    };
+  }
+
+  const compatibleTargets = normalizeTargets(parseFrontmatterList(frontmatter.targets));
+  return {
+    name: frontmatter.name,
+    description: frontmatter.description || "",
+    version: frontmatter.version,
+    compatibleTargets: compatibleTargets.length > 0 ? compatibleTargets : [...HOOK_TARGETS],
+  };
 }
 
 function parseFrontmatter(content: string): Record<string, string> {
@@ -67,19 +175,15 @@ function hookRootPath(source: HookSource, localRepoPath: string): string {
 }
 
 function toCatalogHook(source: HookSource, hookDir: string): CatalogHook | null {
-  const hookFile = path.join(hookDir, "HOOK.md");
-  const statPath = fs.existsSync(hookFile) ? hookFile : hookDir;
+  const hookMdFile = path.join(hookDir, "HOOK.md");
+  const hookJsonFile = path.join(hookDir, "HOOK.json");
+  const statPath = fs.existsSync(hookJsonFile) ? hookJsonFile : (fs.existsSync(hookMdFile) ? hookMdFile : hookDir);
   const stat = fs.statSync(statPath);
-
-  let frontmatter: Record<string, string> = {};
-  if (fs.existsSync(hookFile)) {
-    const content = fs.readFileSync(hookFile, "utf8");
-    frontmatter = parseFrontmatter(content);
-  }
-
-  const hookName = frontmatter.name || path.basename(hookDir);
+  const manifest = parseHookManifest(hookDir);
+  const hookName = manifest.name || path.basename(hookDir);
   const hookId = `${source.id}/${hookName}`;
   const digest = computeDirectoryDigest(hookDir);
+  const metadataFormat = fs.existsSync(hookJsonFile) ? "json" : (fs.existsSync(hookMdFile) ? "markdown" : "directory");
 
   return {
     hookId,
@@ -88,13 +192,15 @@ function toCatalogHook(source: HookSource, hookDir: string): CatalogHook | null 
     sourceUrl: source.repoUrl,
     hookName,
     name: hookName,
-    description: frontmatter.description || "",
+    description: manifest.description || "",
     sourcePath: hookDir,
-    version: frontmatter.version,
+    version: manifest.version,
     updatedAt: stat.mtime.toISOString(),
     contentDigest: digest.digest,
     contentFileCount: digest.fileCount,
-    compatibleTargets: ["claude", "gemini"],
+    compatibleTargets: manifest.compatibleTargets || [...HOOK_TARGETS],
+    metadataFormat,
+    registrations: manifest.registrations,
   };
 }
 
