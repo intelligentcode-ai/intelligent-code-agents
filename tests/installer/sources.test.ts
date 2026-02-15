@@ -36,6 +36,10 @@ function fixtureCatalog(): SkillCatalog {
         official: true,
         enabled: true,
         skillsRoot: "/skills",
+        publishDefaultMode: "branch-pr",
+        defaultBaseBranch: "dev",
+        providerHint: "github",
+        officialContributionEnabled: true,
         removable: true,
       },
     ],
@@ -243,6 +247,10 @@ test("synced skills are stored in ~/.ica/<source>/skills", async () => {
       repoUrl: `file://${repoDir}`,
       transport: "https",
       skillsRoot: "/skills",
+      publishDefaultMode: "branch-pr",
+      defaultBaseBranch: "main",
+      providerHint: "unknown",
+      officialContributionEnabled: false,
       enabled: true,
       removable: true,
     });
@@ -286,6 +294,10 @@ test("all sources support legacy root layout when configured skillsRoot is missi
       official: false,
       enabled: true,
       skillsRoot: "/skills",
+      publishDefaultMode: "branch-pr",
+      defaultBaseBranch: "main",
+      providerHint: "unknown",
+      officialContributionEnabled: false,
       removable: true,
     };
 

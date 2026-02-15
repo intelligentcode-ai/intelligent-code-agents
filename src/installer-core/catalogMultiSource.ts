@@ -1,32 +1,90 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createCredentialProvider } from "./credentials";
-import { safeErrorMessage } from "./security";
 import { setSourceSyncStatus, ensureSourceRegistry, OFFICIAL_SOURCE_ID } from "./sources";
 import { syncSource } from "./sourceSync";
 import { CatalogSkill, InstallSelection, SkillCatalog, SkillResource, SkillSource, TargetPlatform } from "./types";
 import { isSkillBlocked } from "./skillBlocklist";
-import { frontmatterList, frontmatterString, parseFrontmatter } from "./skillMetadata";
-import { computeDirectoryDigest } from "./contentDigest";
+
+const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
 
 interface CatalogOptions {
   repoVersion: string;
   refresh: boolean;
 }
 
-interface SkillIndexEntry {
-  skillName?: string;
-  name?: string;
-  description?: string;
-  category?: string;
-  scope?: string;
-  subcategory?: string;
-  tags?: string[] | string;
-  version?: string;
-  author?: string;
-  "contact-email"?: string;
-  contactEmail?: string;
-  website?: string;
+interface ParsedFrontmatter {
+  values: Record<string, string>;
+  lists: Record<string, string[]>;
+}
+
+function cleanFrontmatterValue(value: string): string {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function parseFrontmatter(content: string): ParsedFrontmatter {
+  const match = content.match(FRONTMATTER_RE);
+  if (!match) return { values: {}, lists: {} };
+  const values: Record<string, string> = {};
+  const lists: Record<string, string[]> = {};
+  let currentListKey: string | null = null;
+
+  for (const rawLine of match[1].split("\n")) {
+    const line = rawLine.replace(/\r$/, "");
+    const keyMatch = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (keyMatch) {
+      const key = keyMatch[1].trim();
+      const rawValue = keyMatch[2].trim();
+      if (!key) {
+        currentListKey = null;
+        continue;
+      }
+
+      if (rawValue.length === 0) {
+        currentListKey = key;
+        if (!lists[key]) lists[key] = [];
+        continue;
+      }
+
+      if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
+        const entries = rawValue
+          .slice(1, -1)
+          .split(",")
+          .map((entry) => cleanFrontmatterValue(entry))
+          .filter(Boolean);
+        if (entries.length > 0) {
+          lists[key] = entries;
+        }
+      } else {
+        values[key] = cleanFrontmatterValue(rawValue);
+      }
+      currentListKey = null;
+      continue;
+    }
+
+    const listMatch = line.match(/^\s*-\s*(.+)$/);
+    if (currentListKey && listMatch) {
+      const value = cleanFrontmatterValue(listMatch[1]);
+      if (value) {
+        if (!lists[currentListKey]) lists[currentListKey] = [];
+        lists[currentListKey].push(value);
+      }
+      continue;
+    }
+
+    if (line.trim()) {
+      currentListKey = null;
+    }
+  }
+
+  return { values, lists };
 }
 
 function inferCategory(skillName: string): string {
@@ -58,23 +116,30 @@ function inferCategory(skillName: string): string {
 
 function collectResources(skillDir: string, skillName: string): SkillResource[] {
   const resources: SkillResource[] = [];
-  const directories: Array<SkillResource["type"]> = ["references", "scripts", "assets"];
-  for (const type of directories) {
-    const base = path.join(skillDir, type);
-    if (!fs.existsSync(base)) continue;
+  const walk = (current: string): void => {
+    const entries = fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      if (entry.name === ".git") continue;
+      const absolute = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        walk(absolute);
+        continue;
+      }
+      if (!(entry.isFile() || entry.isSymbolicLink())) continue;
+      if (entry.name === "SKILL.md") continue;
 
-    const files = fs
-      .readdirSync(base, { withFileTypes: true })
-      .filter((entry) => entry.isFile() || entry.isSymbolicLink())
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    for (const file of files) {
+      const relative = path.relative(skillDir, absolute).replace(/\\/g, "/");
+      const topLevel = relative.split("/", 1)[0];
+      const type: SkillResource["type"] =
+        topLevel === "references" || topLevel === "scripts" || topLevel === "assets" ? topLevel : "other";
       resources.push({
         type,
-        path: path.join("skills", skillName, type, file.name).replace(/\\/g, "/"),
+        path: path.join("skills", skillName, relative).replace(/\\/g, "/"),
       });
     }
-  }
+  };
+  walk(skillDir);
+  resources.sort((a, b) => a.path.localeCompare(b.path));
   return resources;
 }
 
@@ -86,59 +151,27 @@ function skillRootPath(source: SkillSource, localRepoPath: string): string {
   return path.join(localRepoPath, relativeRoot);
 }
 
-function normalizeTags(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => String(item).trim())
-      .filter(Boolean);
-  }
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-  return [];
-}
-
-function loadSkillIndexEntries(localRepoPath: string, root: string): SkillIndexEntry[] | null {
-  const candidates = [path.join(localRepoPath, "skills.index.json"), path.join(root, "skills.index.json")];
-  for (const candidate of candidates) {
-    if (!fs.existsSync(candidate)) continue;
-    try {
-      const raw = JSON.parse(fs.readFileSync(candidate, "utf8")) as { skills?: SkillIndexEntry[] } | SkillIndexEntry[];
-      if (Array.isArray(raw)) {
-        return raw;
-      }
-      if (raw && Array.isArray(raw.skills)) {
-        return raw.skills;
-      }
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
 function toCatalogSkill(source: SkillSource, skillDir: string): CatalogSkill | null {
   const skillFile = path.join(skillDir, "SKILL.md");
   if (!fs.existsSync(skillFile)) return null;
   const content = fs.readFileSync(skillFile, "utf8");
-  const frontmatter = parseFrontmatter(content);
-  const skillName = frontmatterString(frontmatter, "name") || path.basename(skillDir);
+  const parsedFrontmatter = parseFrontmatter(content);
+  const frontmatter = parsedFrontmatter.values;
+  const skillName = frontmatter.name || path.basename(skillDir);
   if (isSkillBlocked(skillName)) {
     return null;
   }
   const skillId = `${source.id}/${skillName}`;
   const stat = fs.statSync(skillFile);
-  const explicitCategory = (frontmatterString(frontmatter, "category") || "").trim().toLowerCase();
-  const scope = (frontmatterString(frontmatter, "scope") || "").trim().toLowerCase() || undefined;
-  const subcategory = (frontmatterString(frontmatter, "subcategory") || "").trim().toLowerCase() || undefined;
-  const tags = frontmatterList(frontmatter, "tags");
-  const author = frontmatterString(frontmatter, "author");
-  const contactEmail = frontmatterString(frontmatter, "contact-email") || frontmatterString(frontmatter, "contactEmail");
-  const website = frontmatterString(frontmatter, "website");
-  const digest = computeDirectoryDigest(skillDir);
+  const explicitCategory = (frontmatter.category || "").trim().toLowerCase();
+  const explicitScope = (frontmatter.scope || "").trim().toLowerCase();
+  const tags = Array.from(
+    new Set(
+      (parsedFrontmatter.lists.tags || [])
+        .map((tag) => tag.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  );
 
   return {
     skillId,
@@ -147,103 +180,16 @@ function toCatalogSkill(source: SkillSource, skillDir: string): CatalogSkill | n
     sourceUrl: source.repoUrl,
     skillName,
     name: skillName,
-    description: frontmatterString(frontmatter, "description") || "",
+    description: frontmatter.description || "",
     category: explicitCategory || inferCategory(skillName),
-    scope,
-    subcategory,
+    scope: explicitScope || undefined,
     tags: tags.length > 0 ? tags : undefined,
-    author,
-    contactEmail,
-    website,
     dependencies: [],
     compatibleTargets: ["claude", "codex", "cursor", "gemini", "antigravity"] satisfies TargetPlatform[],
     resources: collectResources(skillDir, skillName),
     sourcePath: skillDir,
-    version: frontmatterString(frontmatter, "version"),
+    version: frontmatter.version,
     updatedAt: stat.mtime.toISOString(),
-    contentDigest: digest.digest,
-    contentFileCount: digest.fileCount,
-  };
-}
-
-function toCatalogSkillFromIndex(source: SkillSource, root: string, entry: SkillIndexEntry): CatalogSkill | null {
-  const skillName = (entry.skillName || entry.name || "").trim();
-  if (!skillName || isSkillBlocked(skillName)) {
-    return null;
-  }
-
-  const skillDir = path.join(root, skillName);
-  const skillFile = path.join(skillDir, "SKILL.md");
-  if (!fs.existsSync(skillFile)) {
-    return null;
-  }
-  const stat = fs.statSync(skillFile);
-  const explicitCategory = (entry.category || "").trim().toLowerCase();
-  const scope = (entry.scope || "").trim().toLowerCase() || undefined;
-  const subcategory = (entry.subcategory || "").trim().toLowerCase() || undefined;
-  const tags = normalizeTags(entry.tags);
-  const digest = computeDirectoryDigest(skillDir);
-
-  return {
-    skillId: `${source.id}/${skillName}`,
-    sourceId: source.id,
-    sourceName: source.name,
-    sourceUrl: source.repoUrl,
-    skillName,
-    name: skillName,
-    description: (entry.description || "").trim(),
-    category: explicitCategory || inferCategory(skillName),
-    scope,
-    subcategory,
-    tags: tags.length > 0 ? tags : undefined,
-    author: entry.author?.trim() || undefined,
-    contactEmail: entry.contactEmail?.trim() || entry["contact-email"]?.trim() || undefined,
-    website: entry.website?.trim() || undefined,
-    dependencies: [],
-    compatibleTargets: ["claude", "codex", "cursor", "gemini", "antigravity"] satisfies TargetPlatform[],
-    resources: collectResources(skillDir, skillName),
-    sourcePath: skillDir,
-    version: entry.version?.trim() || undefined,
-    updatedAt: stat.mtime.toISOString(),
-    contentDigest: digest.digest,
-    contentFileCount: digest.fileCount,
-  };
-}
-
-function skillNameFromIndexEntry(entry: SkillIndexEntry): string {
-  return (entry.skillName || entry.name || "").trim();
-}
-
-function loadSkillIndexMap(localRepoPath: string, root: string): Map<string, SkillIndexEntry> | null {
-  const entries = loadSkillIndexEntries(localRepoPath, root);
-  if (!entries) return null;
-
-  const map = new Map<string, SkillIndexEntry>();
-  for (const entry of entries) {
-    const name = skillNameFromIndexEntry(entry);
-    if (!name) continue;
-    map.set(name, entry);
-  }
-  return map;
-}
-
-function applyIndexMetadata(skill: CatalogSkill, entry: SkillIndexEntry): CatalogSkill {
-  const explicitCategory = (entry.category || "").trim().toLowerCase();
-  const scope = (entry.scope || "").trim().toLowerCase() || undefined;
-  const subcategory = (entry.subcategory || "").trim().toLowerCase() || undefined;
-  const tags = normalizeTags(entry.tags);
-
-  return {
-    ...skill,
-    description: (entry.description || "").trim() || skill.description,
-    category: explicitCategory || skill.category,
-    scope: scope || skill.scope,
-    subcategory: subcategory || skill.subcategory,
-    tags: tags.length > 0 ? tags : skill.tags,
-    author: entry.author?.trim() || skill.author,
-    contactEmail: entry.contactEmail?.trim() || entry["contact-email"]?.trim() || skill.contactEmail,
-    website: entry.website?.trim() || skill.website,
-    version: entry.version?.trim() || skill.version,
   };
 }
 
@@ -300,32 +246,18 @@ export async function buildMultiSourceCatalog(options: CatalogOptions): Promise<
         throw new Error(`Source '${source.id}' is invalid: missing skills root '${hydrated.skillsRoot}'.`);
       }
 
-      const indexMap = loadSkillIndexMap(localRepoPath, root);
-
       const skillDirs = fs
         .readdirSync(root, { withFileTypes: true })
         .filter((entry) => entry.isDirectory())
         .map((entry) => path.join(root, entry.name))
         .sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
 
-      const seenSkillNames = new Set<string>();
       for (const skillDir of skillDirs) {
-        const discovered = toCatalogSkill(hydrated, skillDir);
-        if (!discovered) continue;
-        seenSkillNames.add(discovered.skillName);
-        const indexEntry = indexMap?.get(discovered.skillName);
-        catalogSkills.push(indexEntry ? applyIndexMetadata(discovered, indexEntry) : discovered);
-      }
-
-      if (indexMap) {
-        for (const [skillName, entry] of indexMap.entries()) {
-          if (seenSkillNames.has(skillName)) continue;
-          const fromIndex = toCatalogSkillFromIndex(hydrated, root, entry);
-          if (fromIndex) catalogSkills.push(fromIndex);
-        }
+        const item = toCatalogSkill(hydrated, skillDir);
+        if (item) catalogSkills.push(item);
       }
     } catch (error) {
-      const message = safeErrorMessage(error, "Source refresh failed.");
+      const message = error instanceof Error ? error.message : String(error);
       hydratedSources.push({
         ...source,
         lastError: message,

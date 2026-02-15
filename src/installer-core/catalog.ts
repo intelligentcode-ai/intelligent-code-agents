@@ -1,39 +1,39 @@
 import fs from "node:fs";
-import fsp from "node:fs/promises";
 import path from "node:path";
 import { SkillCatalog, SkillCatalogEntry, SkillResource, TargetPlatform } from "./types";
 import { buildMultiSourceCatalog } from "./catalogMultiSource";
 import { isSkillBlocked } from "./skillBlocklist";
-import { DEFAULT_SKILLS_ROOT, OFFICIAL_SOURCE_ID, OFFICIAL_SOURCE_NAME, OFFICIAL_SOURCE_URL, getIcaStateRoot } from "./sources";
-import { frontmatterList, frontmatterString, parseFrontmatter } from "./skillMetadata";
-import { pathExists, writeText } from "./fs";
-import { computeDirectoryDigest } from "./contentDigest";
+import { DEFAULT_PUBLISH_MODE, DEFAULT_SKILLS_ROOT, OFFICIAL_SOURCE_ID, OFFICIAL_SOURCE_NAME, OFFICIAL_SOURCE_URL } from "./sources";
 
+const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
 interface LocalCatalogEntry {
   name: string;
   description: string;
   category: string;
-  scope?: string;
-  subcategory?: string;
-  tags?: string[];
-  author?: string;
-  contactEmail?: string;
-  website?: string;
   dependencies: string[];
   compatibleTargets: TargetPlatform[];
   resources: SkillResource[];
   sourcePath: string;
-  contentDigest?: string;
-  contentFileCount?: number;
 }
 
-interface CacheRecord {
-  catalog: SkillCatalog;
-  savedAtMs: number;
-}
+function parseFrontmatter(content: string): Record<string, string> {
+  const match = content.match(FRONTMATTER_RE);
+  if (!match) {
+    return {};
+  }
 
-export const CATALOG_CACHE_TTL_MS = 60 * 60 * 1000;
-const CATALOG_CACHE_RELATIVE_PATH = path.join("catalog", "skills.catalog.json");
+  const map: Record<string, string> = {};
+  for (const line of match[1].split("\n")) {
+    const idx = line.indexOf(":");
+    if (idx === -1) continue;
+    const key = line.slice(0, idx).trim();
+    const value = line.slice(idx + 1).trim();
+    if (key) {
+      map[key] = value;
+    }
+  }
+  return map;
+}
 
 function inferCategory(skillName: string): string {
   const roleSkills = new Set([
@@ -64,22 +64,30 @@ function inferCategory(skillName: string): string {
 
 function collectResources(skillDir: string): SkillResource[] {
   const resources: SkillResource[] = [];
-  const directories: Array<SkillResource["type"]> = ["references", "scripts", "assets"];
+  const walk = (current: string): void => {
+    const entries = fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      if (entry.name === ".git") continue;
+      const absolute = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        walk(absolute);
+        continue;
+      }
+      if (!(entry.isFile() || entry.isSymbolicLink())) continue;
+      if (entry.name === "SKILL.md") continue;
 
-  for (const resourceType of directories) {
-    const location = path.join(skillDir, resourceType);
-    if (!fs.existsSync(location)) continue;
-
-    for (const file of fs
-      .readdirSync(location, { withFileTypes: true })
-      .filter((entry) => entry.isFile() || entry.isSymbolicLink())
-      .sort((a, b) => a.name.localeCompare(b.name))) {
+      const relative = path.relative(skillDir, absolute).replace(/\\/g, "/");
+      const topLevel = relative.split("/", 1)[0];
+      const resourceType: SkillResource["type"] =
+        topLevel === "references" || topLevel === "scripts" || topLevel === "assets" ? topLevel : "other";
       resources.push({
         type: resourceType,
-        path: path.join("skills", path.basename(skillDir), resourceType, file.name),
+        path: path.join("skills", path.basename(skillDir), relative).replace(/\\/g, "/"),
       });
     }
-  }
+  };
+  walk(skillDir);
+  resources.sort((a, b) => a.path.localeCompare(b.path));
 
   return resources;
 }
@@ -92,36 +100,21 @@ function toCatalogEntry(skillDir: string, repoRoot: string): LocalCatalogEntry |
 
   const content = fs.readFileSync(skillFile, "utf8");
   const frontmatter = parseFrontmatter(content);
-  const name = frontmatterString(frontmatter, "name") || path.basename(skillDir);
+  const name = frontmatter.name || path.basename(skillDir);
   if (isSkillBlocked(name)) {
     return null;
   }
-  const description = frontmatterString(frontmatter, "description") || "";
-  const explicitCategory = (frontmatterString(frontmatter, "category") || "").trim().toLowerCase();
-  const scope = (frontmatterString(frontmatter, "scope") || "").trim().toLowerCase() || undefined;
-  const subcategory = (frontmatterString(frontmatter, "subcategory") || "").trim().toLowerCase() || undefined;
-  const tags = frontmatterList(frontmatter, "tags");
-  const author = frontmatterString(frontmatter, "author");
-  const contactEmail = frontmatterString(frontmatter, "contact-email") || frontmatterString(frontmatter, "contactEmail");
-  const website = frontmatterString(frontmatter, "website");
-  const digest = computeDirectoryDigest(skillDir);
+  const description = frontmatter.description || "";
+  const explicitCategory = (frontmatter.category || "").trim().toLowerCase();
 
   return {
     name,
     description,
     category: explicitCategory || inferCategory(name),
-    scope,
-    subcategory,
-    tags: tags.length > 0 ? tags : undefined,
-    author,
-    contactEmail,
-    website,
     dependencies: [],
     compatibleTargets: ["claude", "codex", "cursor", "gemini", "antigravity"] satisfies TargetPlatform[],
     resources: collectResources(skillDir),
     sourcePath: path.relative(repoRoot, skillDir).replace(/\\/g, "/"),
-    contentDigest: digest.digest,
-    contentFileCount: digest.fileCount,
   };
 }
 
@@ -132,115 +125,6 @@ function resolveGeneratedAt(sourceDateEpoch?: string): string {
 
   // Stable default to keep generated artifacts reproducible across rebuilds.
   return "1970-01-01T00:00:00.000Z";
-}
-
-function normalizeCatalog(repoRoot: string, catalog: SkillCatalog): SkillCatalog {
-  return {
-    ...catalog,
-    sources: catalog.sources || [],
-    skills: (catalog.skills || []).map((skill) => ({
-      ...skill,
-      skillId: skill.skillId || `${skill.sourceId || "local"}/${skill.skillName || skill.name}`,
-      sourceId: skill.sourceId || "local",
-      sourceName: skill.sourceName || skill.sourceId || "local",
-      sourceUrl: skill.sourceUrl || "",
-      skillName: skill.skillName || skill.name,
-      sourcePath: path.isAbsolute(skill.sourcePath || "") ? (skill.sourcePath || "") : path.resolve(repoRoot, skill.sourcePath || ""),
-    })),
-  };
-}
-
-function withLiveDiagnostics(catalog: SkillCatalog): SkillCatalog {
-  return {
-    ...catalog,
-    stale: false,
-    catalogSource: "live",
-    staleReason: undefined,
-    cacheAgeSeconds: undefined,
-    nextRefreshAt: undefined,
-  };
-}
-
-function withSnapshotDiagnostics(catalog: SkillCatalog, staleReason: string): SkillCatalog {
-  return {
-    ...catalog,
-    stale: true,
-    catalogSource: "snapshot",
-    staleReason,
-    cacheAgeSeconds: undefined,
-    nextRefreshAt: undefined,
-  };
-}
-
-function withCacheDiagnostics(catalog: SkillCatalog, savedAtMs: number, nowMs: number, staleReason?: string): SkillCatalog {
-  const cacheAgeSeconds = Math.max(0, Math.floor((nowMs - savedAtMs) / 1000));
-  const nextRefreshAt = new Date(savedAtMs + CATALOG_CACHE_TTL_MS).toISOString();
-  const ttlExpired = nowMs >= savedAtMs + CATALOG_CACHE_TTL_MS;
-  const stale = Boolean(staleReason) || ttlExpired;
-
-  return {
-    ...catalog,
-    stale,
-    catalogSource: "cache",
-    staleReason: staleReason || (stale ? "Cached catalog is older than refresh TTL." : undefined),
-    cacheAgeSeconds,
-    nextRefreshAt,
-  };
-}
-
-function liveUnavailableReason(catalog: SkillCatalog): string {
-  const failures = catalog.sources.filter((source) => source.enabled !== false && source.lastError).map((source) => `${source.id}: ${source.lastError}`);
-  if (failures.length > 0) {
-    return `Live catalog refresh failed (${failures.join("; ")}).`;
-  }
-
-  const hasEnabledSource = catalog.sources.some((source) => source.enabled !== false);
-  if (!hasEnabledSource) {
-    return "No enabled skill sources are configured; serving fallback catalog.";
-  }
-
-  return "Live catalog returned zero skills; serving fallback catalog.";
-}
-
-function shouldAttemptLiveRefresh(refresh: boolean, cache: CacheRecord | null, nowMs: number): boolean {
-  if (refresh) return true;
-  if (!cache) return true;
-  return nowMs >= cache.savedAtMs + CATALOG_CACHE_TTL_MS;
-}
-
-function cachePath(): string {
-  return path.join(getIcaStateRoot(), CATALOG_CACHE_RELATIVE_PATH);
-}
-
-async function loadCatalogCache(repoRoot: string): Promise<CacheRecord | null> {
-  const targetPath = cachePath();
-  if (!(await pathExists(targetPath))) {
-    return null;
-  }
-
-  try {
-    const raw = await fsp.readFile(targetPath, "utf8");
-    const parsed = JSON.parse(raw) as SkillCatalog;
-    const stat = await fsp.stat(targetPath);
-    return {
-      catalog: normalizeCatalog(repoRoot, parsed),
-      savedAtMs: stat.mtimeMs,
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function saveCatalogCache(catalog: SkillCatalog): Promise<void> {
-  const payload: SkillCatalog = {
-    ...catalog,
-    stale: undefined,
-    catalogSource: undefined,
-    staleReason: undefined,
-    cacheAgeSeconds: undefined,
-    nextRefreshAt: undefined,
-  };
-  await writeText(cachePath(), `${JSON.stringify(payload, null, 2)}\n`);
 }
 
 export function buildDefaultSourceCatalog(version: string, sourceDateEpoch?: string): SkillCatalog {
@@ -257,6 +141,10 @@ export function buildDefaultSourceCatalog(version: string, sourceDateEpoch?: str
         official: true,
         enabled: true,
         skillsRoot: DEFAULT_SKILLS_ROOT,
+        publishDefaultMode: DEFAULT_PUBLISH_MODE,
+        defaultBaseBranch: "dev",
+        providerHint: "github",
+        officialContributionEnabled: true,
         removable: true,
       },
     ],
@@ -302,7 +190,19 @@ export function loadCatalog(repoRoot: string, fallbackVersion = "0.0.0"): SkillC
   const catalogPath = path.join(repoRoot, "src", "catalog", "skills.catalog.json");
   if (fs.existsSync(catalogPath)) {
     const catalog = loadCatalogFromFile(catalogPath);
-    const normalized = normalizeCatalog(repoRoot, catalog);
+    const normalized: SkillCatalog = {
+      ...catalog,
+      sources: catalog.sources || [],
+      skills: catalog.skills.map((skill) => ({
+        ...skill,
+        skillId: skill.skillId || `${skill.sourceId || "local"}/${skill.skillName || skill.name}`,
+        sourceId: skill.sourceId || "local",
+        sourceName: skill.sourceName || skill.sourceId || "local",
+        sourceUrl: skill.sourceUrl || "",
+        skillName: skill.skillName || skill.name,
+        sourcePath: path.isAbsolute(skill.sourcePath) ? skill.sourcePath : path.resolve(repoRoot, skill.sourcePath),
+      })),
+    };
     if (normalized.skills.length > 0) {
       return normalized;
     }
@@ -314,52 +214,19 @@ export function loadCatalog(repoRoot: string, fallbackVersion = "0.0.0"): SkillC
 export async function loadCatalogFromSources(repoRoot: string, refresh = false): Promise<SkillCatalog> {
   const versionFile = path.join(repoRoot, "VERSION");
   const version = fs.existsSync(versionFile) ? fs.readFileSync(versionFile, "utf8").trim() : "0.0.0";
-  const snapshot = loadCatalog(repoRoot, version);
-  const cache = await loadCatalogCache(repoRoot);
-  const nowMs = Date.now();
-  let liveFailureReason: string | undefined;
-
-  if (!shouldAttemptLiveRefresh(refresh, cache, nowMs) && cache) {
-    return withCacheDiagnostics(cache.catalog, cache.savedAtMs, nowMs);
-  }
-
-  let multi: SkillCatalog;
-  try {
-    multi = await buildMultiSourceCatalog({
-      repoVersion: version,
-      refresh,
-    });
-  } catch {
-    liveFailureReason = "Live catalog refresh failed unexpectedly; serving fallback catalog.";
-    multi = {
-      generatedAt: new Date().toISOString(),
-      source: "multi-source",
-      version,
-      sources: [],
-      skills: [],
-    };
-  }
+  const multi = await buildMultiSourceCatalog({
+    repoVersion: version,
+    refresh,
+  });
   if (multi.skills.length > 0) {
-    const live = withLiveDiagnostics(multi);
-    try {
-      await saveCatalogCache(live);
-    } catch {
-      // Cache persistence is best-effort; live catalog should still be returned.
-    }
-    return live;
+    return multi;
   }
-
-  const reason = liveFailureReason || liveUnavailableReason(multi);
-  if (cache) {
-    return withCacheDiagnostics(cache.catalog, cache.savedAtMs, nowMs, reason);
-  }
-
-  const fallback: SkillCatalog = {
-    ...snapshot,
-    source: multi.sources.length > 0 ? "multi-source" : snapshot.source,
-    sources: multi.sources.length > 0 ? multi.sources : snapshot.sources,
+  const fallback = loadCatalog(repoRoot, version);
+  return {
+    ...fallback,
+    source: multi.sources.length > 0 ? "multi-source" : fallback.source,
+    sources: multi.sources.length > 0 ? multi.sources : fallback.sources,
   };
-  return withSnapshotDiagnostics(fallback, `${reason} Serving bundled snapshot catalog.`);
 }
 
 export function findSkill(catalog: SkillCatalog, skillNameOrId: string): SkillCatalogEntry | undefined {

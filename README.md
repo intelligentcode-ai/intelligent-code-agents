@@ -1,65 +1,14 @@
 # Intelligent Code Agents (ICA)
 
-ICA is the fastest path from "nothing installed" to a working, managed agent stack.
+ICA is a skills installer and manager for coding agents.
 
-Use one CLI and one local dashboard to install, sync, audit, and update skills across runtimes without hand-wired setup.
-
-What ICA gives you:
-- one command surface for install/uninstall/sync/audit
-- source-aware skill management with explicit pinning (`<source>/<skill>`)
-- CLI + local dashboard workflows
-- verified bootstrap installers and reproducible releases
-
-## Skills Repository + Contribution
-
-Official skills live in the standalone Skills repository:
-- [intelligentcode-ai/skills](https://github.com/intelligentcode-ai/skills)
-
-Want to add a custom skill?
-- Open a PR in the Skills repo: [Create Pull Request](https://github.com/intelligentcode-ai/skills/pulls)
-- Follow contribution requirements in: [How to Contribute](https://github.com/intelligentcode-ai/skills#how-to-contribute)
-
-## Agent Bootstrap Prompt (IDE/Local Agent)
-
-Use this when you want your local agent to do setup for you end-to-end.
-
-Paste this into your coding agent:
-
-```text
-Bootstrap ICA for this local environment.
-
-Your task:
-1) Download and install this skill file into your own native skill storage (using your runtime's normal skill conventions):
-   https://raw.githubusercontent.com/intelligentcode-ai/skills/master/skills/ica-bootstrap/SKILL.md
-2) Immediately execute the installed `ica-bootstrap` skill.
-3) Let `ica-bootstrap` complete end-to-end setup, including:
-   - ICA CLI installation
-   - skills source registration/refresh
-   - installation of `ica-cli`
-   - verification (`ica doctor`, `ica list`)
-
-Behavior requirements:
-- Do the work directly on this machine.
-- Do not ask me where skill folders are.
-- Do not ask me to confirm routine steps.
-- Ask only if credentials, permissions, or security policy block execution.
-- If a command fails, diagnose and retry with the safest fallback automatically.
-
-Final output:
-- What you installed
-- What you executed
-- Current ICA health/status
-- Exact blocker only if setup is still not complete
-```
-
-Canonical prompt source:
-- [skills/ica-bootstrap/assets/INITIAL_PROMPT.md](https://github.com/intelligentcode-ai/skills/blob/master/skills/ica-bootstrap/assets/INITIAL_PROMPT.md)
+It gives you one clean control plane for:
+- installing, uninstalling, syncing, and auditing skills
+- managing multiple skill sources with explicit source pinning (`<source>/<skill>`)
+- running from CLI or a local-first dashboard
+- using verified bootstrap installers and signed, reproducible releases
 
 ## Install First (Verified Bootstrap)
-
-If you're setting up manually, this is the safest and fastest starting point.
-
-Bootstrap downloads the latest source artifact (`ica-<tag>-source.tar.gz`), verifies it against `SHA256SUMS.txt`, and installs `ica`.
 
 macOS/Linux:
 
@@ -73,22 +22,17 @@ Windows PowerShell:
 iwr https://raw.githubusercontent.com/intelligentcode-ai/intelligent-code-agents/main/scripts/bootstrap/install.ps1 -UseBasicParsing | iex
 ```
 
-Then run:
-
-```bash
-ica install
-ica serve --open=true
-```
-
 ## Multi-Source Skills (Clear + Explicit)
 
 ICA supports multiple skill repositories side-by-side.
 
 - Add official and custom repos (HTTPS/SSH)
 - Keep each source cached locally under `~/.ica/<source-id>/skills`
+- Keep each source publish workspace under `~/.ica/source-workspaces/<source-id>/repo`
 - Select skills explicitly as `<source>/<skill>` to avoid ambiguity
 - Remove a source without deleting already installed skills (they are marked orphaned)
 - Use the same model in CLI and dashboard
+- Configure per-source publishing defaults: `direct-push`, `branch-only`, or `branch-pr`
 
 ## Dashboard Preview
 
@@ -114,10 +58,6 @@ Post-install evidence with expanded `Installed State` and `Operation Report`.
 ### 5) Manage installed skills (uninstall/sync/report)
 ![ICA Dashboard Management](docs/assets/dashboard/dashboard-step-05-management.png)
 Management action example (`Uninstall selected`) with updated state/report.
-
-### 6) Manage hooks
-![ICA Dashboard Hooks](docs/assets/dashboard/dashboard-step-06-hooks.png)
-Dedicated hooks catalog/actions with source-aware hook install state.
 
 ## Build From Source
 
@@ -153,14 +93,16 @@ Commands:
 - `ica list`
 - `ica doctor`
 - `ica catalog`
-- `ica serve`
-- `ica launch` (alias; deprecated)
 - `ica sources list`
 - `ica sources add --repo-url=...` (or `--repo-path=...`; defaults to current directory when omitted)
 - `ica sources remove --id=...`
 - `ica sources auth --id=... --token=...`
 - `ica sources refresh [--id=...]`
-- `ica sources update --id=... --name=... --repo-url=...`
+- `ica sources update --id=... --name=... --repo-url=... --publish-default-mode=branch-pr --default-base-branch=main --provider-hint=github --official-contribution-enabled=false`
+- `ica skills validate --path=/path/to/skill --profile=personal`
+- `ica skills publish --source=<source-id> --path=/path/to/skill --message="feat(skill): publish my-skill"`
+- `ica skills contribute-official --path=/path/to/skill --message="Add my-skill"`
+- `ica container mount-project --project-path=/path --confirm`
 
 Source-qualified example:
 
@@ -173,6 +115,17 @@ node dist/src/installer-cli/index.js install --yes \
 
 Legacy `--skills=<name>` is still accepted and resolves against the official source.
 
+## Skill Publishing and Official Contribution
+
+- `ica skills validate` supports `personal` and `official` profiles
+- Personal publishing uses the source's configured default mode:
+  - `direct-push`: commits to base branch and pushes
+  - `branch-only`: pushes a feature branch
+  - `branch-pr`: pushes a feature branch and attempts PR creation when provider integration is available
+- Official contribution uses strict validation and PR-oriented flow (defaults to official source base branch `dev`)
+- Skill bundles are copied recursively and support `SKILL.md` + additional resources/assets/scripts/other files
+- Source settings include `officialContributionEnabled` to mark official contribution targets
+
 Custom repositories are persisted in `~/.ica/sources.json` (or `$ICA_STATE_HOME/sources.json` when set).
 
 Downloaded source skills are materialized under `~/.ica/<source-id>/skills` (or `$ICA_STATE_HOME/<source-id>/skills`).
@@ -180,18 +133,15 @@ When install mode is `symlink`, ICA links installed skills from that local skill
 
 ## Dashboard
 
-Start locally (frontend container + host API control plane):
+Start locally (binds to `127.0.0.1`):
 
 ```bash
-ica serve --open=true
+npm ci
+npm run build
+npm run start:dashboard
 ```
 
 Open: `http://127.0.0.1:4173`
-
-Architecture note:
-- `ica serve` runs the ICA API on localhost (`127.0.0.1`) with an ephemeral per-session API key.
-- The dashboard container serves static frontend assets only.
-- A host-side BFF proxies `/api/v1/*` and `/ws/events` as same-origin routes for the browser.
 
 ### GHCR Container
 
@@ -200,10 +150,9 @@ Dashboard highlights:
 - Install, uninstall, and sync skills across multiple targets
 - Add/remove/auth/refresh skill sources (HTTPS + SSH)
 - Target discovery plus user/project scope management
-- Native project directory picker via localhost CLI API
+- Native project directory picker (host helper) plus container mount orchestration endpoint
 - Skill catalog filtering with bulk selection controls
 - Installed-state and operation-report inspection in the UI
-- Frontend-only container with host-BFF same-origin proxying
 
 Container image can be built from `src/installer-dashboard/Dockerfile` and published to GHCR via `.github/workflows/dashboard-ghcr.yml`.
 
@@ -216,10 +165,8 @@ docker build -f src/installer-dashboard/Dockerfile -t ica-dashboard:local .
 Run:
 
 ```bash
-docker run --rm -p 4173:80 ica-dashboard:local
+docker run --rm -p 4173:4173 ica-dashboard:local
 ```
-
-For full installer functionality (API + WS + container lifecycle), use `ica serve --open=true`.
 
 ## Supported Targets
 
@@ -262,6 +209,7 @@ Tag releases from `main` (`vX.Y.Z`). The `release-sign` workflow:
 ## Documentation
 
 - [Installation Guide](docs/installation-guide.md)
+- [Skill Publishing Guide](docs/skill-publishing-guide.md)
 - [Configuration Guide](docs/configuration-guide.md)
 - [Workflow Guide](docs/workflow-guide.md)
 - [Release Signing](docs/release-signing.md)
