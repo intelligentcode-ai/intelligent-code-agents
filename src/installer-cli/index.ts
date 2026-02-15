@@ -20,12 +20,25 @@ import { loadHookCatalogFromSources, HookInstallSelection } from "../installer-c
 import { executeHookOperation, HookInstallRequest, HookTargetPlatform } from "../installer-core/hookExecutor";
 import { loadHookInstallState } from "../installer-core/hookState";
 import { registerRepository } from "../installer-core/repositories";
+import { contributeOfficialSkillBundle, publishSkillBundle, validateSkillBundle } from "../installer-core/skillPublish";
 import { refreshSourcesAndHooks } from "../installer-core/sourceRefresh";
 import { loadInstallState } from "../installer-core/state";
 import { parseTargets, resolveTargetPaths } from "../installer-core/targets";
 import { checkForAppUpdate } from "../installer-core/updateCheck";
 import { findRepoRoot } from "../installer-core/repo";
-import { InstallMode, InstallRequest, InstallScope, InstallSelection, OperationKind, TargetPlatform } from "../installer-core/types";
+import {
+  GitProvider,
+  InstallMode,
+  InstallRequest,
+  InstallScope,
+  InstallSelection,
+  OperationKind,
+  PublishMode,
+  PublishResult,
+  TargetPlatform,
+  ValidationProfile,
+  ValidationResult,
+} from "../installer-core/types";
 
 interface ParsedArgs {
   command: string;
@@ -89,6 +102,80 @@ function stringOption(options: Record<string, string | boolean>, key: string, de
   const value = options[key];
   if (value === undefined) return defaultValue;
   return typeof value === "boolean" ? String(value) : value;
+}
+
+function parseOptionalBooleanOption(options: Record<string, string | boolean>, key: string): boolean | undefined {
+  const value = options[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  throw new Error(`Invalid --${key} value '${value}'. Supported: true|false`);
+}
+
+function parsePublishModeOption(options: Record<string, string | boolean>, key: string): PublishMode | undefined {
+  const value = stringOption(options, key, "").trim();
+  if (!value) return undefined;
+  if (value === "direct-push" || value === "branch-only" || value === "branch-pr") {
+    return value;
+  }
+  throw new Error(`Invalid --${key} value '${value}'. Supported: direct-push|branch-only|branch-pr`);
+}
+
+function parseValidationProfileOption(options: Record<string, string | boolean>, key: string): ValidationProfile {
+  const value = stringOption(options, key, "personal").trim();
+  if (value === "personal" || value === "official") {
+    return value;
+  }
+  throw new Error(`Invalid --${key} value '${value}'. Supported: personal|official`);
+}
+
+function parseProviderHintOption(options: Record<string, string | boolean>, key: string): GitProvider | undefined {
+  const value = stringOption(options, key, "").trim();
+  if (!value) return undefined;
+  if (value === "github" || value === "gitlab" || value === "bitbucket" || value === "unknown") {
+    return value;
+  }
+  throw new Error(`Invalid --${key} value '${value}'. Supported: github|gitlab|bitbucket|unknown`);
+}
+
+function printValidationResult(result: ValidationResult): void {
+  output.write(`Validation profile: ${result.profile}\n`);
+  output.write(`Detected files: ${result.detectedFiles.length}\n`);
+  if (result.warnings.length > 0) {
+    output.write(`Warnings:\n`);
+    for (const warning of result.warnings) {
+      output.write(`- ${warning}\n`);
+    }
+  } else {
+    output.write("Warnings: none\n");
+  }
+  if (result.errors.length > 0) {
+    output.write(`Errors:\n`);
+    for (const error of result.errors) {
+      output.write(`- ${error}\n`);
+    }
+  } else {
+    output.write("Errors: none\n");
+  }
+}
+
+function printPublishResult(result: PublishResult): void {
+  output.write(`Mode: ${result.mode}\n`);
+  output.write(`Branch: ${result.branch}\n`);
+  output.write(`Commit: ${result.commitSha}\n`);
+  output.write(`Remote: ${result.pushedRemote}\n`);
+  if (result.prUrl) {
+    output.write(`PR: ${result.prUrl}\n`);
+  }
+  if (result.compareUrl) {
+    output.write(`Compare: ${result.compareUrl}\n`);
+  }
 }
 
 function splitCsv(value: string): string[] {
@@ -543,20 +630,25 @@ function printHelp(): void {
   output.write(`  ica doctor\n`);
   output.write(`  ica catalog\n\n`);
   output.write(`  ica sources list\n`);
-  output.write(`  ica sources add [--repo-url=<url> | --repo-path=<path>] [--name=<name>] [--id=<id>] [--transport=https|ssh]\n`);
+  output.write(
+    `  ica sources add [--repo-url=<url> | --repo-path=<path>] [--name=<name>] [--id=<id>] [--transport=https|ssh] [--publish-default-mode=direct-push|branch-only|branch-pr] [--default-base-branch=<branch>] [--provider-hint=github|gitlab|bitbucket|unknown]\n`,
+  );
   output.write(`  ica sources remove --id=<source-id>\n`);
   output.write(
-    `  ica sources update --id=<source-id> [--name=<name>] [--repo-url=<url>] [--transport=https|ssh] [--skills-root=/skills] [--hooks-root=/hooks] [--enabled=true|false]\n`,
+    `  ica sources update --id=<source-id> [--name=<name>] [--repo-url=<url>] [--transport=https|ssh] [--skills-root=/skills] [--hooks-root=/hooks] [--enabled=true|false] [--publish-default-mode=direct-push|branch-only|branch-pr] [--default-base-branch=<branch>] [--provider-hint=github|gitlab|bitbucket|unknown] [--official-contribution-enabled=true|false]\n`,
   );
   output.write(`  ica sources auth --id=<source-id> [--token=<pat-or-api-key>]\n`);
   output.write(`  ica sources refresh [--id=<source-id>]\n\n`);
+  output.write(`  ica skills validate --path=<local-skill-dir> --profile=personal|official\n`);
+  output.write(`  ica skills publish --source=<id> --path=<local-skill-dir> [--message="<commit>"] [--override-mode=direct-push|branch-only|branch-pr] [--override-base-branch=<branch>]\n`);
+  output.write(`  ica skills contribute-official --path=<local-skill-dir> [--source=<id>] [--message="<commit>"]\n\n`);
   output.write(`  ica hooks list [--targets=claude,gemini] [--scope=user|project] [--project-path=/path]\n`);
   output.write(`  ica hooks catalog [--json]\n`);
   output.write(`  ica hooks install [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks uninstall [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks sync [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n\n`);
   output.write(
-    `  ica serve [--host=127.0.0.1] [--ui-port=4173] [--api-port=4174] [--reuse-ports=true|false] [--open=true|false] [--image=ghcr.io/intelligentcode-ai/ica-installer-dashboard:main] [--build-image=auto|always|never]\n`,
+    `  ica serve [--host=127.0.0.1] [--ui-port=4173] [--open=true|false] [--api-port=4174] [--reuse-ports=true|false] [--image=ghcr.io/intelligentcode-ai/ica-installer-dashboard:main] [--build-image=auto|always|never]\n`,
   );
   output.write(`  ica launch (alias for serve; deprecated)\n\n`);
   output.write(`  Note: repository registration is unified. Adding one source auto-registers both skills and hooks mirrors.\n\n`);
@@ -950,6 +1042,10 @@ async function runSources(positionals: string[], options: Record<string, string 
       output.write(`  repo: ${repo.repoUrl}\n`);
       if (repo.skills) {
         output.write(`  skillsRoot: ${repo.skills.skillsRoot}\n`);
+        output.write(
+          `  publish: ${repo.skills.publishDefaultMode} (base=${repo.skills.defaultBaseBranch || (repo.skills.official ? "dev" : "main")}, provider=${repo.skills.providerHint})\n`,
+        );
+        output.write(`  officialContributionEnabled: ${repo.skills.officialContributionEnabled ? "true" : "false"}\n`);
         output.write(`  skillsSynced: ${repo.skills.lastSyncAt || "(never)"}\n`);
         if (repo.skills.lastError) output.write(`  skillsError: ${repo.skills.lastError}\n`);
       }
@@ -978,6 +1074,10 @@ async function runSources(positionals: string[], options: Record<string, string 
         repoUrl,
         transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
         skillsRoot: stringOption(options, "skills-root", "") || undefined,
+        publishDefaultMode: parsePublishModeOption(options, "publish-default-mode"),
+        defaultBaseBranch: stringOption(options, "default-base-branch", "") || undefined,
+        providerHint: parseProviderHintOption(options, "provider-hint"),
+        officialContributionEnabled: parseOptionalBooleanOption(options, "official-contribution-enabled"),
         hooksRoot: stringOption(options, "hooks-root", "") || undefined,
         enabled: !stringOption(options, "enabled", "true").toLowerCase().startsWith("f"),
         removable: true,
@@ -1047,6 +1147,10 @@ async function runSources(positionals: string[], options: Record<string, string 
       repoUrl,
       transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
       skillsRoot: stringOption(options, "skills-root", "") || undefined,
+      publishDefaultMode: parsePublishModeOption(options, "publish-default-mode"),
+      defaultBaseBranch: stringOption(options, "default-base-branch", "") || undefined,
+      providerHint: parseProviderHintOption(options, "provider-hint"),
+      officialContributionEnabled: parseOptionalBooleanOption(options, "official-contribution-enabled"),
       enabled:
         options.enabled !== undefined
           ? !stringOption(options, "enabled", "true").toLowerCase().startsWith("f")
@@ -1146,6 +1250,86 @@ async function runSources(positionals: string[], options: Record<string, string 
   }
 
   throw new Error(`Unknown sources action '${action}'. Supported: list|add|remove|update|auth|refresh`);
+}
+
+async function runSkills(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
+  const action = (positionals[0] || "help").toLowerCase();
+  const json = boolOption(options, "json", false);
+  const credentials = createCredentialProvider();
+
+  if (action === "help" || action === "") {
+    output.write("Skills commands: validate|publish|contribute-official\n");
+    output.write("Use `ica help` to see full skills command syntax.\n");
+    return;
+  }
+
+  if (action === "validate") {
+    const skillPath = stringOption(options, "path", "").trim();
+    if (!skillPath) {
+      throw new Error("Missing required option --path");
+    }
+    const profile = parseValidationProfileOption(options, "profile");
+    const result = await validateSkillBundle({ localPath: path.resolve(skillPath) }, profile);
+    if (json) {
+      output.write(`${JSON.stringify(result, null, 2)}\n`);
+    } else {
+      printValidationResult(result);
+    }
+    if (result.errors.length > 0) {
+      throw new Error(`Validation failed with ${result.errors.length} error(s).`);
+    }
+    return;
+  }
+
+  if (action === "publish") {
+    const sourceId = stringOption(options, "source", "").trim();
+    if (!sourceId) {
+      throw new Error("Missing required option --source");
+    }
+    const skillPath = stringOption(options, "path", "").trim();
+    if (!skillPath) {
+      throw new Error("Missing required option --path");
+    }
+    const result = await publishSkillBundle(
+      {
+        sourceId,
+        bundle: { localPath: path.resolve(skillPath) },
+        commitMessage: stringOption(options, "message", "").trim() || undefined,
+        overrideMode: parsePublishModeOption(options, "override-mode"),
+        overrideBaseBranch: stringOption(options, "override-base-branch", "").trim() || undefined,
+      },
+      credentials,
+    );
+    if (json) {
+      output.write(`${JSON.stringify(result, null, 2)}\n`);
+    } else {
+      printPublishResult(result);
+    }
+    return;
+  }
+
+  if (action === "contribute-official") {
+    const skillPath = stringOption(options, "path", "").trim();
+    if (!skillPath) {
+      throw new Error("Missing required option --path");
+    }
+    const result = await contributeOfficialSkillBundle(
+      {
+        sourceId: stringOption(options, "source", "").trim() || undefined,
+        bundle: { localPath: path.resolve(skillPath) },
+        commitMessage: stringOption(options, "message", "").trim() || undefined,
+      },
+      credentials,
+    );
+    if (json) {
+      output.write(`${JSON.stringify(result, null, 2)}\n`);
+    } else {
+      printPublishResult(result);
+    }
+    return;
+  }
+
+  throw new Error(`Unknown skills action '${action}'. Supported: validate|publish|contribute-official`);
 }
 
 async function runHooks(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
@@ -1498,6 +1682,11 @@ async function main(): Promise<void> {
 
   if (normalized === "sources") {
     await runSources(positionals, options);
+    return;
+  }
+
+  if (normalized === "skills") {
+    await runSkills(positionals, options);
     return;
   }
 

@@ -6,6 +6,8 @@
   "autonomy": {
     "level": "L2",
     "pm_always_active": true,
+    "work_item_pipeline_enabled": true,
+    "work_item_pipeline_mode": "batch_auto",
     "l3_settings": {
       "max_parallel": 5,
       "auto_discover": true,

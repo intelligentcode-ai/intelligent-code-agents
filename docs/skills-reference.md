@@ -63,3 +63,24 @@ file-placement, branch-protection, infrastructure-protection
 - `ica.workflow.json`: workflow automation controls (auto-merge standing approval, optional GitHub approvals gate, release automation)
 
 See `docs/configuration-guide.md` for the full hierarchy.
+
+## Authoring and Publishing Skills
+
+ICA supports publishing local skill bundles to configured sources.
+
+- Validate local bundles:
+  - `ica skills validate --path=/path/to/skill --profile=personal|official`
+- Publish to your own source repo:
+  - `ica skills publish --source=<source-id> --path=/path/to/skill`
+- Contribute to official source:
+  - `ica skills contribute-official --path=/path/to/skill`
+
+Per-source publish behavior is configurable via:
+
+- `publishDefaultMode`: `direct-push`, `branch-only`, `branch-pr`
+- `defaultBaseBranch`: e.g. `main` (or `dev` for official contribution workflows)
+- `providerHint`: `github`, `gitlab`, `bitbucket`, `unknown`
+- `officialContributionEnabled`: marks source as eligible for official contribution flow
+
+For full command examples and workflow details, see:
+- `docs/skill-publishing-guide.md`
