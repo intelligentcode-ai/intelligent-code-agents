@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.3.1] - 2026-02-15
+
+### Added
+- Installer trigger-check regression tests for adopted private debug skills (`systematic-debugging`, `parallel-debugging`, `gh-fix-ci`).
+- Installer trigger-check regression tests for legacy private skills (`audit-pr-skills`, `rebuild-skill-index`) after schema modernization.
+
+### Changed
+- Aligned `src/VERSION` with root `VERSION` for release consistency.
+
 ## [12.3.0] - 2026-02-15
 
 ### Added
