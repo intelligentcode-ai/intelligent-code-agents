@@ -3,7 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
-import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
+import net from "node:net";
+import { spawn, execFile } from "node:child_process";
+import { promisify } from "node:util";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { executeOperation } from "../installer-core/executor";
@@ -19,10 +21,24 @@ import { executeHookOperation, HookInstallRequest, HookTargetPlatform } from "..
 import { loadHookInstallState } from "../installer-core/hookState";
 import { registerRepository } from "../installer-core/repositories";
 import { contributeOfficialSkillBundle, publishSkillBundle, validateSkillBundle } from "../installer-core/skillPublish";
+import { refreshSourcesAndHooks } from "../installer-core/sourceRefresh";
 import { loadInstallState } from "../installer-core/state";
 import { parseTargets, resolveTargetPaths } from "../installer-core/targets";
+import { checkForAppUpdate } from "../installer-core/updateCheck";
 import { findRepoRoot } from "../installer-core/repo";
-import { InstallMode, InstallRequest, InstallScope, InstallSelection, OperationKind, PublishMode, TargetPlatform, ValidationProfile } from "../installer-core/types";
+import {
+  GitProvider,
+  InstallMode,
+  InstallRequest,
+  InstallScope,
+  InstallSelection,
+  OperationKind,
+  PublishMode,
+  PublishResult,
+  TargetPlatform,
+  ValidationProfile,
+  ValidationResult,
+} from "../installer-core/types";
 
 interface ParsedArgs {
   command: string;
@@ -30,10 +46,18 @@ interface ParsedArgs {
   positionals: string[];
 }
 
-const HELPER_HOST = "127.0.0.1";
-const HELPER_PORT = Number(process.env.ICA_HELPER_PORT || "4174");
-const HELPER_TOKEN = process.env.ICA_HELPER_TOKEN || crypto.randomBytes(24).toString("hex");
-let helperProcess: ChildProcessWithoutNullStreams | null = null;
+const execFileAsync = promisify(execFile);
+const DEFAULT_DASHBOARD_IMAGE = "ghcr.io/intelligentcode-ai/ica-installer-dashboard:main";
+
+export type ServeImageBuildMode = "auto" | "always" | "never";
+export type ServeReusePortsMode = boolean;
+
+export function redactCliErrorMessage(message: string): string {
+  return message
+    .replace(/(ICA_(?:UI_)?API_KEY=)[^\s]+/g, "$1[REDACTED]")
+    .replace(/(--(?:token|api-key)=)[^\s]+/g, "$1[REDACTED]")
+    .replace(/(x-ica-api-key["']?\s*[:=]\s*["']?)[^"',\s]+/gi, "$1[REDACTED]");
+}
 
 function parseArgv(argv: string[]): ParsedArgs {
   const [command = "help", ...rest] = argv;
@@ -78,6 +102,80 @@ function stringOption(options: Record<string, string | boolean>, key: string, de
   const value = options[key];
   if (value === undefined) return defaultValue;
   return typeof value === "boolean" ? String(value) : value;
+}
+
+function parseOptionalBooleanOption(options: Record<string, string | boolean>, key: string): boolean | undefined {
+  const value = options[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  throw new Error(`Invalid --${key} value '${value}'. Supported: true|false`);
+}
+
+function parsePublishModeOption(options: Record<string, string | boolean>, key: string): PublishMode | undefined {
+  const value = stringOption(options, key, "").trim();
+  if (!value) return undefined;
+  if (value === "direct-push" || value === "branch-only" || value === "branch-pr") {
+    return value;
+  }
+  throw new Error(`Invalid --${key} value '${value}'. Supported: direct-push|branch-only|branch-pr`);
+}
+
+function parseValidationProfileOption(options: Record<string, string | boolean>, key: string): ValidationProfile {
+  const value = stringOption(options, key, "personal").trim();
+  if (value === "personal" || value === "official") {
+    return value;
+  }
+  throw new Error(`Invalid --${key} value '${value}'. Supported: personal|official`);
+}
+
+function parseProviderHintOption(options: Record<string, string | boolean>, key: string): GitProvider | undefined {
+  const value = stringOption(options, key, "").trim();
+  if (!value) return undefined;
+  if (value === "github" || value === "gitlab" || value === "bitbucket" || value === "unknown") {
+    return value;
+  }
+  throw new Error(`Invalid --${key} value '${value}'. Supported: github|gitlab|bitbucket|unknown`);
+}
+
+function printValidationResult(result: ValidationResult): void {
+  output.write(`Validation profile: ${result.profile}\n`);
+  output.write(`Detected files: ${result.detectedFiles.length}\n`);
+  if (result.warnings.length > 0) {
+    output.write(`Warnings:\n`);
+    for (const warning of result.warnings) {
+      output.write(`- ${warning}\n`);
+    }
+  } else {
+    output.write("Warnings: none\n");
+  }
+  if (result.errors.length > 0) {
+    output.write(`Errors:\n`);
+    for (const error of result.errors) {
+      output.write(`- ${error}\n`);
+    }
+  } else {
+    output.write("Errors: none\n");
+  }
+}
+
+function printPublishResult(result: PublishResult): void {
+  output.write(`Mode: ${result.mode}\n`);
+  output.write(`Branch: ${result.branch}\n`);
+  output.write(`Commit: ${result.commitSha}\n`);
+  output.write(`Remote: ${result.pushedRemote}\n`);
+  if (result.prUrl) {
+    output.write(`PR: ${result.prUrl}\n`);
+  }
+  if (result.compareUrl) {
+    output.write(`Compare: ${result.compareUrl}\n`);
+  }
 }
 
 function splitCsv(value: string): string[] {
@@ -156,29 +254,257 @@ function parseHookTargetsStrict(rawValue: string): HookTargetPlatform[] {
   return ["claude"];
 }
 
-async function helperRequest(pathname: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const response = await fetch(`http://${HELPER_HOST}:${HELPER_PORT}${pathname}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-ica-helper-token": HELPER_TOKEN,
-    },
-    body: JSON.stringify(body),
-  });
-  const payload = (await response.json()) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(typeof payload.error === "string" ? payload.error : "Helper request failed.");
+async function commandExists(command: string): Promise<boolean> {
+  try {
+    await execFileAsync(command, ["--version"], { maxBuffer: 1024 * 1024 });
+    return true;
+  } catch {
+    return false;
   }
-  return payload;
 }
 
-async function waitForHelperReady(retries = 30): Promise<void> {
+async function isLoopbackPortAvailable(port: number): Promise<boolean> {
+  return await new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.once("error", () => {
+      resolve(false);
+    });
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+async function getListeningPids(port: number): Promise<number[]> {
+  const pids = new Set<number>();
+
+  try {
+    if (process.platform === "win32") {
+      const { stdout } = await execFileAsync("netstat", ["-ano", "-p", "tcp"], { maxBuffer: 4 * 1024 * 1024 });
+      const lines = stdout.split(/\r?\n/);
+      const matcher = new RegExp(`:${port}\\s+\\S+\\s+LISTENING\\s+(\\d+)`, "i");
+      for (const line of lines) {
+        const match = line.match(matcher);
+        if (!match) continue;
+        const pid = Number.parseInt(match[1], 10);
+        if (Number.isInteger(pid) && pid > 0 && pid !== process.pid) {
+          pids.add(pid);
+        }
+      }
+      return Array.from(pids);
+    }
+
+    const { stdout } = await execFileAsync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], { maxBuffer: 1024 * 1024 });
+    for (const line of stdout.split(/\r?\n/)) {
+      const pid = Number.parseInt(line.trim(), 10);
+      if (Number.isInteger(pid) && pid > 0 && pid !== process.pid) {
+        pids.add(pid);
+      }
+    }
+  } catch {
+    return [];
+  }
+
+  return Array.from(pids);
+}
+
+function canSignalPid(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function isIcaOwnedServePid(pid: number): Promise<boolean> {
+  if (process.platform === "win32") {
+    // Keep previous behavior on Windows where lightweight commandline checks are less portable.
+    return true;
+  }
+  try {
+    const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "command="], { maxBuffer: 1024 * 1024 });
+    const command = (stdout || "").toLowerCase();
+    return (
+      command.includes("installer-api/server/index.js") ||
+      command.includes("installer-bff/server/index.js") ||
+      command.includes("dist/src/installer-api/server/index.js") ||
+      command.includes("dist/src/installer-bff/server/index.js")
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function waitForPortAvailable(port: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await isLoopbackPortAvailable(port)) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return await isLoopbackPortAvailable(port);
+}
+
+async function reclaimLoopbackPort(port: number, flagName: "ui-port" | "api-port"): Promise<void> {
+  if (await isLoopbackPortAvailable(port)) {
+    return;
+  }
+
+  const pids = await getListeningPids(port);
+  if (pids.length === 0) {
+    throw new Error(
+      `Requested --${flagName}=${port} is in use, but ICA could not identify the owning process to stop it automatically.`,
+    );
+  }
+
+  for (const pid of pids) {
+    if (!(await isIcaOwnedServePid(pid))) {
+      throw new Error(
+        `Requested --${flagName}=${port} is in use by non-ICA process (pid ${pid}). Stop it manually or choose a different port.`,
+      );
+    }
+  }
+
+  output.write(`Notice: ${flagName} ${port} is busy; stopping existing process on that port.\n`);
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // ignore individual process signal failures
+    }
+  }
+
+  if (await waitForPortAvailable(port, 2000)) {
+    return;
+  }
+
+  for (const pid of pids) {
+    if (!canSignalPid(pid)) continue;
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // ignore individual process signal failures
+    }
+  }
+
+  if (await waitForPortAvailable(port, 1500)) {
+    return;
+  }
+
+  throw new Error(`Requested --${flagName}=${port} is still in use after attempting to stop the existing process.`);
+}
+
+export function parseServeImageBuildMode(rawValue: string): ServeImageBuildMode {
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === "auto" || normalized === "always" || normalized === "never") {
+    return normalized;
+  }
+  throw new Error(`Invalid --build-image value '${rawValue}'. Supported: auto|always|never`);
+}
+
+export function parseServeReusePorts(rawValue: string): ServeReusePortsMode {
+  const normalized = rawValue.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  throw new Error(`Invalid --reuse-ports value '${rawValue}'. Supported: true|false`);
+}
+
+export function parseServeRefreshMinutes(rawValue: string): number {
+  const trimmed = rawValue.trim();
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`Invalid --sources-refresh-minutes value '${rawValue}'. Use 0 to disable or a positive number.`);
+  }
+  return Math.floor(parsed);
+}
+
+export function shouldBuildDashboardImage(input: {
+  mode: ServeImageBuildMode;
+  image: string;
+  imageExists: boolean;
+  defaultImage: string;
+}): boolean {
+  if (input.mode === "always") {
+    return true;
+  }
+  if (input.mode === "never") {
+    return false;
+  }
+  if (input.imageExists) {
+    return false;
+  }
+  if (input.image.trim().toLowerCase().startsWith("ghcr.io/")) {
+    return false;
+  }
+  return input.image === input.defaultImage;
+}
+
+export function shouldFallbackToSourceBuild(pullErrorMessage: string): boolean {
+  const normalized = pullErrorMessage.toLowerCase();
+  return (
+    normalized.includes("no matching manifest") ||
+    normalized.includes("no match for platform in manifest") ||
+    normalized.includes("manifest unknown") ||
+    normalized.includes("manifest not found") ||
+    normalized.includes("not found: manifest")
+  );
+}
+
+function toDockerRunArgs(base: {
+  containerName: string;
+  image: string;
+  env?: string[];
+  ports?: string[];
+}): string[] {
+  const args: string[] = ["run", "-d", "--name", base.containerName];
+  for (const envItem of base.env || []) {
+    args.push("-e", envItem);
+  }
+  for (const port of base.ports || []) {
+    args.push("-p", port);
+  }
+  args.push(base.image);
+  return args;
+}
+
+async function allocateLoopbackPort(input: {
+  preferredPort: number;
+  explicit: boolean;
+  flagName: "ui-port" | "api-port";
+  blockedPorts?: Set<number>;
+}): Promise<number> {
+  const blocked = input.blockedPorts || new Set<number>();
+  if (!blocked.has(input.preferredPort) && (await isLoopbackPortAvailable(input.preferredPort))) {
+    return input.preferredPort;
+  }
+  if (input.explicit) {
+    throw new Error(`Requested --${input.flagName}=${input.preferredPort} is unavailable. Choose a different port.`);
+  }
+  for (let candidate = input.preferredPort + 1; candidate <= Math.min(65535, input.preferredPort + 100); candidate += 1) {
+    if (blocked.has(candidate)) {
+      continue;
+    }
+    if (await isLoopbackPortAvailable(candidate)) {
+      output.write(`Notice: ${input.flagName} ${input.preferredPort} is busy; using ${candidate}.\n`);
+      return candidate;
+    }
+  }
+  throw new Error(`Unable to find a free localhost port for --${input.flagName} near ${input.preferredPort}.`);
+}
+
+async function waitForApiReady(port: number, apiKey: string, retries = 40): Promise<void> {
   for (let attempt = 0; attempt < retries; attempt += 1) {
     try {
-      const response = await fetch(`http://${HELPER_HOST}:${HELPER_PORT}/health`, {
-        headers: {
-          "x-ica-helper-token": HELPER_TOKEN,
-        },
+      const response = await fetch(`http://127.0.0.1:${port}/api/v1/health`, {
+        headers: { "x-ica-api-key": apiKey },
       });
       if (response.ok) return;
     } catch {
@@ -186,43 +512,213 @@ async function waitForHelperReady(retries = 30): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
-  throw new Error("ICA helper did not become ready in time.");
+  throw new Error("ICA API did not become ready in time.");
 }
 
-async function ensureHelperRunning(repoRoot: string): Promise<void> {
-  if (helperProcess && !helperProcess.killed) {
+async function waitForHttpReady(url: string, retries = 40): Promise<void> {
+  for (let attempt = 0; attempt < retries; attempt += 1) {
     try {
-      await waitForHelperReady(1);
-      return;
+      const response = await fetch(url);
+      if (response.ok) return;
     } catch {
-      // respawn below
+      // retry
     }
+    await new Promise((resolve) => setTimeout(resolve, 150));
   }
+  throw new Error(`Service did not become ready in time: ${url}`);
+}
 
-  const helperScript = path.join(repoRoot, "dist", "src", "installer-helper", "server.js");
-  if (!fs.existsSync(helperScript)) {
-    throw new Error("Native helper is not built. Run: npm run build");
+async function dockerInspect(containerName: string): Promise<boolean> {
+  try {
+    await execFileAsync("docker", ["inspect", containerName], { maxBuffer: 8 * 1024 * 1024 });
+    return true;
+  } catch {
+    return false;
   }
+}
 
-  helperProcess = spawn(process.execPath, [helperScript], {
-    env: {
-      ...process.env,
-      ICA_HELPER_PORT: String(HELPER_PORT),
-      ICA_HELPER_TOKEN: HELPER_TOKEN,
-    },
-    stdio: "pipe",
+async function reclaimDockerPublishedPort(port: number, expectedContainerName: string): Promise<number> {
+  try {
+    const { stdout } = await execFileAsync(
+      "docker",
+      ["ps", "--filter", `publish=${port}`, "--format", "{{.ID}} {{.Names}}"],
+      {
+        maxBuffer: 4 * 1024 * 1024,
+      },
+    );
+    const ids = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (ids.length === 0) {
+      return 0;
+    }
+    let removed = 0;
+    for (const row of ids) {
+      const [id, name] = row.split(/\s+/, 2);
+      if (!id || !name || name !== expectedContainerName) {
+        continue;
+      }
+      await execFileAsync("docker", ["rm", "-f", id], { maxBuffer: 8 * 1024 * 1024 });
+      removed += 1;
+    }
+    return removed;
+  } catch {
+    return 0;
+  }
+}
+
+async function dockerImageExists(image: string): Promise<boolean> {
+  try {
+    await execFileAsync("docker", ["image", "inspect", image], { maxBuffer: 8 * 1024 * 1024 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureDashboardImage(options: {
+  repoRoot: string;
+  image: string;
+  mode: ServeImageBuildMode;
+  defaultImage: string;
+}): Promise<void> {
+  const dockerfilePath = path.join(options.repoRoot, "src", "installer-dashboard", "Dockerfile");
+  const buildFromSource = async (): Promise<void> => {
+    if (!fs.existsSync(dockerfilePath)) {
+      throw new Error(`Dashboard Dockerfile not found at ${dockerfilePath}. Provide --image=<image> or run with --build-image=never.`);
+    }
+    output.write(`Building dashboard image '${options.image}' from source...\n`);
+    await execFileAsync("docker", ["build", "-f", dockerfilePath, "-t", options.image, options.repoRoot], { maxBuffer: 16 * 1024 * 1024 });
+    output.write(`Built dashboard image '${options.image}'.\n`);
+  };
+
+  const imageExists = await dockerImageExists(options.image);
+  const shouldBuild = shouldBuildDashboardImage({
+    mode: options.mode,
+    image: options.image,
+    imageExists,
+    defaultImage: options.defaultImage,
   });
-  helperProcess.stderr.on("data", (chunk) => {
-    const message = chunk.toString("utf8");
-    process.stderr.write(`[ica-helper] ${message}`);
-  });
-  await waitForHelperReady();
+  if (!shouldBuild) {
+    if (!imageExists && options.image.trim().toLowerCase().startsWith("ghcr.io/")) {
+      output.write(`Pulling dashboard image '${options.image}'...\n`);
+      try {
+        await execFileAsync("docker", ["pull", options.image], { maxBuffer: 16 * 1024 * 1024 });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const canFallback = options.mode !== "never" && fs.existsSync(dockerfilePath) && shouldFallbackToSourceBuild(message);
+        if (!canFallback) {
+          throw error;
+        }
+        output.write("Dashboard image pull failed for this platform; falling back to source build.\n");
+        await buildFromSource();
+      }
+    }
+    return;
+  }
+  await buildFromSource();
+}
+
+function printHelp(): void {
+  output.write(`ICA Installer CLI\n\n`);
+  output.write(`Commands:\n`);
+  output.write(`  ica install\n`);
+  output.write(`  ica uninstall\n`);
+  output.write(`  ica sync\n`);
+  output.write(`  ica list\n`);
+  output.write(`  ica doctor\n`);
+  output.write(`  ica catalog\n\n`);
+  output.write(`  ica sources list\n`);
+  output.write(
+    `  ica sources add [--repo-url=<url> | --repo-path=<path>] [--name=<name>] [--id=<id>] [--transport=https|ssh] [--publish-default-mode=direct-push|branch-only|branch-pr] [--default-base-branch=<branch>] [--provider-hint=github|gitlab|bitbucket|unknown]\n`,
+  );
+  output.write(`  ica sources remove --id=<source-id>\n`);
+  output.write(
+    `  ica sources update --id=<source-id> [--name=<name>] [--repo-url=<url>] [--transport=https|ssh] [--skills-root=/skills] [--hooks-root=/hooks] [--enabled=true|false] [--publish-default-mode=direct-push|branch-only|branch-pr] [--default-base-branch=<branch>] [--provider-hint=github|gitlab|bitbucket|unknown] [--official-contribution-enabled=true|false]\n`,
+  );
+  output.write(`  ica sources auth --id=<source-id> [--token=<pat-or-api-key>]\n`);
+  output.write(`  ica sources refresh [--id=<source-id>]\n\n`);
+  output.write(`  ica skills validate --path=<local-skill-dir> --profile=personal|official\n`);
+  output.write(`  ica skills publish --source=<id> --path=<local-skill-dir> [--message="<commit>"] [--override-mode=direct-push|branch-only|branch-pr] [--override-base-branch=<branch>]\n`);
+  output.write(`  ica skills contribute-official --path=<local-skill-dir> [--source=<id>] [--message="<commit>"]\n\n`);
+  output.write(`  ica hooks list [--targets=claude,gemini] [--scope=user|project] [--project-path=/path]\n`);
+  output.write(`  ica hooks catalog [--json]\n`);
+  output.write(`  ica hooks install [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
+  output.write(`  ica hooks uninstall [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
+  output.write(`  ica hooks sync [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n\n`);
+  output.write(
+    `  ica serve [--host=127.0.0.1] [--ui-port=4173] [--open=true|false] [--api-port=4174] [--reuse-ports=true|false] [--image=ghcr.io/intelligentcode-ai/ica-installer-dashboard:main] [--build-image=auto|always|never]\n`,
+  );
+  output.write(`  ica launch (alias for serve; deprecated)\n\n`);
+  output.write(`  Note: repository registration is unified. Adding one source auto-registers both skills and hooks mirrors.\n\n`);
+  output.write(`Common flags:\n`);
+  output.write(`  --targets=claude,codex\n`);
+  output.write(`  --scope=user|project\n`);
+  output.write(`  --project-path=/path/to/repo (default: current directory when --scope=project)\n`);
+  output.write(`  --mode=symlink|copy\n`);
+  output.write(`  --skills=developer,architect,official-skills/reviewer\n`);
+  output.write(`  --remove-unselected\n`);
+  output.write(`  --agent-dir-name=.custom\n`);
+  output.write(`  --install-claude-integration=true|false\n`);
+  output.write(`  --config-file=path/to/ica.config.json\n`);
+  output.write(`  --mcp-config=path/to/mcps.json\n`);
+  output.write(`  --env-file=.env\n`);
+  output.write(`  --force\n`);
+  output.write(`  --yes\n`);
+  output.write(`  --json\n`);
+  output.write(`  --refresh (for catalog: force live source refresh)\n`);
+  output.write(`  --sources-refresh-minutes=60 (serve only; set 0 to disable periodic source refresh)\n`);
+}
+
+function resolveInstallerVersion(repoRoot: string): string {
+  const versionFile = path.join(repoRoot, "VERSION");
+  if (!fs.existsSync(versionFile)) {
+    return "0.0.0";
+  }
+  try {
+    const value = fs.readFileSync(versionFile, "utf8").trim();
+    return value || "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+async function maybePrintUpdateNotifier(repoRoot: string, options: Record<string, string | boolean>): Promise<void> {
+  if (boolOption(options, "json", false)) {
+    return;
+  }
+  const currentVersion = resolveInstallerVersion(repoRoot);
+  const update = await checkForAppUpdate(currentVersion);
+  if (!update.updateAvailable || !update.latestVersion) {
+    return;
+  }
+  const targetVersion = update.latestVersion.replace(/^v/i, "");
+  const link = update.latestReleaseUrl || "https://github.com/intelligentcode-ai/intelligent-code-agents/releases/latest";
+  output.write(`Update available: ICA ${targetVersion} (current ${currentVersion}). ${link}\n`);
+}
+
+async function refreshSourcesOnCliStart(): Promise<void> {
+  try {
+    const result = await refreshSourcesAndHooks({
+      credentials: createCredentialProvider(),
+      loadSources,
+      loadHookSources,
+      syncSource,
+      syncHookSource,
+    });
+    const errors = result.refreshed.flatMap((entry) => [entry.skills?.error, entry.hooks?.error]).filter((item): item is string => Boolean(item));
+    if (errors.length > 0) {
+      output.write(`Warning: startup source refresh completed with ${errors.length} error(s).\n`);
+    }
+  } catch (error) {
+    output.write(`Warning: startup source refresh failed: ${error instanceof Error ? error.message : String(error)}\n`);
+  }
 }
 
 function openBrowser(url: string): void {
   let command = "";
   let args: string[] = [];
-
   if (process.platform === "darwin") {
     command = "open";
     args = [url];
@@ -242,77 +738,9 @@ function openBrowser(url: string): void {
   }
 }
 
-function parseServePort(rawValue: string, flagName: string): number {
-  const parsed = Number(rawValue.trim());
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-    throw new Error(`Invalid --${flagName} value '${rawValue}'.`);
-  }
-  return parsed;
-}
-
-async function waitForDashboardReady(url: string, child: ReturnType<typeof spawn>, retries = 50): Promise<void> {
-  for (let attempt = 0; attempt < retries; attempt += 1) {
-    if (child.exitCode !== null) {
-      throw new Error(`Dashboard process exited before becoming ready (code ${child.exitCode}).`);
-    }
-    try {
-      const response = await fetch(url);
-      if (response.ok) return;
-    } catch {
-      // retry
-    }
-    await new Promise((resolve) => setTimeout(resolve, 150));
-  }
-  throw new Error(`Dashboard did not become ready in time at ${url}.`);
-}
-
-function printHelp(): void {
-  output.write(`ICA Installer CLI\n\n`);
-  output.write(`Commands:\n`);
-  output.write(`  ica install\n`);
-  output.write(`  ica uninstall\n`);
-  output.write(`  ica sync\n`);
-  output.write(`  ica list\n`);
-  output.write(`  ica doctor\n`);
-  output.write(`  ica catalog\n\n`);
-  output.write(`  ica sources list\n`);
-  output.write(`  ica sources add [--repo-url=<url> | --repo-path=<path>] [--name=<name>] [--id=<id>] [--transport=https|ssh]\n`);
-  output.write(`  ica sources remove --id=<source-id>\n`);
-  output.write(
-    `  ica sources update --id=<source-id> [--name=<name>] [--repo-url=<url>] [--transport=https|ssh] [--skills-root=/skills] [--hooks-root=/hooks] [--enabled=true|false] [--publish-default-mode=direct-push|branch-only|branch-pr] [--default-base-branch=main] [--provider-hint=github|gitlab|bitbucket|unknown]\n`,
-  );
-  output.write(`  ica sources auth --id=<source-id> [--token=<pat-or-api-key>]\n`);
-  output.write(`  ica sources refresh [--id=<source-id>]\n\n`);
-  output.write(`  ica skills validate --path=<local-skill-dir> [--profile=personal|official]\n`);
-  output.write(
-    `  ica skills publish --source=<source-id> --path=<local-skill-dir> [--message=<commit-message>] [--override-mode=direct-push|branch-only|branch-pr] [--override-base-branch=<branch>]\n`,
-  );
-  output.write(`  ica skills contribute-official --path=<local-skill-dir> [--source=<source-id>] [--message=<commit-message>]\n\n`);
-  output.write(`  ica hooks list [--targets=claude,gemini] [--scope=user|project] [--project-path=/path]\n`);
-  output.write(`  ica hooks catalog [--json]\n`);
-  output.write(`  ica hooks install [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
-  output.write(`  ica hooks uninstall [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
-  output.write(`  ica hooks sync [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n\n`);
-  output.write(`  ica serve [--host=127.0.0.1] [--ui-port=4173] [--open=true|false]\n`);
-  output.write(`  ica launch (alias for serve; deprecated)\n\n`);
-  output.write(`  Note: repository registration is unified. Adding one source auto-registers both skills and hooks mirrors.\n\n`);
-  output.write(`  ica container mount-project --project-path=<path> --confirm [--container-name=<name>] [--image=<image>] [--port=<host:container>] [--json]\n\n`);
-  output.write(`Common flags:\n`);
-  output.write(`  --targets=claude,codex\n`);
-  output.write(`  --scope=user|project\n`);
-  output.write(`  --project-path=/path/to/repo (default: current directory when --scope=project)\n`);
-  output.write(`  --mode=symlink|copy\n`);
-  output.write(`  --skills=developer,architect,official-skills/reviewer\n`);
-  output.write(`  --remove-unselected\n`);
-  output.write(`  --agent-dir-name=.custom\n`);
-  output.write(`  --install-claude-integration=true|false\n`);
-  output.write(`  --config-file=path/to/ica.config.json\n`);
-  output.write(`  --mcp-config=path/to/mcps.json\n`);
-  output.write(`  --env-file=.env\n`);
-  output.write(`  --force\n`);
-  output.write(`  --yes\n`);
-  output.write(`  --json\n`);
-  output.write(`  --refresh (for catalog: force live source refresh)\n`);
+function isLoopbackHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase();
+  return normalized === "127.0.0.1" || normalized === "localhost";
 }
 
 async function promptInteractive(command: OperationKind, options: Record<string, string | boolean>): Promise<InstallRequest> {
@@ -475,7 +903,8 @@ async function runDoctor(options: Record<string, string | boolean>): Promise<voi
 
 async function runCatalog(options: Record<string, string | boolean>): Promise<void> {
   const repoRoot = findRepoRoot(__dirname);
-  const catalog = await loadCatalogFromSources(repoRoot, false);
+  const refresh = boolOption(options, "refresh", false);
+  const catalog = await loadCatalogFromSources(repoRoot, refresh);
   if (boolOption(options, "json", false)) {
     output.write(`${JSON.stringify(catalog, null, 2)}\n`);
     return;
@@ -483,6 +912,21 @@ async function runCatalog(options: Record<string, string | boolean>): Promise<vo
 
   output.write(`Catalog version: ${catalog.version}\n`);
   output.write(`Generated at: ${catalog.generatedAt}\n`);
+  output.write(`Source: ${catalog.catalogSource || "live"}\n`);
+  if (catalog.stale) {
+    output.write(`Stale: yes\n`);
+    if (catalog.staleReason) {
+      output.write(`Reason: ${catalog.staleReason}\n`);
+    }
+  } else {
+    output.write(`Stale: no\n`);
+  }
+  if (typeof catalog.cacheAgeSeconds === "number") {
+    output.write(`Cache age: ${catalog.cacheAgeSeconds}s\n`);
+  }
+  if (catalog.nextRefreshAt) {
+    output.write(`Next refresh: ${catalog.nextRefreshAt}\n`);
+  }
   for (const skill of catalog.skills) {
     output.write(`- ${skill.skillId} [${skill.category}]\n`);
     output.write(`  ${skill.description}\n`);
@@ -536,10 +980,6 @@ async function runSources(positionals: string[], options: Record<string, string 
       repoUrl: string;
       transport: "https" | "ssh";
       name: string;
-      publishDefaultMode?: PublishMode;
-      defaultBaseBranch?: string;
-      providerHint?: "github" | "gitlab" | "bitbucket" | "unknown";
-      officialContributionEnabled?: boolean;
       skills?: Awaited<ReturnType<typeof loadSources>>[number];
       hooks?: Awaited<ReturnType<typeof loadHookSources>>[number];
     }>
@@ -553,10 +993,6 @@ async function runSources(positionals: string[], options: Record<string, string 
         repoUrl: string;
         transport: "https" | "ssh";
         name: string;
-        publishDefaultMode?: PublishMode;
-        defaultBaseBranch?: string;
-        providerHint?: "github" | "gitlab" | "bitbucket" | "unknown";
-        officialContributionEnabled?: boolean;
         skills?: Awaited<ReturnType<typeof loadSources>>[number];
         hooks?: Awaited<ReturnType<typeof loadHookSources>>[number];
       }
@@ -573,10 +1009,6 @@ async function runSources(positionals: string[], options: Record<string, string 
         repoUrl: source.repoUrl,
         transport: source.transport,
         name: source.name,
-        publishDefaultMode: source.publishDefaultMode,
-        defaultBaseBranch: source.defaultBaseBranch,
-        providerHint: source.providerHint,
-        officialContributionEnabled: source.officialContributionEnabled,
         skills: source,
       });
     }
@@ -591,10 +1023,6 @@ async function runSources(positionals: string[], options: Record<string, string 
         repoUrl: source.repoUrl,
         transport: source.transport,
         name: source.name,
-        publishDefaultMode: byId.get(source.id)?.publishDefaultMode,
-        defaultBaseBranch: byId.get(source.id)?.defaultBaseBranch,
-        providerHint: byId.get(source.id)?.providerHint,
-        officialContributionEnabled: byId.get(source.id)?.officialContributionEnabled,
         hooks: source,
       });
     }
@@ -614,9 +1042,9 @@ async function runSources(positionals: string[], options: Record<string, string 
       output.write(`  repo: ${repo.repoUrl}\n`);
       if (repo.skills) {
         output.write(`  skillsRoot: ${repo.skills.skillsRoot}\n`);
-        output.write(`  publishDefaultMode: ${repo.skills.publishDefaultMode}\n`);
-        output.write(`  defaultBaseBranch: ${repo.skills.defaultBaseBranch || "(default)"}\n`);
-        output.write(`  providerHint: ${repo.skills.providerHint}\n`);
+        output.write(
+          `  publish: ${repo.skills.publishDefaultMode} (base=${repo.skills.defaultBaseBranch || (repo.skills.official ? "dev" : "main")}, provider=${repo.skills.providerHint})\n`,
+        );
         output.write(`  officialContributionEnabled: ${repo.skills.officialContributionEnabled ? "true" : "false"}\n`);
         output.write(`  skillsSynced: ${repo.skills.lastSyncAt || "(never)"}\n`);
         if (repo.skills.lastError) output.write(`  skillsError: ${repo.skills.lastError}\n`);
@@ -646,13 +1074,10 @@ async function runSources(positionals: string[], options: Record<string, string 
         repoUrl,
         transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
         skillsRoot: stringOption(options, "skills-root", "") || undefined,
-        publishDefaultMode: (stringOption(options, "publish-default-mode", "") as PublishMode) || undefined,
+        publishDefaultMode: parsePublishModeOption(options, "publish-default-mode"),
         defaultBaseBranch: stringOption(options, "default-base-branch", "") || undefined,
-        providerHint: (stringOption(options, "provider-hint", "") as "github" | "gitlab" | "bitbucket" | "unknown") || undefined,
-        officialContributionEnabled:
-          options["official-contribution-enabled"] !== undefined
-            ? boolOption(options, "official-contribution-enabled", false)
-            : undefined,
+        providerHint: parseProviderHintOption(options, "provider-hint"),
+        officialContributionEnabled: parseOptionalBooleanOption(options, "official-contribution-enabled"),
         hooksRoot: stringOption(options, "hooks-root", "") || undefined,
         enabled: !stringOption(options, "enabled", "true").toLowerCase().startsWith("f"),
         removable: true,
@@ -722,13 +1147,10 @@ async function runSources(positionals: string[], options: Record<string, string 
       repoUrl,
       transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
       skillsRoot: stringOption(options, "skills-root", "") || undefined,
-      publishDefaultMode: (stringOption(options, "publish-default-mode", "") as PublishMode) || undefined,
+      publishDefaultMode: parsePublishModeOption(options, "publish-default-mode"),
       defaultBaseBranch: stringOption(options, "default-base-branch", "") || undefined,
-      providerHint: (stringOption(options, "provider-hint", "") as "github" | "gitlab" | "bitbucket" | "unknown") || undefined,
-      officialContributionEnabled:
-        options["official-contribution-enabled"] !== undefined
-          ? boolOption(options, "official-contribution-enabled", false)
-          : undefined,
+      providerHint: parseProviderHintOption(options, "provider-hint"),
+      officialContributionEnabled: parseOptionalBooleanOption(options, "official-contribution-enabled"),
       enabled:
         options.enabled !== undefined
           ? !stringOption(options, "enabled", "true").toLowerCase().startsWith("f")
@@ -805,49 +1227,109 @@ async function runSources(positionals: string[], options: Record<string, string 
 
   if (action === "refresh") {
     const sourceId = stringOption(options, "id", "").trim();
-    const repositories = await loadRepositoryRows();
-    const targets = sourceId
-      ? repositories.filter((repo) => repo.id === sourceId)
-      : repositories.filter((repo) => repo.skills?.enabled !== false || repo.hooks?.enabled !== false);
-    if (targets.length === 0) {
+    const result = await refreshSourcesAndHooks(
+      {
+        credentials: credentialProvider,
+        loadSources,
+        loadHookSources,
+        syncSource,
+        syncHookSource,
+      },
+      { sourceId, onlyEnabled: true },
+    );
+    if (!result.matched) {
       throw new Error(sourceId ? `Unknown source '${sourceId}'` : "No enabled sources found.");
     }
-
-    const refreshed: Array<{
-      id: string;
-      skills?: { revision?: string; localPath?: string; error?: string };
-      hooks?: { revision?: string; localPath?: string; error?: string };
-    }> = [];
-    for (const repo of targets) {
-      const item: {
-        id: string;
-        skills?: { revision?: string; localPath?: string; error?: string };
-        hooks?: { revision?: string; localPath?: string; error?: string };
-      } = { id: repo.id };
-
-      if (repo.skills) {
-        try {
-          const result = await syncSource(repo.skills, credentialProvider);
-          item.skills = { revision: result.revision, localPath: result.localPath };
-        } catch (error) {
-          item.skills = { error: error instanceof Error ? error.message : String(error) };
-        }
-      }
-      if (repo.hooks) {
-        try {
-          const result = await syncHookSource(repo.hooks, credentialProvider);
-          item.hooks = { revision: result.revision, localPath: result.localPath };
-        } catch (error) {
-          item.hooks = { error: error instanceof Error ? error.message : String(error) };
-        }
-      }
-      refreshed.push(item);
-    }
+    const refreshed = result.refreshed.map((item) => ({
+      id: item.sourceId,
+      skills: item.skills,
+      hooks: item.hooks,
+    }));
     output.write(json ? `${JSON.stringify(refreshed, null, 2)}\n` : `Refreshed ${refreshed.length} repositories.\n`);
     return;
   }
 
   throw new Error(`Unknown sources action '${action}'. Supported: list|add|remove|update|auth|refresh`);
+}
+
+async function runSkills(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
+  const action = (positionals[0] || "help").toLowerCase();
+  const json = boolOption(options, "json", false);
+  const credentials = createCredentialProvider();
+
+  if (action === "help" || action === "") {
+    output.write("Skills commands: validate|publish|contribute-official\n");
+    output.write("Use `ica help` to see full skills command syntax.\n");
+    return;
+  }
+
+  if (action === "validate") {
+    const skillPath = stringOption(options, "path", "").trim();
+    if (!skillPath) {
+      throw new Error("Missing required option --path");
+    }
+    const profile = parseValidationProfileOption(options, "profile");
+    const result = await validateSkillBundle({ localPath: path.resolve(skillPath) }, profile);
+    if (json) {
+      output.write(`${JSON.stringify(result, null, 2)}\n`);
+    } else {
+      printValidationResult(result);
+    }
+    if (result.errors.length > 0) {
+      throw new Error(`Validation failed with ${result.errors.length} error(s).`);
+    }
+    return;
+  }
+
+  if (action === "publish") {
+    const sourceId = stringOption(options, "source", "").trim();
+    if (!sourceId) {
+      throw new Error("Missing required option --source");
+    }
+    const skillPath = stringOption(options, "path", "").trim();
+    if (!skillPath) {
+      throw new Error("Missing required option --path");
+    }
+    const result = await publishSkillBundle(
+      {
+        sourceId,
+        bundle: { localPath: path.resolve(skillPath) },
+        commitMessage: stringOption(options, "message", "").trim() || undefined,
+        overrideMode: parsePublishModeOption(options, "override-mode"),
+        overrideBaseBranch: stringOption(options, "override-base-branch", "").trim() || undefined,
+      },
+      credentials,
+    );
+    if (json) {
+      output.write(`${JSON.stringify(result, null, 2)}\n`);
+    } else {
+      printPublishResult(result);
+    }
+    return;
+  }
+
+  if (action === "contribute-official") {
+    const skillPath = stringOption(options, "path", "").trim();
+    if (!skillPath) {
+      throw new Error("Missing required option --path");
+    }
+    const result = await contributeOfficialSkillBundle(
+      {
+        sourceId: stringOption(options, "source", "").trim() || undefined,
+        bundle: { localPath: path.resolve(skillPath) },
+        commitMessage: stringOption(options, "message", "").trim() || undefined,
+      },
+      credentials,
+    );
+    if (json) {
+      output.write(`${JSON.stringify(result, null, 2)}\n`);
+    } else {
+      printPublishResult(result);
+    }
+    return;
+  }
+
+  throw new Error(`Unknown skills action '${action}'. Supported: validate|publish|contribute-official`);
 }
 
 async function runHooks(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
@@ -963,201 +1445,220 @@ async function runHooks(positionals: string[], options: Record<string, string | 
 async function runServe(options: Record<string, string | boolean>): Promise<void> {
   const repoRoot = findRepoRoot(__dirname);
   const host = stringOption(options, "host", "127.0.0.1").trim() || "127.0.0.1";
-  const uiPort = parseServePort(stringOption(options, "ui-port", stringOption(options, "port", "4173")), "ui-port");
-
-  const apiPortRaw = stringOption(options, "api-port", "").trim();
-  if (apiPortRaw) {
-    output.write("Notice: --api-port is ignored by the local dashboard server.\n");
+  if (!isLoopbackHost(host)) {
+    throw new Error(`Refusing non-loopback host '${host}'. The ICA API is localhost-only.`);
   }
-  if (options["image"] !== undefined || options["build-image"] !== undefined) {
-    output.write("Notice: --image/--build-image are ignored in local serve mode.\n");
+  const uiPortInput = Number(stringOption(options, "ui-port", stringOption(options, "port", "4173")).trim() || "4173");
+  const apiPortInput = Number(stringOption(options, "api-port", "4174").trim() || "4174");
+  if (!Number.isInteger(uiPortInput) || uiPortInput <= 0) {
+    throw new Error("Invalid --ui-port value.");
+  }
+  if (!Number.isInteger(apiPortInput) || apiPortInput <= 0) {
+    throw new Error("Invalid --api-port value.");
+  }
+  const uiPortExplicit = options["ui-port"] !== undefined || options.port !== undefined;
+  const apiPortExplicit = options["api-port"] !== undefined;
+  const reusePorts = parseServeReusePorts(stringOption(options, "reuse-ports", process.env.ICA_REUSE_PORTS || "true"));
+  if (uiPortInput === apiPortInput) {
+    throw new Error("API and UI ports must be different. Choose distinct --api-port and --ui-port values.");
+  }
+  const containerName = stringOption(options, "container-name", process.env.ICA_DASHBOARD_CONTAINER_NAME || "ica-dashboard");
+  const image = stringOption(options, "image", process.env.ICA_DASHBOARD_IMAGE || DEFAULT_DASHBOARD_IMAGE);
+  const buildMode = parseServeImageBuildMode(stringOption(options, "build-image", process.env.ICA_DASHBOARD_BUILD_IMAGE || "auto"));
+  const sourcesRefreshMinutes = parseServeRefreshMinutes(
+    stringOption(options, "sources-refresh-minutes", process.env.ICA_SOURCE_REFRESH_INTERVAL_MINUTES || "60"),
+  );
+  if (!(await commandExists("docker"))) {
+    throw new Error("Docker CLI is not available.");
+  }
+  if (await dockerInspect(containerName)) {
+    await execFileAsync("docker", ["rm", "-f", containerName], { maxBuffer: 8 * 1024 * 1024 });
   }
 
-  const dashboardScript = path.join(repoRoot, "dist", "src", "installer-dashboard", "server", "index.js");
-  if (!fs.existsSync(dashboardScript)) {
-    throw new Error("Dashboard server is not built. Run: npm run build");
+  let apiPort = apiPortInput;
+  let uiPort = uiPortInput;
+  let uiContainerPort = 0;
+  if (reusePorts) {
+    await reclaimLoopbackPort(apiPort, "api-port");
+    await reclaimLoopbackPort(uiPort, "ui-port");
+  } else {
+    apiPort = await allocateLoopbackPort({
+      preferredPort: apiPortInput,
+      explicit: apiPortExplicit,
+      flagName: "api-port",
+    });
+    uiPort = await allocateLoopbackPort({
+      preferredPort: uiPortInput,
+      explicit: uiPortExplicit,
+      flagName: "ui-port",
+      blockedPorts: new Set([apiPort]),
+    });
+  }
+  const preferredInternalUiPort = Math.max(uiPort, apiPort) + 1;
+  if (reusePorts) {
+    uiContainerPort = preferredInternalUiPort;
+    await reclaimDockerPublishedPort(uiContainerPort, containerName);
+    if (!(await isLoopbackPortAvailable(uiContainerPort))) {
+      throw new Error(
+        `Requested internal dashboard port ${uiContainerPort} is in use by another process. Choose a different --ui-port.`,
+      );
+    }
+  } else {
+    uiContainerPort = await allocateLoopbackPort({
+      preferredPort: preferredInternalUiPort,
+      explicit: false,
+      flagName: "ui-port",
+      blockedPorts: new Set([apiPort, uiPort]),
+    });
   }
 
-  const dashboardUrl = `http://${host}:${uiPort}`;
-  const child = spawn(process.execPath, [dashboardScript], {
-    cwd: repoRoot,
-    env: {
-      ...process.env,
-      ICA_DASHBOARD_HOST: host,
-      ICA_DASHBOARD_PORT: String(uiPort),
-    },
-    stdio: "inherit",
+  const apiScript = path.join(repoRoot, "dist", "src", "installer-api", "server", "index.js");
+  const bffScript = path.join(repoRoot, "dist", "src", "installer-bff", "server", "index.js");
+  if (!fs.existsSync(apiScript)) {
+    throw new Error("ICA API runtime is not built. Run: npm run build");
+  }
+  if (!fs.existsSync(bffScript)) {
+    throw new Error("ICA dashboard BFF runtime is not built. Run: npm run build");
+  }
+  const apiKey = crypto.randomBytes(24).toString("hex");
+  const hostForUrl = host.includes(":") ? `[${host}]` : host;
+  const apiBaseUrl = `http://${hostForUrl}:${apiPort}`;
+  const staticOrigin = `http://${hostForUrl}:${uiContainerPort}`;
+  const dashboardUrl = `http://${hostForUrl}:${uiPort}`;
+  const open = boolOption(options, "open", false);
+
+  await ensureDashboardImage({
+    repoRoot,
+    image,
+    mode: buildMode,
+    defaultImage: DEFAULT_DASHBOARD_IMAGE,
   });
 
-  const onSigint = () => child.kill("SIGINT");
-  const onSigterm = () => child.kill("SIGTERM");
-  process.on("SIGINT", onSigint);
-  process.on("SIGTERM", onSigterm);
+  const apiProcess = spawn(process.execPath, [apiScript], {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      ICA_API_HOST: "127.0.0.1",
+      ICA_API_PORT: String(apiPort),
+      ICA_API_KEY: apiKey,
+      ICA_UI_PORT: String(uiPort),
+      ICA_SOURCE_REFRESH_INTERVAL_MINUTES: String(sourcesRefreshMinutes),
+    },
+  });
+  let shutdownRequested = false;
+  let containerStarted = false;
+  let bffStarted = false;
+  let apiProcessError: Error | null = null;
+  let bffProcessError: Error | null = null;
+  apiProcess.once("error", (error) => {
+    apiProcessError = error;
+    shutdownRequested = true;
+  });
+  const bffProcess = spawn(process.execPath, [bffScript], {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      ICA_BFF_HOST: "127.0.0.1",
+      ICA_BFF_PORT: String(uiPort),
+      ICA_BFF_STATIC_ORIGIN: `http://127.0.0.1:${uiContainerPort}`,
+      ICA_BFF_API_ORIGIN: `http://127.0.0.1:${apiPort}`,
+      ICA_BFF_API_KEY: apiKey,
+    },
+  });
+  bffProcess.once("error", (error) => {
+    bffProcessError = error;
+    shutdownRequested = true;
+  });
+
+  const shutdown = async (): Promise<void> => {
+    if (!shutdownRequested) {
+      shutdownRequested = true;
+    }
+    if (containerStarted) {
+      try {
+        await execFileAsync("docker", ["rm", "-f", containerName], { maxBuffer: 8 * 1024 * 1024 });
+      } catch {
+        // ignore cleanup failure
+      }
+    }
+    if (apiProcess.exitCode === null && !apiProcess.killed) {
+      apiProcess.kill("SIGTERM");
+    }
+    if (bffProcess.exitCode === null && !bffProcess.killed) {
+      bffProcess.kill("SIGTERM");
+    }
+  };
 
   try {
-    await waitForDashboardReady(dashboardUrl, child);
-    output.write(`Dashboard ready: ${dashboardUrl}\n`);
-    if (boolOption(options, "open", false)) {
+    await waitForApiReady(apiPort, apiKey);
+    const runArgs = toDockerRunArgs({
+      containerName,
+      image,
+      ports: [`127.0.0.1:${uiContainerPort}:80`],
+    });
+    const dockerRunResult = await execFileAsync("docker", runArgs, { maxBuffer: 8 * 1024 * 1024 });
+    containerStarted = true;
+    await waitForHttpReady(`http://127.0.0.1:${uiContainerPort}/`);
+    await waitForHttpReady(`http://127.0.0.1:${uiPort}/health`);
+    bffStarted = true;
+
+    output.write(`ICA dashboard listening at ${dashboardUrl}\n`);
+    output.write(`Dashboard proxy: http://${hostForUrl}:${uiPort} -> ${staticOrigin} + ${apiBaseUrl}\n`);
+    output.write(`Container: ${containerName} (${(dockerRunResult.stdout || "").trim()})\n`);
+    output.write(
+      sourcesRefreshMinutes > 0
+        ? `Source auto-refresh: every ${sourcesRefreshMinutes} minute(s)\n`
+        : "Source auto-refresh: disabled\n",
+    );
+    if (open) {
       openBrowser(dashboardUrl);
     }
 
-    await new Promise<void>((resolve, reject) => {
-      child.once("error", reject);
-      child.once("exit", (code) => {
-        if (code === 0 || code === null) {
-          resolve();
-          return;
-        }
-        reject(new Error(`Dashboard exited with code ${code}.`));
-      });
-    });
-  } finally {
-    process.off("SIGINT", onSigint);
-    process.off("SIGTERM", onSigterm);
+    const requestShutdown = (): void => {
+      shutdownRequested = true;
+    };
+    process.once("SIGINT", requestShutdown);
+    process.once("SIGTERM", requestShutdown);
+
+    while (!shutdownRequested) {
+      if (apiProcess.exitCode !== null) {
+        throw new Error(`ICA API process exited with code ${apiProcess.exitCode}`);
+      }
+      if (bffProcess.exitCode !== null) {
+        throw new Error(`ICA dashboard BFF process exited with code ${bffProcess.exitCode}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    if (apiProcessError) {
+      throw apiProcessError;
+    }
+    if (bffProcessError) {
+      throw bffProcessError;
+    }
+    if (!bffStarted) {
+      throw new Error("ICA dashboard BFF did not start correctly.");
+    }
+    await shutdown();
+  } catch (error) {
+    await shutdown();
+    throw error;
   }
 }
 
-async function runContainer(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
-  const action = (positionals[0] || "mount-project").toLowerCase();
-  if (action !== "mount-project") {
-    throw new Error(`Unknown container action '${action}'. Supported: mount-project`);
-  }
-  const projectPath = stringOption(options, "project-path", "").trim();
-  if (!projectPath) {
-    throw new Error("Missing required option --project-path");
-  }
-  if (!boolOption(options, "confirm", false)) {
-    throw new Error("Container mount requires --confirm");
-  }
-
-  const repoRoot = findRepoRoot(__dirname);
-  await ensureHelperRunning(repoRoot);
-  const payload = await helperRequest("/container/mount-project", {
-    projectPath,
-    containerName: stringOption(options, "container-name", "") || undefined,
-    image: stringOption(options, "image", "") || undefined,
-    port: stringOption(options, "port", "") || undefined,
-    confirm: true,
-  });
-  if (boolOption(options, "json", false)) {
-    output.write(`${JSON.stringify(payload, null, 2)}\n`);
-    return;
-  }
-  output.write(`Mounted project path '${projectPath}' into container '${String(payload.containerName || "")}'.\n`);
-  if (payload.command) {
-    output.write(`Command: ${String(payload.command)}\n`);
-  }
-}
-
-async function runSkills(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
-  const action = (positionals[0] || "validate").toLowerCase();
-  const json = boolOption(options, "json", false);
-  const credentials = createCredentialProvider();
-
-  if (action === "validate") {
-    const skillPath = stringOption(options, "path", "").trim();
-    if (!skillPath) {
-      throw new Error("Missing required option --path");
-    }
-    const profile = (stringOption(options, "profile", "personal").trim() || "personal") as ValidationProfile;
-    if (profile !== "personal" && profile !== "official") {
-      throw new Error("Invalid --profile. Supported: personal|official");
-    }
-
-    const result = await validateSkillBundle({ localPath: skillPath }, profile);
-    if (json) {
-      output.write(`${JSON.stringify(result, null, 2)}\n`);
-      return;
-    }
-    output.write(`Profile: ${result.profile}\n`);
-    output.write(`Detected files: ${result.detectedFiles.length}\n`);
-    if (result.warnings.length > 0) {
-      output.write(`Warnings:\n`);
-      for (const warning of result.warnings) {
-        output.write(`  - ${warning}\n`);
-      }
-    }
-    if (result.errors.length > 0) {
-      output.write(`Errors:\n`);
-      for (const err of result.errors) {
-        output.write(`  - ${err}\n`);
-      }
-      throw new Error("Validation failed.");
-    }
-    output.write(`Validation passed.\n`);
-    return;
-  }
-
-  if (action === "publish") {
-    const sourceId = stringOption(options, "source", stringOption(options, "id", "")).trim();
-    const skillPath = stringOption(options, "path", "").trim();
-    const overrideMode = stringOption(options, "override-mode", "").trim();
-    const overrideBaseBranch = stringOption(options, "override-base-branch", "").trim();
-    if (!sourceId) throw new Error("Missing required option --source");
-    if (!skillPath) throw new Error("Missing required option --path");
-    if (overrideMode && overrideMode !== "direct-push" && overrideMode !== "branch-only" && overrideMode !== "branch-pr") {
-      throw new Error("Invalid --override-mode. Supported: direct-push|branch-only|branch-pr");
-    }
-
-    const result = await publishSkillBundle(
-      {
-        sourceId,
-        bundle: {
-          localPath: skillPath,
-          skillName: stringOption(options, "skill-name", "").trim() || undefined,
-        },
-        commitMessage: stringOption(options, "message", "").trim() || undefined,
-        overrideMode: overrideMode ? (overrideMode as PublishMode) : undefined,
-        overrideBaseBranch: overrideBaseBranch || undefined,
-      },
-      credentials,
-    );
-    if (json) {
-      output.write(`${JSON.stringify(result, null, 2)}\n`);
-      return;
-    }
-    output.write(`Published using mode '${result.mode}'.\n`);
-    output.write(`Branch: ${result.branch}\n`);
-    output.write(`Commit: ${result.commitSha}\n`);
-    output.write(`Pushed remote: ${result.pushedRemote}\n`);
-    if (result.prUrl) output.write(`PR: ${result.prUrl}\n`);
-    if (result.compareUrl) output.write(`Compare: ${result.compareUrl}\n`);
-    return;
-  }
-
-  if (action === "contribute-official") {
-    const skillPath = stringOption(options, "path", "").trim();
-    if (!skillPath) throw new Error("Missing required option --path");
-    const result = await contributeOfficialSkillBundle(
-      {
-        sourceId: stringOption(options, "source", "").trim() || undefined,
-        bundle: {
-          localPath: skillPath,
-          skillName: stringOption(options, "skill-name", "").trim() || undefined,
-        },
-        commitMessage: stringOption(options, "message", "").trim() || undefined,
-      },
-      credentials,
-    );
-    if (json) {
-      output.write(`${JSON.stringify(result, null, 2)}\n`);
-      return;
-    }
-    output.write(`Official contribution prepared.\n`);
-    output.write(`Branch: ${result.branch}\n`);
-    output.write(`Commit: ${result.commitSha}\n`);
-    output.write(`Pushed remote: ${result.pushedRemote}\n`);
-    if (result.prUrl) output.write(`PR: ${result.prUrl}\n`);
-    if (result.compareUrl) output.write(`Compare: ${result.compareUrl}\n`);
-    return;
-  }
-
-  throw new Error(`Unknown skills action '${action}'. Supported: validate|publish|contribute-official`);
+async function runLaunch(options: Record<string, string | boolean>): Promise<void> {
+  output.write("Deprecation notice: `ica launch` is now an alias of `ica serve` and will be removed in a future release.\n");
+  await runServe(options);
 }
 
 async function main(): Promise<void> {
   const { command, options, positionals } = parseArgv(process.argv.slice(2));
   const normalized = command.toLowerCase();
+  const repoRoot = findRepoRoot(__dirname);
+
+  if (normalized !== "help") {
+    await refreshSourcesOnCliStart();
+    await maybePrintUpdateNotifier(repoRoot, options);
+  }
 
   if (["install", "uninstall", "sync"].includes(normalized)) {
     await runOperation(normalized as OperationKind, options);
@@ -1184,13 +1685,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (normalized === "hooks") {
-    await runHooks(positionals, options);
+  if (normalized === "skills") {
+    await runSkills(positionals, options);
     return;
   }
 
-  if (normalized === "skills") {
-    await runSkills(positionals, options);
+  if (normalized === "hooks") {
+    await runHooks(positionals, options);
     return;
   }
 
@@ -1200,26 +1701,17 @@ async function main(): Promise<void> {
   }
 
   if (normalized === "launch") {
-    output.write("Deprecation notice: `ica launch` is now an alias of `ica serve` and will be removed in a future release.\n");
-    await runServe(options);
-    return;
-  }
-
-  if (normalized === "container") {
-    await runContainer(positionals, options);
+    await runLaunch(options);
     return;
   }
 
   printHelp();
 }
 
-main().catch((error) => {
-  process.stderr.write(`ICA CLI failed: ${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 1;
-});
-
-process.on("exit", () => {
-  if (helperProcess && !helperProcess.killed) {
-    helperProcess.kill();
-  }
-});
+if (require.main === module) {
+  main().catch((error) => {
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`ICA CLI failed: ${redactCliErrorMessage(rawMessage)}\n`);
+    process.exitCode = 1;
+  });
+}
