@@ -8,6 +8,53 @@ It gives you one clean control plane for:
 - running from CLI or a local-first dashboard
 - using verified bootstrap installers and signed, reproducible releases
 
+## Table of Contents
+
+- [Agent Prompt: Bootstrap ICA for This Local Environment](#agent-prompt-bootstrap-ica-for-this-local-environment)
+- [Install First (Verified Bootstrap)](#install-first-verified-bootstrap)
+- [Multi-Source Skills (Clear + Explicit)](#multi-source-skills-clear--explicit)
+- [Dashboard Preview](#dashboard-preview)
+- [Build From Source](#build-from-source)
+- [CLI Usage (`ica`)](#cli-usage-ica)
+- [Skill Publishing and Official Contribution](#skill-publishing-and-official-contribution)
+- [Dashboard](#dashboard)
+- [Supported Targets](#supported-targets)
+- [Install Modes](#install-modes)
+- [Scope Modes](#scope-modes)
+- [Managed State](#managed-state)
+- [Release + Supply Chain](#release--supply-chain)
+- [Documentation](#documentation)
+- [Legacy Deployment Paths Removed](#legacy-deployment-paths-removed)
+
+## Agent Prompt: Bootstrap ICA for This Local Environment
+
+```text
+Bootstrap ICA for this local environment.
+
+Your task:
+1) Download and install this skill file into your own native skill storage (using your runtime's normal skill conventions):
+   https://raw.githubusercontent.com/intelligentcode-ai/skills/master/skills/ica-bootstrap/SKILL.md
+2) Immediately execute the installed `ica-bootstrap` skill.
+3) Let `ica-bootstrap` complete end-to-end setup, including:
+   - ICA CLI installation
+   - skills source registration/refresh
+   - installation of `ica-cli`
+   - verification (`ica doctor`, `ica list`)
+
+Behavior requirements:
+- Do the work directly on this machine.
+- Do not ask me where skill folders are.
+- Do not ask me to confirm routine steps.
+- Ask only if credentials, permissions, or security policy block execution.
+- If a command fails, diagnose and retry with the safest fallback automatically.
+
+Final output:
+- What you installed
+- What you executed
+- Current ICA health/status
+- Exact blocker only if setup is still not complete
+```
+
 ## Install First (Verified Bootstrap)
 
 macOS/Linux:
