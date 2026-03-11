@@ -11,8 +11,8 @@ import {
   removeHookSource as removeHookSourceRecord,
   updateHookSource as updateHookSourceRecord,
 } from "./hookSources";
+import { inspectInstallations } from "./installations";
 import { loadHookInstallState } from "./hookState";
-import { loadInstallState } from "./state";
 import { resolveTargetPaths } from "./targets";
 import { checkForAppUpdate } from "./updateCheck";
 import { redactSensitive } from "./security";
@@ -65,7 +65,16 @@ export interface InstallationRow {
   projectPath?: string;
   installed: boolean;
   managedSkills: InstallationSkillView[];
+  managedWorkflows: InstallationWorkflowView[];
   updatedAt?: string;
+}
+
+export interface InstallationWorkflowView {
+  name: string;
+  skillId?: string;
+  sourceId?: string;
+  installMode: string;
+  effectiveMode: string;
 }
 
 export interface HookInstallationRow {
@@ -344,41 +353,7 @@ export function createInstallerApplicationService(
     async listInstallations(input) {
       const resolved = resolveTargetPaths(normalizeTargetRows(input.targets), input.scope, input.projectPath, input.agentDirName);
       const catalog = await deps.loadCatalogFromSources(options.repoRoot, false);
-      const catalogSkillNames = new Set(catalog.skills.map((skill) => skill.skillName));
-      const activeSourceIds = new Set(catalog.sources.map((source) => source.id));
-
-      const installations = await Promise.all(
-        resolved.map(async (entry) => {
-          const state = await loadInstallState(entry.installPath);
-          const managedSkills: InstallationSkillView[] =
-            state?.managedSkills.map((skill) => ({
-              name: skill.name,
-              skillId: skill.skillId,
-              sourceId: skill.sourceId,
-              installMode: skill.installMode,
-              effectiveMode: skill.effectiveMode,
-              orphaned: skill.orphaned || (skill.sourceId ? !activeSourceIds.has(skill.sourceId) : false),
-            })) || [];
-          const skillsByName = new Map(managedSkills.map((skill) => [skill.name, skill]));
-          for (const skill of detectLegacyInstalledSkills(entry.installPath, catalogSkillNames)) {
-            if (!skillsByName.has(skill.name)) {
-              skillsByName.set(skill.name, skill);
-            }
-          }
-
-          return {
-            target: entry.target,
-            installPath: entry.installPath,
-            scope: entry.scope,
-            projectPath: entry.projectPath,
-            installed: Boolean(state) || skillsByName.size > 0,
-            managedSkills: Array.from(skillsByName.values()).sort((a, b) => a.name.localeCompare(b.name)),
-            updatedAt: state?.updatedAt,
-          };
-        }),
-      );
-
-      return { installations };
+      return { installations: await inspectInstallations(resolved, catalog) };
     },
 
     async listHookInstallations(input) {

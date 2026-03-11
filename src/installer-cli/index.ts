@@ -848,6 +848,7 @@ async function runList(options: Record<string, string | boolean>): Promise<void>
     target: row.target,
     installPath: row.installPath,
     managedSkills: row.managedSkills.map((skill) => skill.skillId || skill.name),
+    managedWorkflows: row.managedWorkflows.map((workflow) => workflow.name),
     updatedAt: row.updatedAt,
   }));
 
@@ -859,6 +860,7 @@ async function runList(options: Record<string, string | boolean>): Promise<void>
   for (const row of rows) {
     output.write(`${row.target}: ${row.installPath}\n`);
     output.write(`  Skills: ${row.managedSkills.length > 0 ? row.managedSkills.join(", ") : "(none)"}\n`);
+    output.write(`  Workflows: ${row.managedWorkflows.length > 0 ? row.managedWorkflows.join(", ") : "(none)"}\n`);
     if (row.updatedAt) {
       output.write(`  Updated: ${row.updatedAt}\n`);
     }
@@ -945,7 +947,9 @@ async function runOperation(command: OperationKind, options: Record<string, stri
   for (const target of report.targets) {
     output.write(`\n[${target.target}] ${target.operation} -> ${target.installPath}\n`);
     output.write(`  applied: ${target.appliedSkills.join(", ") || "(none)"}\n`);
+    output.write(`  applied workflows: ${target.appliedWorkflows.join(", ") || "(none)"}\n`);
     output.write(`  removed: ${target.removedSkills.join(", ") || "(none)"}\n`);
+    output.write(`  removed workflows: ${target.removedWorkflows.join(", ") || "(none)"}\n`);
     output.write(`  skipped: ${target.skippedSkills.join(", ") || "(none)"}\n`);
 
     if (target.warnings.length > 0) {

@@ -28,15 +28,6 @@ import {
 } from "./plugins";
 import { dashboardServerPluginRegistry } from "./pluginRegistry";
 
-interface InstallationSkillView {
-  name: string;
-  skillId?: string;
-  sourceId?: string;
-  installMode: string;
-  effectiveMode: string;
-  orphaned?: boolean;
-}
-
 interface InstallationHookView {
   name: string;
   hookId?: string;
@@ -184,51 +175,6 @@ function asHookInstallSelection(input: unknown): HookInstallSelection[] | undefi
     }))
     .filter((item) => item.sourceId && item.hookName);
   return parsed.length > 0 ? parsed : undefined;
-}
-
-function detectLegacyInstalledSkills(installPath: string, catalogSkillNames: Set<string>): InstallationSkillView[] {
-  const skillsRoot = path.join(installPath, "skills");
-  if (!fs.existsSync(skillsRoot)) {
-    return [];
-  }
-
-  let entries: fs.Dirent[] = [];
-  try {
-    entries = fs.readdirSync(skillsRoot, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  const detected: InstallationSkillView[] = [];
-  for (const entry of entries) {
-    if (!catalogSkillNames.has(entry.name)) {
-      continue;
-    }
-
-    const skillPath = path.join(skillsRoot, entry.name);
-    let looksLikeSkill = false;
-    try {
-      const stat = fs.lstatSync(skillPath);
-      if (stat.isSymbolicLink()) {
-        const resolved = fs.realpathSync(skillPath);
-        looksLikeSkill = fs.existsSync(path.join(resolved, "SKILL.md"));
-      } else if (stat.isDirectory()) {
-        looksLikeSkill = fs.existsSync(path.join(skillPath, "SKILL.md"));
-      }
-    } catch {
-      looksLikeSkill = false;
-    }
-
-    if (looksLikeSkill) {
-      detected.push({
-        name: entry.name,
-        installMode: "unknown",
-        effectiveMode: "unknown",
-      });
-    }
-  }
-
-  return detected.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function detectLegacyInstalledHooks(installPath: string, catalogHookNames: Set<string>): InstallationHookView[] {

@@ -1,7 +1,7 @@
 {
   "$schema": "./src/schemas/ica.config.schema.json",
   "version": "1.0.0",
-  "description": "Project-level ICA policy for GitHub-driven L3 desktop migration work",
+  "description": "Project-level ICA policy for intelligent-code-agents",
   "autonomy": {
     "level": "L3",
     "system_level": "L3",
@@ -29,17 +29,26 @@
   "quality": {
     "enforce_peer_review": true,
     "testing_required": true,
-    "documentation_required": true,
     "security_validation": true,
-    "compliance_checking": true
+    "documentation_required": true
   },
   "development": {
-    "auto_cleanup": true,
-    "file_management_strict": true,
-    "testing_approach": "comprehensive"
+    "testing_approach": "comprehensive",
+    "file_management_strict": true
   },
   "project": {
     "repository_type": "git",
     "release_automation": true
+  },
+  "tools": {
+    "mcp_tools_enabled": true
+  },
+  "mcp_integrations": {
+    "issue_tracking": {
+      "provider": "mcp__github",
+      "enabled": true,
+      "fallback": "file-based",
+      "config": {}
+    }
   }
 }
