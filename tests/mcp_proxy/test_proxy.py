@@ -18,24 +18,62 @@ def _have_mcp():
         return False
 
 
-def _have_proxy_sources():
-    repo = Path(__file__).resolve().parents[2]
-    required = [
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _core_candidates():
+    repo = _repo_root()
+    split_repo_env = os.environ.get("ICA_SKILLS_REPO")
+    candidates = [
         repo / "src" / "skills" / "mcp-common" / "scripts" / "ica_mcp_core.py",
-        repo / "src" / "skills" / "mcp-proxy" / "scripts" / "mcp_proxy_server.py",
+        repo.parent / "skills" / "skills" / "mcp-common" / "scripts" / "ica_mcp_core.py",
     ]
-    return all(path.exists() for path in required)
+    if split_repo_env:
+        candidates.append(Path(split_repo_env) / "skills" / "mcp-common" / "scripts" / "ica_mcp_core.py")
+    return candidates
+
+
+def _proxy_candidates():
+    repo = _repo_root()
+    split_repo_env = os.environ.get("ICA_SKILLS_REPO")
+    candidates = [
+        repo / "src" / "skills" / "mcp-proxy" / "scripts" / "mcp_proxy_server.py",
+        repo.parent / "skills" / "skills" / "mcp-proxy" / "scripts" / "mcp_proxy_server.py",
+    ]
+    if split_repo_env:
+        candidates.append(Path(split_repo_env) / "skills" / "mcp-proxy" / "scripts" / "mcp_proxy_server.py")
+    return candidates
+
+
+def _load_core():
+    core_file = next((candidate for candidate in _core_candidates() if candidate.exists()), None)
+    if core_file is None:
+        raise unittest.SkipTest("Skipping MCP proxy tests: ica_mcp_core.py not available in this checkout.")
+    sys.path.insert(0, str(core_file.parent))
+    import ica_mcp_core  # type: ignore
+
+    return ica_mcp_core
+
+
+def _resolve_proxy_script() -> Path:
+    proxy_script = next((candidate for candidate in _proxy_candidates() if candidate.exists()), None)
+    if proxy_script is None:
+        raise unittest.SkipTest("Skipping MCP proxy tests: mcp_proxy_server.py not available in this checkout.")
+    return proxy_script
+
+
+def _have_proxy_sources():
+    return any(candidate.exists() for candidate in _core_candidates()) and any(
+        candidate.exists() for candidate in _proxy_candidates()
+    )
 
 
 @unittest.skipUnless(_have_mcp(), "python package 'mcp' not installed")
 @unittest.skipUnless(_have_proxy_sources(), "MCP proxy source files are not present in this checkout")
 class TestMcpProxy(unittest.TestCase):
     def test_config_merge_precedence(self):
-        # Load core from repo path.
-        repo = Path(__file__).resolve().parents[2]
-        core_dir = repo / "src" / "skills" / "mcp-common" / "scripts"
-        sys.path.insert(0, str(core_dir))
-        import ica_mcp_core  # type: ignore
+        ica_mcp_core = _load_core()
 
         with tempfile.TemporaryDirectory() as td:
             td = Path(td)
@@ -109,8 +147,7 @@ class TestMcpProxy(unittest.TestCase):
         from mcp.client.stdio import stdio_client
         from mcp import ClientSession
 
-        repo = Path(__file__).resolve().parents[2]
-        proxy_script = repo / "src" / "skills" / "mcp-proxy" / "scripts" / "mcp_proxy_server.py"
+        proxy_script = _resolve_proxy_script()
 
         with tempfile.TemporaryDirectory() as td:
             td = Path(td)
@@ -226,8 +263,7 @@ class TestMcpProxy(unittest.TestCase):
         from mcp import StdioServerParameters
         from mcp.client.stdio import stdio_client
 
-        repo = Path(__file__).resolve().parents[2]
-        proxy_script = repo / "src" / "skills" / "mcp-proxy" / "scripts" / "mcp_proxy_server.py"
+        proxy_script = _resolve_proxy_script()
 
         with tempfile.TemporaryDirectory() as td:
             td = Path(td)
