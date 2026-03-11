@@ -8,20 +8,19 @@ import type { WebSocket as WsWebSocket } from "ws";
 import { executeOperation } from "../../installer-core/executor";
 import { loadCatalogFromSources } from "../../installer-core/catalog";
 import { createCredentialProvider } from "../../installer-core/credentials";
-import { checkSourceAuth } from "../../installer-core/sourceAuth";
 import { syncSource } from "../../installer-core/sourceSync";
-import { loadSources, removeSource, setSourceSyncStatus, updateSource } from "../../installer-core/sources";
-import { loadHookSources, removeHookSource, updateHookSource } from "../../installer-core/hookSources";
+import { loadSources } from "../../installer-core/sources";
+import { loadHookSources } from "../../installer-core/hookSources";
 import { syncHookSource } from "../../installer-core/hookSync";
 import { loadHookCatalogFromSources, HookInstallSelection } from "../../installer-core/hookCatalog";
 import { executeHookOperation, HookInstallRequest, HookTargetPlatform } from "../../installer-core/hookExecutor";
 import { loadHookInstallState } from "../../installer-core/hookState";
-import { registerRepository } from "../../installer-core/repositories";
 import { redactSensitive, safeErrorMessage } from "../../installer-core/security";
 import { refreshSourcesAndHooks } from "../../installer-core/sourceRefresh";
 import { loadInstallState } from "../../installer-core/state";
 import { discoverTargets, resolveTargetPaths } from "../../installer-core/targets";
 import { checkForAppUpdate } from "../../installer-core/updateCheck";
+import { createInstallerApplicationService, InstallerApplicationService, withInstallerApplicationService } from "../../installer-core/applicationService";
 import { SUPPORTED_TARGETS } from "../../installer-core/constants";
 import { findRepoRoot } from "../../installer-core/repo";
 import { InstallRequest, InstallScope, InstallSelection, TargetPlatform } from "../../installer-core/types";
@@ -107,6 +106,7 @@ export interface InstallerApiServerOptions {
   wsTicketTtlMs?: number;
   wsHeartbeatMs?: number;
   dependencies?: Partial<InstallerApiDependencies>;
+  applicationService?: Partial<InstallerApplicationService>;
 }
 
 function parseScope(value?: string): InstallScope {
@@ -134,6 +134,10 @@ function parseBooleanQuery(value: unknown): boolean {
 
 function sanitizeError(value: unknown, fallback = "Operation failed."): string {
   return safeErrorMessage(value, fallback);
+}
+
+function isUnknownSourceError(value: unknown, sourceId: string): boolean {
+  return sanitizeError(value) === `Unknown source '${sourceId}'.`;
 }
 
 function resolveInstallerVersion(repoRoot: string): string {
@@ -375,6 +379,24 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
     registry: dashboardServerPluginRegistry,
     pluginConfigs: parseDashboardPluginConfig(process.env.ICA_API_PLUGIN_CONFIG || process.env.ICA_DASHBOARD_PLUGIN_CONFIG),
   });
+  const applicationService = withInstallerApplicationService(
+    createInstallerApplicationService({
+      repoRoot,
+      installHooks: pluginRuntime.installHooks,
+      dependencies: {
+        executeOperation: deps.executeOperation,
+        loadCatalogFromSources: deps.loadCatalogFromSources,
+        loadHookCatalogFromSources: deps.loadHookCatalogFromSources,
+        loadSources: deps.loadSources,
+        loadHookSources: deps.loadHookSources,
+        syncSource: deps.syncSource,
+        syncHookSource: deps.syncHookSource,
+        checkForAppUpdate: deps.checkForAppUpdate,
+        pickProjectDirectory: pickDirectoryNative,
+      },
+    }),
+    options.applicationService,
+  );
 
   app.setErrorHandler(async (error, request, reply) => {
     if (!isApiRoute(request.url)) {
@@ -434,7 +456,7 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
   });
 
   app.get("/api/v1/health", async () => {
-    const update = await deps.checkForAppUpdate(installerVersion);
+    const update = await applicationService.checkForUpdate(installerVersion);
     return {
       ok: true,
       service: "ica-installer-api",
@@ -528,179 +550,29 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
 
   app.get("/api/v1/installations", async (request) => {
     const query = request.query as { scope?: string; projectPath?: string; targets?: string };
-    const scope = parseScope(query.scope);
-    const projectPath = query.projectPath;
-    const targets = parseTargets(query.targets);
-    const resolved = resolveTargetPaths(targets, scope, projectPath);
-    const catalog = await deps.loadCatalogFromSources(repoRoot, false);
-    const catalogSkillNames = new Set(catalog.skills.map((skill) => skill.skillName));
-    const activeSourceIds = new Set(catalog.sources.map((source) => source.id));
-
-    const rows = await Promise.all(
-      resolved.map(async (entry) => {
-        const state = await loadInstallState(entry.installPath);
-        const managedSkills: InstallationSkillView[] =
-          state?.managedSkills.map((skill) => ({
-            name: skill.name,
-            skillId: skill.skillId,
-            sourceId: skill.sourceId,
-            installMode: skill.installMode,
-            effectiveMode: skill.effectiveMode,
-            orphaned: skill.orphaned || (skill.sourceId ? !activeSourceIds.has(skill.sourceId) : false),
-          })) || [];
-        const skillsByName = new Map(managedSkills.map((skill) => [skill.name, skill]));
-        const detected = detectLegacyInstalledSkills(entry.installPath, catalogSkillNames);
-        for (const skill of detected) {
-          if (!skillsByName.has(skill.name)) {
-            skillsByName.set(skill.name, skill);
-          }
-        }
-        const combinedSkills = Array.from(skillsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
-
-        return {
-          target: entry.target,
-          installPath: entry.installPath,
-          scope: entry.scope,
-          projectPath: entry.projectPath,
-          installed: Boolean(state) || combinedSkills.length > 0,
-          managedSkills: combinedSkills,
-          updatedAt: state?.updatedAt,
-        };
-      }),
-    );
-
-    return { installations: rows };
+    return applicationService.listInstallations({
+      scope: parseScope(query.scope),
+      projectPath: query.projectPath,
+      targets: parseTargets(query.targets),
+    });
   });
 
   app.get("/api/v1/hooks/installations", async (request) => {
     const query = request.query as { scope?: string; projectPath?: string; targets?: string };
-    const scope = parseScope(query.scope);
-    const projectPath = query.projectPath;
     const targets = parseTargets(query.targets).filter((target): target is HookTargetPlatform => HOOK_CAPABLE_TARGETS.has(target as HookTargetPlatform));
     if (targets.length === 0) {
       return { installations: [] };
     }
-    const resolved = resolveTargetPaths(targets, scope, projectPath);
-    const catalog = await deps.loadHookCatalogFromSources(repoRoot, false);
-    const catalogHookNames = new Set(catalog.hooks.map((hook) => hook.hookName));
-    const activeSourceIds = new Set(catalog.sources.map((source) => source.id));
-
-    const rows = await Promise.all(
-      resolved.map(async (entry) => {
-        const state = await loadHookInstallState(entry.installPath);
-        const managedHooks: InstallationHookView[] =
-          state?.managedHooks.map((hook) => ({
-            name: hook.name,
-            hookId: hook.hookId,
-            sourceId: hook.sourceId,
-            installMode: hook.installMode,
-            effectiveMode: hook.effectiveMode,
-            orphaned: hook.orphaned || (hook.sourceId ? !activeSourceIds.has(hook.sourceId) : false),
-          })) || [];
-        const hooksByName = new Map(managedHooks.map((hook) => [hook.name, hook]));
-        const detected = detectLegacyInstalledHooks(entry.installPath, catalogHookNames);
-        for (const hook of detected) {
-          if (!hooksByName.has(hook.name)) {
-            hooksByName.set(hook.name, hook);
-          }
-        }
-        const combinedHooks = Array.from(hooksByName.values()).sort((a, b) => a.name.localeCompare(b.name));
-
-        return {
-          target: entry.target,
-          installPath: entry.installPath,
-          scope: entry.scope,
-          projectPath: entry.projectPath,
-          installed: Boolean(state) || combinedHooks.length > 0,
-          managedHooks: combinedHooks,
-          updatedAt: state?.updatedAt,
-        };
-      }),
-    );
-
-    return { installations: rows };
+    return applicationService.listHookInstallations({
+      scope: parseScope(query.scope),
+      projectPath: query.projectPath,
+      targets,
+    });
   });
 
   app.get("/api/v1/sources", async (_request, reply) => {
     try {
-      const skillSources = await deps.loadSources();
-      const hookSources = await deps.loadHookSources();
-    const byId = new Map<
-      string,
-      {
-        id: string;
-        name: string;
-        repoUrl: string;
-        transport: "https" | "ssh";
-        official: boolean;
-        enabled: boolean;
-        skillsRoot?: string;
-        hooksRoot?: string;
-        credentialRef?: string;
-        removable: boolean;
-        lastSyncAt?: string;
-        lastError?: string;
-        revision?: string;
-      }
-    >();
-
-    for (const source of skillSources) {
-      byId.set(source.id, {
-        ...(byId.get(source.id) || {
-          id: source.id,
-          name: source.name,
-          repoUrl: source.repoUrl,
-          transport: source.transport,
-          official: source.official,
-          enabled: source.enabled,
-          removable: source.removable,
-        }),
-        id: source.id,
-        name: source.name,
-        repoUrl: source.repoUrl,
-        transport: source.transport,
-        official: source.official,
-        enabled: source.enabled,
-        skillsRoot: source.skillsRoot,
-        credentialRef: source.credentialRef,
-        removable: source.removable,
-        lastSyncAt: source.lastSyncAt || byId.get(source.id)?.lastSyncAt,
-        lastError: source.lastError || byId.get(source.id)?.lastError,
-        revision: source.revision || byId.get(source.id)?.revision,
-      });
-    }
-
-    for (const source of hookSources) {
-      byId.set(source.id, {
-        ...(byId.get(source.id) || {
-          id: source.id,
-          name: source.name,
-          repoUrl: source.repoUrl,
-          transport: source.transport,
-          official: source.official,
-          enabled: source.enabled,
-          removable: source.removable,
-        }),
-        id: source.id,
-        name: source.name,
-        repoUrl: source.repoUrl,
-        transport: source.transport,
-        official: source.official,
-        enabled: (byId.get(source.id)?.enabled ?? false) || source.enabled,
-        hooksRoot: source.hooksRoot,
-        credentialRef: source.credentialRef || byId.get(source.id)?.credentialRef,
-        removable: (byId.get(source.id)?.removable ?? true) && source.removable,
-        lastSyncAt: byId.get(source.id)?.lastSyncAt || source.lastSyncAt,
-        lastError: byId.get(source.id)?.lastError || source.lastError,
-        revision: byId.get(source.id)?.revision || source.revision,
-      });
-    }
-
-      return {
-        sources: Array.from(byId.values())
-          .map((source) => toPublicSource(source))
-          .sort((a, b) => a.id.localeCompare(b.id)),
-      };
+      return await applicationService.listSources();
     } catch (error) {
       return reply.code(503).send(apiFailure(error, "Failed to load sources.", "SOURCES_UNAVAILABLE", true));
     }
@@ -716,40 +588,25 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
       return reply.code(400).send({ error: "repoUrl is required." });
     }
 
-    const credentialProvider = createCredentialProvider();
-    const token = typeof body.token === "string" ? body.token.trim() : "";
-    const registration = await registerRepository(
-      {
-        id: typeof body.id === "string" ? body.id : undefined,
-        name: typeof body.name === "string" ? body.name : undefined,
-        repoUrl,
-        transport: typeof body.transport === "string" && (body.transport === "https" || body.transport === "ssh") ? body.transport : undefined,
-        skillsRoot: typeof body.skillsRoot === "string" ? body.skillsRoot : undefined,
-        hooksRoot: typeof body.hooksRoot === "string" ? body.hooksRoot : undefined,
-        enabled: body.enabled !== false,
-        removable: body.removable !== false,
-        official: body.official === true,
-        token,
-      },
-      credentialProvider,
-    );
-    const source = registration.skillSource;
-    const auth = await checkSourceAuth(
-      {
-        id: source.id,
-        repoUrl: source.repoUrl,
-        transport: source.transport,
-      },
-      credentialProvider,
-    );
-    if (!auth.ok) {
-      await setSourceSyncStatus(source.id, { lastError: auth.message });
-      return reply.code(400).send({ error: auth.message, source });
+    const result = await applicationService.registerSource({
+      id: typeof body.id === "string" ? body.id : undefined,
+      name: typeof body.name === "string" ? body.name : undefined,
+      repoUrl,
+      transport: typeof body.transport === "string" && (body.transport === "https" || body.transport === "ssh") ? body.transport : undefined,
+      skillsRoot: typeof body.skillsRoot === "string" ? body.skillsRoot : undefined,
+      hooksRoot: typeof body.hooksRoot === "string" ? body.hooksRoot : undefined,
+      enabled: body.enabled !== false,
+      removable: body.removable !== false,
+      official: body.official === true,
+      token: typeof body.token === "string" ? body.token.trim() : "",
+    });
+    if (!result.auth.ok) {
+      return reply.code(400).send({ error: result.auth.message, source: result.source });
     }
 
     return {
-      source,
-      sync: registration.sync,
+      source: result.source,
+      sync: result.sync,
     };
   });
 
@@ -761,40 +618,19 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
     >;
 
     try {
-      const source = await updateSource(params.id, {
+      return await applicationService.updateSource({
+        sourceId: params.id,
         name: typeof body.name === "string" ? body.name : undefined,
         repoUrl: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
         transport: typeof body.transport === "string" && (body.transport === "https" || body.transport === "ssh") ? body.transport : undefined,
         skillsRoot: typeof body.skillsRoot === "string" ? body.skillsRoot : undefined,
+        hooksRoot: typeof body.hooksRoot === "string" ? body.hooksRoot : undefined,
         enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
         credentialRef: typeof body.credentialRef === "string" ? body.credentialRef : undefined,
         removable: typeof body.removable === "boolean" ? body.removable : undefined,
         official: typeof body.official === "boolean" ? body.official : undefined,
+        token: typeof body.token === "string" ? body.token.trim() : "",
       });
-      try {
-        await updateHookSource(params.id, {
-          name: typeof body.name === "string" ? body.name : undefined,
-          repoUrl: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
-          transport: typeof body.transport === "string" && (body.transport === "https" || body.transport === "ssh") ? body.transport : undefined,
-          hooksRoot: typeof body.hooksRoot === "string" ? body.hooksRoot : undefined,
-          enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
-          credentialRef: typeof body.credentialRef === "string" ? body.credentialRef : undefined,
-          removable: typeof body.removable === "boolean" ? body.removable : undefined,
-          official: typeof body.official === "boolean" ? body.official : undefined,
-        });
-      } catch {
-        // Older environments may still have only skill sources configured.
-      }
-
-      const credentialProvider = createCredentialProvider();
-      const token = typeof body.token === "string" ? body.token.trim() : "";
-      if (token) {
-        await credentialProvider.store(params.id, token);
-        await updateSource(params.id, { credentialRef: `${params.id}:stored` });
-        await updateHookSource(params.id, { credentialRef: `${params.id}:stored` });
-      }
-
-      return { source };
     } catch (error) {
       return reply.code(400).send({ error: sanitizeError(error) });
     }
@@ -803,20 +639,7 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
   app.delete("/api/v1/sources/:id", async (request, reply) => {
     const params = request.params as { id: string };
     try {
-      let removed: Awaited<ReturnType<typeof removeSource>> | null = null;
-      try {
-        removed = await removeSource(params.id);
-      } catch {
-        // allow hook-only entries
-      }
-      try {
-        await removeHookSource(params.id);
-      } catch {
-        // hooks mirror may not exist; ignore.
-      }
-      const credentialProvider = createCredentialProvider();
-      await credentialProvider.delete(params.id);
-      return { source: removed || { id: params.id } };
+      return await applicationService.removeSource(params.id);
     } catch (error) {
       return reply.code(400).send({ error: sanitizeError(error) });
     }
@@ -828,34 +651,21 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
       string,
       unknown
     >;
-    const source = (await deps.loadSources()).find((item) => item.id === params.id) || (await deps.loadHookSources()).find((item) => item.id === params.id);
-    if (!source) {
-      return reply.code(404).send({ error: `Unknown source '${params.id}'.` });
-    }
-
-    const credentialProvider = createCredentialProvider();
-    const token = typeof body.token === "string" ? body.token.trim() : "";
-    if (token) {
-      await credentialProvider.store(source.id, token);
-      await updateSource(source.id, { credentialRef: `${source.id}:stored` });
-      try {
-        await updateHookSource(source.id, { credentialRef: `${source.id}:stored` });
-      } catch {
-        // ignore missing hook mirror
+    try {
+      const auth = await applicationService.checkSourceAuth({
+        sourceId: params.id,
+        token: typeof body.token === "string" ? body.token.trim() : "",
+      });
+      if (!auth.ok) {
+        return reply.code(400).send(auth);
       }
+      return auth;
+    } catch (error) {
+      if (isUnknownSourceError(error, params.id)) {
+        return reply.code(404).send({ error: `Unknown source '${params.id}'.` });
+      }
+      return reply.code(400).send({ error: sanitizeError(error) });
     }
-    const auth = await checkSourceAuth(
-      {
-        id: source.id,
-        repoUrl: source.repoUrl,
-        transport: source.transport,
-      },
-      credentialProvider,
-    );
-    if (!auth.ok) {
-      return reply.code(400).send(auth);
-    }
-    return auth;
   });
 
   app.post("/api/v1/sources/:id/refresh", async (request, reply) => {
@@ -863,16 +673,7 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
     const opId = `op_${crypto.randomUUID()}`;
     realtime.emit("source", "source.refresh.started", { sourceId: params.id }, opId);
     try {
-      const result = await refreshSourcesAndHooks(
-        {
-          credentials: createCredentialProvider(),
-          loadSources: deps.loadSources,
-          loadHookSources: deps.loadHookSources,
-          syncSource: deps.syncSource,
-          syncHookSource: deps.syncHookSource,
-        },
-        { sourceId: params.id, onlyEnabled: false },
-      );
+      const result = await applicationService.refreshSources({ sourceId: params.id, onlyEnabled: false });
       if (!result.matched) {
         return reply.code(404).send({ error: `Unknown source '${params.id}'.` });
       }
@@ -896,13 +697,7 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
     const opId = `op_${crypto.randomUUID()}`;
     realtime.emit("source", "source.refresh.started", { sourceId: "all" }, opId);
     try {
-      const result = await refreshSourcesAndHooks({
-        credentials: createCredentialProvider(),
-        loadSources: deps.loadSources,
-        loadHookSources: deps.loadHookSources,
-        syncSource: deps.syncSource,
-        syncHookSource: deps.syncHookSource,
-      });
+      const result = await applicationService.refreshSources();
       const refreshed = result.refreshed;
       realtime.emit("source", "source.refresh.completed", { sourceId: "all", refreshed }, opId);
       return { refreshed, operationId: opId };
@@ -918,8 +713,7 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
       unknown
     >;
     try {
-      const selectedPath = await pickDirectoryNative(typeof body.initialPath === "string" ? body.initialPath : process.cwd());
-      return { path: selectedPath };
+      return await applicationService.pickProjectDirectory(typeof body.initialPath === "string" ? body.initialPath : process.cwd());
     } catch (error) {
       return reply.code(400).send({ error: sanitizeError(error) });
     }
@@ -1022,7 +816,7 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
     const opId = `op_${crypto.randomUUID()}`;
     realtime.emit("operation", "operation.started", { operation: "install", targets }, opId);
     try {
-      const result = await deps.executeOperation(repoRoot, installRequest, { hooks: pluginRuntime.installHooks });
+      const result = await applicationService.executeInstallOperation(installRequest);
       realtime.emit("operation", "operation.completed", { operation: "install", targets }, opId);
       return withOperationId(result, opId);
     } catch (error) {
@@ -1056,7 +850,7 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
     const opId = `op_${crypto.randomUUID()}`;
     realtime.emit("operation", "operation.started", { operation: "uninstall", targets }, opId);
     try {
-      const result = await deps.executeOperation(repoRoot, uninstallRequest, { hooks: pluginRuntime.installHooks });
+      const result = await applicationService.executeUninstallOperation(uninstallRequest);
       realtime.emit("operation", "operation.completed", { operation: "uninstall", targets }, opId);
       return withOperationId(result, opId);
     } catch (error) {
@@ -1090,7 +884,7 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
     const opId = `op_${crypto.randomUUID()}`;
     realtime.emit("operation", "operation.started", { operation: "sync", targets }, opId);
     try {
-      const result = await deps.executeOperation(repoRoot, syncRequest, { hooks: pluginRuntime.installHooks });
+      const result = await applicationService.executeSyncOperation(syncRequest);
       realtime.emit("operation", "operation.completed", { operation: "sync", targets }, opId);
       return withOperationId(result, opId);
     } catch (error) {

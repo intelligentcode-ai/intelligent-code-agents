@@ -18,7 +18,17 @@ def _have_mcp():
         return False
 
 
+def _have_proxy_sources():
+    repo = Path(__file__).resolve().parents[2]
+    required = [
+        repo / "src" / "skills" / "mcp-common" / "scripts" / "ica_mcp_core.py",
+        repo / "src" / "skills" / "mcp-proxy" / "scripts" / "mcp_proxy_server.py",
+    ]
+    return all(path.exists() for path in required)
+
+
 @unittest.skipUnless(_have_mcp(), "python package 'mcp' not installed")
+@unittest.skipUnless(_have_proxy_sources(), "MCP proxy source files are not present in this checkout")
 class TestMcpProxy(unittest.TestCase):
     def test_config_merge_precedence(self):
         # Load core from repo path.

@@ -22,6 +22,16 @@
           "enum": ["L1", "L2", "L3"],
           "description": "Autonomy level: L1 (manual), L2 (guided), L3 (autonomous)"
         },
+        "system_level": {
+          "type": "string",
+          "enum": ["L1", "L2", "L3"],
+          "description": "Resolved system autonomy level used by process orchestration"
+        },
+        "project_level": {
+          "type": "string",
+          "enum": ["follow-system", "L1", "L2", "L3"],
+          "description": "Project override for effective autonomy level"
+        },
         "pm_always_active": {
           "type": "boolean",
           "description": "Always activate PM role"
@@ -34,6 +44,16 @@
           "type": "string",
           "enum": ["batch_auto", "batch_confirm", "item_confirm"],
           "description": "Confirmation mode for actionable-finding ingestion when work item pipeline is enabled"
+        },
+        "interrupt_policy": {
+          "type": "string",
+          "enum": ["p0_only", "always_confirm", "never_preempt"],
+          "description": "How active work can be interrupted when new items arrive"
+        },
+        "dispatch_trigger": {
+          "type": "string",
+          "enum": ["on_completion", "immediate_if_idle"],
+          "description": "When the next planned item should be dispatched"
         },
         "l3_settings": {
           "type": "object",
@@ -85,6 +105,15 @@
         "validate_commits": {
           "type": "boolean",
           "description": "Validate commit messages"
+        },
+        "worktree_branch_behavior": {
+          "type": "string",
+          "enum": ["always_new", "ask", "current_branch"],
+          "description": "Whether implementation must happen in a dedicated worktree/branch"
+        },
+        "worktree_branch_prefix": {
+          "type": "string",
+          "description": "Branch prefix to use when creating dedicated worktree branches"
         }
       }
     },

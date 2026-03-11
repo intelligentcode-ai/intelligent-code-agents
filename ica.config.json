@@ -1,0 +1,45 @@
+{
+  "$schema": "./src/schemas/ica.config.schema.json",
+  "version": "1.0.0",
+  "description": "Project-level ICA policy for GitHub-driven L3 desktop migration work",
+  "autonomy": {
+    "level": "L3",
+    "system_level": "L3",
+    "project_level": "L3",
+    "pm_always_active": true,
+    "work_item_pipeline_enabled": true,
+    "work_item_pipeline_mode": "batch_auto",
+    "interrupt_policy": "p0_only",
+    "dispatch_trigger": "on_completion",
+    "l3_settings": {
+      "max_parallel": 5,
+      "auto_discover": true,
+      "continue_on_error": true
+    }
+  },
+  "git": {
+    "privacy": true,
+    "branch_protection": true,
+    "default_branch": "main",
+    "require_pr_for_main": true,
+    "validate_commits": true,
+    "worktree_branch_behavior": "always_new",
+    "worktree_branch_prefix": "codex/"
+  },
+  "quality": {
+    "enforce_peer_review": true,
+    "testing_required": true,
+    "documentation_required": true,
+    "security_validation": true,
+    "compliance_checking": true
+  },
+  "development": {
+    "auto_cleanup": true,
+    "file_management_strict": true,
+    "testing_approach": "comprehensive"
+  },
+  "project": {
+    "repository_type": "git",
+    "release_automation": true
+  }
+}

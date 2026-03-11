@@ -2,24 +2,21 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
-import Fastify from "fastify";
+import Fastify, { FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { executeOperation } from "../../installer-core/executor";
 import { loadCatalogFromSources } from "../../installer-core/catalog";
-import { createCredentialProvider } from "../../installer-core/credentials";
-import { checkSourceAuth } from "../../installer-core/sourceAuth";
 import { syncSource } from "../../installer-core/sourceSync";
-import { contributeOfficialSkillBundle, publishSkillBundle, validateSkillBundle } from "../../installer-core/skillPublish";
-import { loadSources, removeSource, setSourceSyncStatus, updateSource } from "../../installer-core/sources";
-import { loadHookSources, removeHookSource, updateHookSource } from "../../installer-core/hookSources";
+import { loadSources } from "../../installer-core/sources";
+import { loadHookSources } from "../../installer-core/hookSources";
 import { syncHookSource } from "../../installer-core/hookSync";
 import { loadHookCatalogFromSources, HookInstallSelection } from "../../installer-core/hookCatalog";
 import { executeHookOperation, HookInstallRequest, HookTargetPlatform } from "../../installer-core/hookExecutor";
 import { loadHookInstallState } from "../../installer-core/hookState";
-import { registerRepository } from "../../installer-core/repositories";
 import { loadInstallState } from "../../installer-core/state";
 import { discoverTargets, resolveTargetPaths } from "../../installer-core/targets";
 import { SUPPORTED_TARGETS } from "../../installer-core/constants";
+import { createInstallerApplicationService, InstallerApplicationService, withInstallerApplicationService } from "../../installer-core/applicationService";
 import { findRepoRoot } from "../../installer-core/repo";
 import { InstallRequest, InstallScope, InstallSelection, PublishMode, TargetPlatform, ValidationProfile } from "../../installer-core/types";
 import {
@@ -81,12 +78,9 @@ function parseTargets(value?: string): TargetPlatform[] {
   return Array.from(new Set(parsed));
 }
 
-function normalizePathForMatch(value: string): string {
-  return value.trim().replace(/\\/g, "/").replace(/\/+$/, "");
-}
-
-function looksLikeOfficialSkillPath(localPath: string): boolean {
-  return normalizePathForMatch(localPath).includes("/official-skills/");
+function isUnknownSourceError(value: unknown, sourceId: string): boolean {
+  const message = value instanceof Error ? value.message : String(value);
+  return message === `Unknown source '${sourceId}'.`;
 }
 
 const HELPER_HOST = "127.0.0.1";
@@ -157,6 +151,11 @@ async function ensureHelperRunning(repoRoot: string): Promise<void> {
   });
 
   await waitForHelperReady();
+}
+
+export interface InstallerDashboardServerOptions {
+  repoRoot?: string;
+  applicationService?: Partial<InstallerApplicationService>;
 }
 
 function asInstallSelection(input: unknown): InstallSelection[] | undefined {
@@ -277,9 +276,11 @@ function detectLegacyInstalledHooks(installPath: string, catalogHookNames: Set<s
   return detected.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function main(): Promise<void> {
+export async function createInstallerDashboardServer(
+  options: InstallerDashboardServerOptions = {},
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
-  const repoRoot = findRepoRoot(__dirname);
+  const repoRoot = options.repoRoot || findRepoRoot(__dirname);
 
   const webBuildPath = path.join(repoRoot, "dist", "installer-dashboard", "web-build");
   if (fs.existsSync(webBuildPath)) {
@@ -295,6 +296,26 @@ async function main(): Promise<void> {
     registry: dashboardServerPluginRegistry,
     pluginConfigs: parseDashboardPluginConfig(process.env.ICA_DASHBOARD_PLUGIN_CONFIG),
   });
+  const applicationService = withInstallerApplicationService(
+    createInstallerApplicationService({
+      repoRoot,
+      installHooks: pluginRuntime.installHooks,
+      dependencies: {
+        pickProjectDirectory: async (initialPath) => {
+          await ensureHelperRunning(repoRoot);
+          const payload = await helperRequest("/pick-directory", {
+            initialPath,
+          });
+          const selectedPath = typeof payload.path === "string" ? payload.path : "";
+          if (!selectedPath) {
+            throw new Error("Helper did not return a selected path.");
+          }
+          return selectedPath;
+        },
+      },
+    }),
+    options.applicationService,
+  );
 
   app.get("/api/v1/health", async () => {
     return {
@@ -343,188 +364,28 @@ async function main(): Promise<void> {
 
   app.get("/api/v1/installations", async (request) => {
     const query = request.query as { scope?: string; projectPath?: string; targets?: string };
-    const scope = parseScope(query.scope);
-    const projectPath = query.projectPath;
-    const targets = parseTargets(query.targets);
-    const resolved = resolveTargetPaths(targets, scope, projectPath);
-    const catalog = await loadCatalogFromSources(repoRoot, false);
-    const catalogSkillNames = new Set(catalog.skills.map((skill) => skill.skillName));
-    const activeSourceIds = new Set(catalog.sources.map((source) => source.id));
-
-    const rows = await Promise.all(
-      resolved.map(async (entry) => {
-        const state = await loadInstallState(entry.installPath);
-        const managedSkills: InstallationSkillView[] =
-          state?.managedSkills.map((skill) => ({
-            name: skill.name,
-            skillId: skill.skillId,
-            sourceId: skill.sourceId,
-            installMode: skill.installMode,
-            effectiveMode: skill.effectiveMode,
-            orphaned: skill.orphaned || (skill.sourceId ? !activeSourceIds.has(skill.sourceId) : false),
-          })) || [];
-        const skillsByName = new Map(managedSkills.map((skill) => [skill.name, skill]));
-        const detected = detectLegacyInstalledSkills(entry.installPath, catalogSkillNames);
-        for (const skill of detected) {
-          if (!skillsByName.has(skill.name)) {
-            skillsByName.set(skill.name, skill);
-          }
-        }
-        const combinedSkills = Array.from(skillsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
-
-        return {
-          target: entry.target,
-          installPath: entry.installPath,
-          scope: entry.scope,
-          projectPath: entry.projectPath,
-          installed: Boolean(state) || combinedSkills.length > 0,
-          managedSkills: combinedSkills,
-          updatedAt: state?.updatedAt,
-        };
-      }),
-    );
-
-    return { installations: rows };
+    return applicationService.listInstallations({
+      scope: parseScope(query.scope),
+      projectPath: query.projectPath,
+      targets: parseTargets(query.targets),
+    });
   });
 
   app.get("/api/v1/hooks/installations", async (request) => {
     const query = request.query as { scope?: string; projectPath?: string; targets?: string };
-    const scope = parseScope(query.scope);
-    const projectPath = query.projectPath;
     const targets = parseTargets(query.targets).filter((target): target is HookTargetPlatform => HOOK_CAPABLE_TARGETS.has(target as HookTargetPlatform));
     if (targets.length === 0) {
       return { installations: [] };
     }
-    const resolved = resolveTargetPaths(targets, scope, projectPath);
-    const catalog = await loadHookCatalogFromSources(repoRoot, false);
-    const catalogHookNames = new Set(catalog.hooks.map((hook) => hook.hookName));
-    const activeSourceIds = new Set(catalog.sources.map((source) => source.id));
-
-    const rows = await Promise.all(
-      resolved.map(async (entry) => {
-        const state = await loadHookInstallState(entry.installPath);
-        const managedHooks: InstallationHookView[] =
-          state?.managedHooks.map((hook) => ({
-            name: hook.name,
-            hookId: hook.hookId,
-            sourceId: hook.sourceId,
-            installMode: hook.installMode,
-            effectiveMode: hook.effectiveMode,
-            orphaned: hook.orphaned || (hook.sourceId ? !activeSourceIds.has(hook.sourceId) : false),
-          })) || [];
-        const hooksByName = new Map(managedHooks.map((hook) => [hook.name, hook]));
-        const detected = detectLegacyInstalledHooks(entry.installPath, catalogHookNames);
-        for (const hook of detected) {
-          if (!hooksByName.has(hook.name)) {
-            hooksByName.set(hook.name, hook);
-          }
-        }
-        const combinedHooks = Array.from(hooksByName.values()).sort((a, b) => a.name.localeCompare(b.name));
-
-        return {
-          target: entry.target,
-          installPath: entry.installPath,
-          scope: entry.scope,
-          projectPath: entry.projectPath,
-          installed: Boolean(state) || combinedHooks.length > 0,
-          managedHooks: combinedHooks,
-          updatedAt: state?.updatedAt,
-        };
-      }),
-    );
-
-    return { installations: rows };
+    return applicationService.listHookInstallations({
+      scope: parseScope(query.scope),
+      projectPath: query.projectPath,
+      targets,
+    });
   });
 
   app.get("/api/v1/sources", async () => {
-    const skillSources = await loadSources();
-    const hookSources = await loadHookSources();
-    const byId = new Map<
-      string,
-      {
-        id: string;
-        name: string;
-        repoUrl: string;
-        transport: "https" | "ssh";
-        official: boolean;
-        enabled: boolean;
-        skillsRoot?: string;
-        hooksRoot?: string;
-        publishDefaultMode?: PublishMode;
-        defaultBaseBranch?: string;
-        providerHint?: "github" | "gitlab" | "bitbucket" | "unknown";
-        officialContributionEnabled?: boolean;
-        credentialRef?: string;
-        removable: boolean;
-        lastSyncAt?: string;
-        lastError?: string;
-        revision?: string;
-      }
-    >();
-
-    for (const source of skillSources) {
-      byId.set(source.id, {
-        ...(byId.get(source.id) || {
-          id: source.id,
-          name: source.name,
-          repoUrl: source.repoUrl,
-          transport: source.transport,
-          official: source.official,
-          enabled: source.enabled,
-          removable: source.removable,
-        }),
-        id: source.id,
-        name: source.name,
-        repoUrl: source.repoUrl,
-        transport: source.transport,
-        official: source.official,
-        enabled: source.enabled,
-        skillsRoot: source.skillsRoot,
-        publishDefaultMode: source.publishDefaultMode,
-        defaultBaseBranch: source.defaultBaseBranch,
-        providerHint: source.providerHint,
-        officialContributionEnabled: source.officialContributionEnabled,
-        credentialRef: source.credentialRef,
-        removable: source.removable,
-        lastSyncAt: source.lastSyncAt || byId.get(source.id)?.lastSyncAt,
-        lastError: source.lastError || byId.get(source.id)?.lastError,
-        revision: source.revision || byId.get(source.id)?.revision,
-      });
-    }
-
-    for (const source of hookSources) {
-      byId.set(source.id, {
-        ...(byId.get(source.id) || {
-          id: source.id,
-          name: source.name,
-          repoUrl: source.repoUrl,
-          transport: source.transport,
-          official: source.official,
-          enabled: source.enabled,
-          removable: source.removable,
-        }),
-        id: source.id,
-        name: source.name,
-        repoUrl: source.repoUrl,
-        transport: source.transport,
-        official: source.official,
-        enabled: (byId.get(source.id)?.enabled ?? false) || source.enabled,
-        hooksRoot: source.hooksRoot,
-        publishDefaultMode: byId.get(source.id)?.publishDefaultMode,
-        defaultBaseBranch: byId.get(source.id)?.defaultBaseBranch,
-        providerHint: byId.get(source.id)?.providerHint,
-        officialContributionEnabled: byId.get(source.id)?.officialContributionEnabled,
-        credentialRef: source.credentialRef || byId.get(source.id)?.credentialRef,
-        removable: (byId.get(source.id)?.removable ?? true) && source.removable,
-        lastSyncAt: byId.get(source.id)?.lastSyncAt || source.lastSyncAt,
-        lastError: byId.get(source.id)?.lastError || source.lastError,
-        revision: byId.get(source.id)?.revision || source.revision,
-      });
-    }
-
-    return {
-      sources: Array.from(byId.values()).sort((a, b) => a.id.localeCompare(b.id)),
-    };
+    return applicationService.listSources();
   });
 
   app.post("/api/v1/sources", async (request, reply) => {
@@ -537,52 +398,37 @@ async function main(): Promise<void> {
       return reply.code(400).send({ error: "repoUrl is required." });
     }
 
-    const credentialProvider = createCredentialProvider();
-    const token = typeof body.token === "string" ? body.token.trim() : "";
-    const registration = await registerRepository(
-      {
-        id: typeof body.id === "string" ? body.id : undefined,
-        name: typeof body.name === "string" ? body.name : undefined,
-        repoUrl,
-        transport: typeof body.transport === "string" && (body.transport === "https" || body.transport === "ssh") ? body.transport : undefined,
-        skillsRoot: typeof body.skillsRoot === "string" ? body.skillsRoot : undefined,
-        publishDefaultMode:
-          typeof body.publishDefaultMode === "string" &&
-          (body.publishDefaultMode === "direct-push" || body.publishDefaultMode === "branch-only" || body.publishDefaultMode === "branch-pr")
-            ? body.publishDefaultMode
-            : undefined,
-        defaultBaseBranch: typeof body.defaultBaseBranch === "string" ? body.defaultBaseBranch : undefined,
-        providerHint:
-          typeof body.providerHint === "string" &&
-          (body.providerHint === "github" || body.providerHint === "gitlab" || body.providerHint === "bitbucket" || body.providerHint === "unknown")
-            ? body.providerHint
-            : undefined,
-        officialContributionEnabled: typeof body.officialContributionEnabled === "boolean" ? body.officialContributionEnabled : undefined,
-        hooksRoot: typeof body.hooksRoot === "string" ? body.hooksRoot : undefined,
-        enabled: body.enabled !== false,
-        removable: body.removable !== false,
-        official: body.official === true,
-        token,
-      },
-      credentialProvider,
-    );
-    const source = registration.skillSource;
-    const auth = await checkSourceAuth(
-      {
-        id: source.id,
-        repoUrl: source.repoUrl,
-        transport: source.transport,
-      },
-      credentialProvider,
-    );
-    if (!auth.ok) {
-      await setSourceSyncStatus(source.id, { lastError: auth.message });
-      return reply.code(400).send({ error: auth.message, source });
+    const result = await applicationService.registerSource({
+      id: typeof body.id === "string" ? body.id : undefined,
+      name: typeof body.name === "string" ? body.name : undefined,
+      repoUrl,
+      transport: typeof body.transport === "string" && (body.transport === "https" || body.transport === "ssh") ? body.transport : undefined,
+      skillsRoot: typeof body.skillsRoot === "string" ? body.skillsRoot : undefined,
+      publishDefaultMode:
+        typeof body.publishDefaultMode === "string" &&
+        (body.publishDefaultMode === "direct-push" || body.publishDefaultMode === "branch-only" || body.publishDefaultMode === "branch-pr")
+          ? body.publishDefaultMode
+          : undefined,
+      defaultBaseBranch: typeof body.defaultBaseBranch === "string" ? body.defaultBaseBranch : undefined,
+      providerHint:
+        typeof body.providerHint === "string" &&
+        (body.providerHint === "github" || body.providerHint === "gitlab" || body.providerHint === "bitbucket" || body.providerHint === "unknown")
+          ? body.providerHint
+          : undefined,
+      officialContributionEnabled: typeof body.officialContributionEnabled === "boolean" ? body.officialContributionEnabled : undefined,
+      hooksRoot: typeof body.hooksRoot === "string" ? body.hooksRoot : undefined,
+      enabled: body.enabled !== false,
+      removable: body.removable !== false,
+      official: body.official === true,
+      token: typeof body.token === "string" ? body.token.trim() : "",
+    });
+    if (!result.auth.ok) {
+      return reply.code(400).send({ error: result.auth.message, source: result.source });
     }
 
     return {
-      source,
-      sync: registration.sync,
+      source: result.source,
+      sync: result.sync,
     };
   });
 
@@ -594,11 +440,13 @@ async function main(): Promise<void> {
     >;
 
     try {
-      const source = await updateSource(params.id, {
+      return await applicationService.updateSource({
+        sourceId: params.id,
         name: typeof body.name === "string" ? body.name : undefined,
         repoUrl: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
         transport: typeof body.transport === "string" && (body.transport === "https" || body.transport === "ssh") ? body.transport : undefined,
         skillsRoot: typeof body.skillsRoot === "string" ? body.skillsRoot : undefined,
+        hooksRoot: typeof body.hooksRoot === "string" ? body.hooksRoot : undefined,
         publishDefaultMode:
           typeof body.publishDefaultMode === "string" &&
           (body.publishDefaultMode === "direct-push" || body.publishDefaultMode === "branch-only" || body.publishDefaultMode === "branch-pr")
@@ -615,31 +463,8 @@ async function main(): Promise<void> {
         credentialRef: typeof body.credentialRef === "string" ? body.credentialRef : undefined,
         removable: typeof body.removable === "boolean" ? body.removable : undefined,
         official: typeof body.official === "boolean" ? body.official : undefined,
+        token: typeof body.token === "string" ? body.token.trim() : "",
       });
-      try {
-        await updateHookSource(params.id, {
-          name: typeof body.name === "string" ? body.name : undefined,
-          repoUrl: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
-          transport: typeof body.transport === "string" && (body.transport === "https" || body.transport === "ssh") ? body.transport : undefined,
-          hooksRoot: typeof body.hooksRoot === "string" ? body.hooksRoot : undefined,
-          enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
-          credentialRef: typeof body.credentialRef === "string" ? body.credentialRef : undefined,
-          removable: typeof body.removable === "boolean" ? body.removable : undefined,
-          official: typeof body.official === "boolean" ? body.official : undefined,
-        });
-      } catch {
-        // Older environments may still have only skill sources configured.
-      }
-
-      const credentialProvider = createCredentialProvider();
-      const token = typeof body.token === "string" ? body.token.trim() : "";
-      if (token) {
-        await credentialProvider.store(params.id, token);
-        await updateSource(params.id, { credentialRef: `${params.id}:stored` });
-        await updateHookSource(params.id, { credentialRef: `${params.id}:stored` });
-      }
-
-      return { source };
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
     }
@@ -648,20 +473,7 @@ async function main(): Promise<void> {
   app.delete("/api/v1/sources/:id", async (request, reply) => {
     const params = request.params as { id: string };
     try {
-      let removed: Awaited<ReturnType<typeof removeSource>> | null = null;
-      try {
-        removed = await removeSource(params.id);
-      } catch {
-        // allow hook-only entries
-      }
-      try {
-        await removeHookSource(params.id);
-      } catch {
-        // hooks mirror may not exist; ignore.
-      }
-      const credentialProvider = createCredentialProvider();
-      await credentialProvider.delete(params.id);
-      return { source: removed || { id: params.id } };
+      return await applicationService.removeSource(params.id);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
     }
@@ -673,61 +485,37 @@ async function main(): Promise<void> {
       string,
       unknown
     >;
-    const source = (await loadSources()).find((item) => item.id === params.id) || (await loadHookSources()).find((item) => item.id === params.id);
-    if (!source) {
-      return reply.code(404).send({ error: `Unknown source '${params.id}'.` });
-    }
-
-    const credentialProvider = createCredentialProvider();
-    const token = typeof body.token === "string" ? body.token.trim() : "";
-    if (token) {
-      await credentialProvider.store(source.id, token);
-      await updateSource(source.id, { credentialRef: `${source.id}:stored` });
-      try {
-        await updateHookSource(source.id, { credentialRef: `${source.id}:stored` });
-      } catch {
-        // ignore missing hook mirror
+    try {
+      const auth = await applicationService.checkSourceAuth({
+        sourceId: params.id,
+        token: typeof body.token === "string" ? body.token.trim() : "",
+      });
+      if (!auth.ok) {
+        return reply.code(400).send(auth);
       }
+      return auth;
+    } catch (error) {
+      if (isUnknownSourceError(error, params.id)) {
+        return reply.code(404).send({ error: `Unknown source '${params.id}'.` });
+      }
+      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
     }
-    const auth = await checkSourceAuth(
-      {
-        id: source.id,
-        repoUrl: source.repoUrl,
-        transport: source.transport,
-      },
-      credentialProvider,
-    );
-    if (!auth.ok) {
-      return reply.code(400).send(auth);
-    }
-    return auth;
   });
 
   app.post("/api/v1/sources/:id/refresh", async (request, reply) => {
     const params = request.params as { id: string };
-    const skillSource = (await loadSources()).find((item) => item.id === params.id);
-    const hookSource = (await loadHookSources()).find((item) => item.id === params.id);
-    if (!skillSource && !hookSource) {
+    const result = await applicationService.refreshSources({ sourceId: params.id, onlyEnabled: false });
+    if (!result.matched) {
       return reply.code(404).send({ error: `Unknown source '${params.id}'.` });
     }
-    const credentialProvider = createCredentialProvider();
     try {
       const refreshed: Array<{ type: "skills" | "hooks"; revision?: string; localPath?: string; error?: string }> = [];
-      if (skillSource) {
-        try {
-          const result = await syncSource(skillSource, credentialProvider);
-          refreshed.push({ type: "skills", revision: result.revision, localPath: result.localPath });
-        } catch (error) {
-          refreshed.push({ type: "skills", error: error instanceof Error ? error.message : String(error) });
-        }
+      const item = result.refreshed[0];
+      if (item?.skills) {
+        refreshed.push({ type: "skills", ...item.skills });
       }
-      if (hookSource) {
-        try {
-          const result = await syncHookSource(hookSource, credentialProvider);
-          refreshed.push({ type: "hooks", revision: result.revision, localPath: result.localPath });
-        } catch (error) {
-          refreshed.push({ type: "hooks", error: error instanceof Error ? error.message : String(error) });
-        }
+      if (item?.hooks) {
+        refreshed.push({ type: "hooks", ...item.hooks });
       }
       return { sourceId: params.id, refreshed };
     } catch (error) {
@@ -736,48 +524,8 @@ async function main(): Promise<void> {
   });
 
   app.post("/api/v1/sources/refresh-all", async () => {
-    const credentialProvider = createCredentialProvider();
-    const skillSources = (await loadSources()).filter((source) => source.enabled);
-    const hookSources = (await loadHookSources()).filter((source) => source.enabled);
-    const byId = new Map<string, { skills?: typeof skillSources[number]; hooks?: typeof hookSources[number] }>();
-    for (const source of skillSources) {
-      byId.set(source.id, { ...(byId.get(source.id) || {}), skills: source });
-    }
-    for (const source of hookSources) {
-      byId.set(source.id, { ...(byId.get(source.id) || {}), hooks: source });
-    }
-
-    const refreshed: Array<{
-      sourceId: string;
-      skills?: { revision?: string; localPath?: string; error?: string };
-      hooks?: { revision?: string; localPath?: string; error?: string };
-    }> = [];
-    for (const [sourceId, entry] of byId.entries()) {
-      const item: {
-        sourceId: string;
-        skills?: { revision?: string; localPath?: string; error?: string };
-        hooks?: { revision?: string; localPath?: string; error?: string };
-      } = { sourceId };
-
-      if (entry.skills) {
-        try {
-          const result = await syncSource(entry.skills, credentialProvider);
-          item.skills = { revision: result.revision, localPath: result.localPath };
-        } catch (error) {
-          item.skills = { error: error instanceof Error ? error.message : String(error) };
-        }
-      }
-      if (entry.hooks) {
-        try {
-          const result = await syncHookSource(entry.hooks, credentialProvider);
-          item.hooks = { revision: result.revision, localPath: result.localPath };
-        } catch (error) {
-          item.hooks = { error: error instanceof Error ? error.message : String(error) };
-        }
-      }
-      refreshed.push(item);
-    }
-    return { refreshed };
+    const result = await applicationService.refreshSources();
+    return { refreshed: result.refreshed };
   });
 
   app.post("/api/v1/skills/validate", async (request, reply) => {
@@ -795,13 +543,11 @@ async function main(): Promise<void> {
     }
 
     try {
-      const validation = await validateSkillBundle(
-        {
-          localPath,
-          skillName: typeof body.skillName === "string" ? body.skillName : undefined,
-        },
+      const validation = await applicationService.validateSkillBundle({
+        localPath,
+        skillName: typeof body.skillName === "string" ? body.skillName : undefined,
         profile,
-      );
+      });
       return { validation };
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
@@ -827,36 +573,20 @@ async function main(): Promise<void> {
       return reply.code(400).send({ error: "overrideMode must be direct-push, branch-only, or branch-pr." });
     }
     try {
-      const sources = await loadSources();
-      const targetSource = sources.find((source) => source.id === sourceId);
-      if (!targetSource) {
-        return reply.code(404).send({ error: `Unknown source '${sourceId}'.` });
-      }
-
-      const catalog = await loadCatalogFromSources(repoRoot, false);
-      const normalizedLocalPath = normalizePathForMatch(localPath);
-      const matchedSkill = catalog.skills.find((skill) => normalizePathForMatch(skill.sourcePath || "") === normalizedLocalPath);
-      const matchedSource = matchedSkill ? sources.find((source) => source.id === matchedSkill.sourceId) : undefined;
-      const officialBundle = Boolean(matchedSource?.official) || looksLikeOfficialSkillPath(localPath);
-      if (officialBundle && !targetSource.official) {
-        return reply.code(400).send({ error: "Official skills can only be published to official sources." });
-      }
-
-      const result = await publishSkillBundle(
-        {
-          sourceId,
-          bundle: {
-            localPath,
-            skillName: typeof body.skillName === "string" ? body.skillName : undefined,
-          },
-          commitMessage: typeof body.message === "string" ? body.message : undefined,
-          overrideMode: overrideMode ? (overrideMode as PublishMode) : undefined,
-          overrideBaseBranch: overrideBaseBranch || undefined,
-        },
-        createCredentialProvider(),
-      );
+      // Official skills can only be published to official sources. The shared application service enforces that guard.
+      const result = await applicationService.publishSkillBundle({
+        sourceId,
+        localPath,
+        skillName: typeof body.skillName === "string" ? body.skillName : undefined,
+        commitMessage: typeof body.message === "string" ? body.message : undefined,
+        overrideMode: overrideMode ? (overrideMode as PublishMode) : undefined,
+        overrideBaseBranch: overrideBaseBranch || undefined,
+      });
       return { result };
     } catch (error) {
+      if (isUnknownSourceError(error, sourceId)) {
+        return reply.code(404).send({ error: `Unknown source '${sourceId}'.` });
+      }
       return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
@@ -871,17 +601,12 @@ async function main(): Promise<void> {
       return reply.code(400).send({ error: "path is required." });
     }
     try {
-      const result = await contributeOfficialSkillBundle(
-        {
-          sourceId: typeof body.sourceId === "string" ? body.sourceId : undefined,
-          bundle: {
-            localPath,
-            skillName: typeof body.skillName === "string" ? body.skillName : undefined,
-          },
-          commitMessage: typeof body.message === "string" ? body.message : undefined,
-        },
-        createCredentialProvider(),
-      );
+      const result = await applicationService.contributeOfficialSkillBundle({
+        sourceId: typeof body.sourceId === "string" ? body.sourceId : undefined,
+        localPath,
+        skillName: typeof body.skillName === "string" ? body.skillName : undefined,
+        commitMessage: typeof body.message === "string" ? body.message : undefined,
+      });
       return { result };
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
@@ -910,11 +635,7 @@ async function main(): Promise<void> {
       unknown
     >;
     try {
-      await ensureHelperRunning(repoRoot);
-      const payload = await helperRequest("/pick-directory", {
-        initialPath: typeof body.initialPath === "string" ? body.initialPath : process.cwd(),
-      });
-      return payload;
+      return await applicationService.pickProjectDirectory(typeof body.initialPath === "string" ? body.initialPath : process.cwd());
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
     }
@@ -1020,7 +741,7 @@ async function main(): Promise<void> {
       envFile: body.envFile,
     };
 
-    return executeOperation(repoRoot, installRequest, { hooks: pluginRuntime.installHooks });
+    return applicationService.executeInstallOperation(installRequest);
   });
 
   app.post("/api/v1/uninstall/apply", async (request, reply) => {
@@ -1046,7 +767,7 @@ async function main(): Promise<void> {
       envFile: body.envFile,
     };
 
-    return executeOperation(repoRoot, uninstallRequest, { hooks: pluginRuntime.installHooks });
+    return applicationService.executeUninstallOperation(uninstallRequest);
   });
 
   app.post("/api/v1/sync/apply", async (request, reply) => {
@@ -1072,7 +793,7 @@ async function main(): Promise<void> {
       envFile: body.envFile,
     };
 
-    return executeOperation(repoRoot, syncRequest, { hooks: pluginRuntime.installHooks });
+    return applicationService.executeSyncOperation(syncRequest);
   });
 
   app.post("/api/v1/hooks/install/apply", async (request, reply) => {
@@ -1148,13 +869,20 @@ async function main(): Promise<void> {
     return reply.type("text/html").send(fs.readFileSync(path.join(webBuildPath, "index.html"), "utf8"));
   });
 
+  return app;
+}
+
+async function main(): Promise<void> {
+  const app = await createInstallerDashboardServer();
   const host = process.env.ICA_DASHBOARD_HOST || "127.0.0.1";
   const port = Number(process.env.ICA_DASHBOARD_PORT || "4173");
   await app.listen({ host, port });
   process.stdout.write(`ICA dashboard listening at http://${host}:${port}\n`);
 }
 
-main().catch((error) => {
-  process.stderr.write(`Dashboard startup failed: ${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    process.stderr.write(`Dashboard startup failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}

@@ -68,8 +68,12 @@ Notes:
 
 ### Autonomy + Work-Item Orchestration
 - `autonomy.level` (string) — L1/L2/L3 autonomy mode
+- `autonomy.system_level` (string) — persisted system-level autonomy used by `process`
+- `autonomy.project_level` (string) — project override (`follow-system`, `L1`, `L2`, `L3`)
 - `autonomy.work_item_pipeline_enabled` (bool, default `true`) — auto-run `create-work-items` -> `plan-work-items` -> `run-work-items` when actionable findings/comments are detected
 - `autonomy.work_item_pipeline_mode` (string, default `batch_auto`) — confirmation behavior for actionable finding ingestion
+- `autonomy.interrupt_policy` (string, default `p0_only`) — when active work may be preempted
+- `autonomy.dispatch_trigger` (string, default `on_completion`) — when the next work item is dispatched
   - `batch_auto`: no extra confirmation
   - `batch_confirm`: one grouped confirmation
   - `item_confirm`: per-item confirmation
@@ -79,8 +83,12 @@ Example:
 ```json
 {
   "autonomy": {
+    "system_level": "L3",
+    "project_level": "L3",
     "work_item_pipeline_enabled": true,
-    "work_item_pipeline_mode": "batch_auto"
+    "work_item_pipeline_mode": "batch_auto",
+    "interrupt_policy": "p0_only",
+    "dispatch_trigger": "on_completion"
   }
 }
 ```
@@ -91,6 +99,8 @@ Example:
 - `git.branch_protection` (bool)
 - `git.default_branch` (string)
 - `git.require_pr_for_main` (bool)
+- `git.worktree_branch_behavior` (string) — `always_new`, `ask`, or `current_branch`
+- `git.worktree_branch_prefix` (string) — branch prefix for dedicated worktrees
 
 ### Paths
 - `paths.story_path`, `paths.bug_path`, `paths.memory_path`
