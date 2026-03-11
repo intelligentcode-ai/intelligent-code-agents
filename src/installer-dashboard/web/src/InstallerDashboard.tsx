@@ -48,6 +48,14 @@ type InstallationSkill = {
   orphaned?: boolean;
 };
 
+type InstallationWorkflow = {
+  name: string;
+  skillId?: string;
+  sourceId?: string;
+  installMode: string;
+  effectiveMode: string;
+};
+
 type InstallationRow = {
   target: Target;
   installPath: string;
@@ -55,6 +63,7 @@ type InstallationRow = {
   projectPath?: string;
   installed: boolean;
   managedSkills: InstallationSkill[];
+  managedWorkflows?: InstallationWorkflow[];
   updatedAt?: string;
 };
 
@@ -94,7 +103,9 @@ type OperationTargetReport = {
   installPath: string;
   operation: string;
   appliedSkills: string[];
+  appliedWorkflows: string[];
   removedSkills: string[];
+  removedWorkflows: string[];
   skippedSkills: string[];
   warnings: Array<{ code: string; message: string }>;
   errors: Array<{ code: string; message: string }>;

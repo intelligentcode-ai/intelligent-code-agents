@@ -1,0 +1,52 @@
+{
+  "$schema": "./src/schemas/ica.config.schema.json",
+  "version": "1.0.0",
+  "description": "Project-level ICA policy for intelligent-code-agents",
+  "autonomy": {
+    "level": "L3",
+    "system_level": "L3",
+    "project_level": "L3",
+    "pm_always_active": true,
+    "work_item_pipeline_enabled": true,
+    "work_item_pipeline_mode": "batch_auto",
+    "l3_settings": {
+      "max_parallel": 5,
+      "auto_discover": true,
+      "continue_on_error": true
+    }
+  },
+  "git": {
+    "privacy": true,
+    "branch_protection": true,
+    "default_branch": "main",
+    "require_pr_for_main": true,
+    "validate_commits": true,
+    "worktree_branch_behavior": "always_new",
+    "worktree_branch_prefix": "agent/"
+  },
+  "quality": {
+    "enforce_peer_review": true,
+    "testing_required": true,
+    "security_validation": true,
+    "documentation_required": true
+  },
+  "development": {
+    "testing_approach": "comprehensive",
+    "file_management_strict": true
+  },
+  "project": {
+    "repository_type": "git",
+    "release_automation": true
+  },
+  "tools": {
+    "mcp_tools_enabled": true
+  },
+  "mcp_integrations": {
+    "issue_tracking": {
+      "provider": "mcp__github",
+      "enabled": true,
+      "fallback": "file-based",
+      "config": {}
+    }
+  }
+}

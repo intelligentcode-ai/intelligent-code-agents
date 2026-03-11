@@ -13,7 +13,7 @@ ICA installs `SKILL.md` assets and supporting defaults into agent home directori
 - `codex` -> `~/.codex`
 - `cursor` -> `~/.cursor`
 - `gemini` -> `~/.gemini`
-- `antigravity` -> `~/.antigravity`
+- `antigravity` -> `~/.gemini/antigravity`
 
 ## Install Methods
 

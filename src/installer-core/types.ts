@@ -145,6 +145,16 @@ export interface ManagedSkillState {
   sourcePath: string;
 }
 
+export interface ManagedWorkflowState {
+  name: string;
+  skillName: string;
+  skillId: SkillIdentifier;
+  sourceId: string;
+  installMode: InstallMode;
+  effectiveMode: InstallMode;
+  destinationPath: string;
+}
+
 export interface InstallState {
   schemaVersion: string;
   installerVersion: string;
@@ -154,6 +164,7 @@ export interface InstallState {
   installedAt: string;
   updatedAt: string;
   managedSkills: ManagedSkillState[];
+  managedWorkflows: ManagedWorkflowState[];
   managedBaselinePaths: string[];
   history: OperationLogEntry[];
 }
@@ -179,7 +190,9 @@ export interface TargetOperationReport {
   installPath: string;
   operation: OperationKind;
   appliedSkills: string[];
+  appliedWorkflows: string[];
   removedSkills: string[];
+  removedWorkflows: string[];
   skippedSkills: string[];
   warnings: OperationWarning[];
   errors: OperationError[];
@@ -201,6 +214,9 @@ export interface PlannerDelta {
 export interface ResolvedTargetPath {
   target: TargetPlatform;
   installPath: string;
+  skillsPath: string;
+  workflowsPath: string;
+  legacyInstallPaths?: string[];
   scope: InstallScope;
   projectPath?: string;
 }

@@ -110,8 +110,15 @@ ica serve --open=true
 
 ## Scope
 
-- User scope: `~/.claude`, `~/.codex`, `~/.cursor`, `~/.gemini`, `~/.antigravity`
+- User scope: `~/.claude`, `~/.codex`, `~/.cursor`, `~/.gemini`, `~/.gemini/antigravity`
 - Project scope: `<project>/.claude`, `<project>/.codex`, ...
+
+Antigravity project scope installs into `<project>/.agents` (skills under `<project>/.agents/skills`).
+ICA also creates Antigravity workflows for slash discovery:
+- user scope: `~/.gemini/antigravity/global_workflows`
+- project scope: `<project>/.agents/workflows`
+
+Legacy Antigravity project path `.agent` is supported for migration/compatibility only.
 
 CLI default: for `--scope=project`, if `--project-path` is omitted, ICA uses the current working directory.
 

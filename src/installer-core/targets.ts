@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execSync } from "node:child_process";
+import { antigravityWorkflowPath } from "./antigravity";
 import { SUPPORTED_TARGETS, TARGET_HOME_DIR } from "./constants";
 import { InstallScope, ResolvedTargetPath, TargetPlatform } from "./types";
 
@@ -47,7 +48,11 @@ export function discoverTargets(): TargetPlatform[] {
     targets.push("gemini");
   }
 
-  if (hasDir(path.join(home, ".antigravity")) || hasCommand("antigravity")) {
+  if (
+    hasDir(path.join(home, ".gemini", "antigravity")) ||
+    hasDir(path.join(home, ".antigravity")) ||
+    hasCommand("antigravity")
+  ) {
     targets.push("antigravity");
   }
 
@@ -74,7 +79,11 @@ export function resolveInstallPath(
   projectPath?: string,
   agentDirName?: string,
 ): string {
-  const homeDir = agentDirName || TARGET_HOME_DIR[target];
+  const homeDir =
+    agentDirName ||
+    (target === "antigravity" && scope === "project"
+      ? ".agents"
+      : TARGET_HOME_DIR[target]);
   if (scope === "project") {
     if (!projectPath) {
       throw new Error("projectPath is required for project scope");
@@ -90,10 +99,32 @@ export function resolveTargetPaths(
   projectPath?: string,
   agentDirName?: string,
 ): ResolvedTargetPath[] {
-  return targets.map((target) => ({
-    target,
-    scope,
-    projectPath: scope === "project" ? path.resolve(projectPath || "") : undefined,
-    installPath: resolveInstallPath(target, scope, projectPath, agentDirName),
-  }));
+  return targets.map((target) => {
+    const installPath = resolveInstallPath(target, scope, projectPath, agentDirName);
+    const projectRoot = scope === "project" ? path.resolve(projectPath || "") : undefined;
+
+    if (target === "antigravity") {
+      return {
+        target,
+        scope,
+        projectPath: projectRoot,
+        installPath,
+        skillsPath: path.join(installPath, "skills"),
+        workflowsPath: antigravityWorkflowPath(installPath, scope),
+        legacyInstallPaths:
+          scope === "project"
+            ? [path.join(projectRoot || "", ".agent")]
+            : [path.join(os.homedir(), ".antigravity")],
+      };
+    }
+
+    return {
+      target,
+      scope,
+      projectPath: projectRoot,
+      installPath,
+      skillsPath: path.join(installPath, "skills"),
+      workflowsPath: path.join(installPath, "workflows"),
+    };
+  });
 }

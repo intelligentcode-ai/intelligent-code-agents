@@ -22,7 +22,7 @@ import { loadHookInstallState } from "../installer-core/hookState";
 import { registerRepository } from "../installer-core/repositories";
 import { contributeOfficialSkillBundle, publishSkillBundle, validateSkillBundle } from "../installer-core/skillPublish";
 import { refreshSourcesAndHooks } from "../installer-core/sourceRefresh";
-import { loadInstallState } from "../installer-core/state";
+import { inspectInstallations } from "../installer-core/installations";
 import { parseTargets, resolveTargetPaths } from "../installer-core/targets";
 import { checkForAppUpdate } from "../installer-core/updateCheck";
 import { findRepoRoot } from "../installer-core/repo";
@@ -850,16 +850,19 @@ async function runList(options: Record<string, string | boolean>): Promise<void>
   const projectPath = stringOption(options, "project-path", "") || undefined;
   const targets = parseTargetsStrict(stringOption(options, "targets", ""));
   const resolved = resolveTargetPaths(targets, scope, projectPath, stringOption(options, "agent-dir-name", "") || undefined);
+  const repoRoot = findRepoRoot(__dirname);
+  const catalog = await loadCatalogFromSources(repoRoot, false);
+  const installations = await inspectInstallations(resolved, catalog);
 
-  const rows: Array<{ target: TargetPlatform; installPath: string; managedSkills: string[]; updatedAt?: string }> = [];
+  const rows: Array<{ target: TargetPlatform; installPath: string; managedSkills: string[]; managedWorkflows: string[]; updatedAt?: string }> = [];
 
-  for (const target of resolved) {
-    const state = await loadInstallState(target.installPath);
+  for (const target of installations) {
     rows.push({
       target: target.target,
       installPath: target.installPath,
-      managedSkills: (state?.managedSkills || []).map((skill) => skill.skillId || skill.name),
-      updatedAt: state?.updatedAt,
+      managedSkills: target.managedSkills.map((skill) => skill.skillId || skill.name),
+      managedWorkflows: target.managedWorkflows.map((workflow) => workflow.name),
+      updatedAt: target.updatedAt,
     });
   }
 
@@ -871,6 +874,7 @@ async function runList(options: Record<string, string | boolean>): Promise<void>
   for (const row of rows) {
     output.write(`${row.target}: ${row.installPath}\n`);
     output.write(`  Skills: ${row.managedSkills.length > 0 ? row.managedSkills.join(", ") : "(none)"}\n`);
+    output.write(`  Workflows: ${row.managedWorkflows.length > 0 ? row.managedWorkflows.join(", ") : "(none)"}\n`);
     if (row.updatedAt) {
       output.write(`  Updated: ${row.updatedAt}\n`);
     }
@@ -952,7 +956,9 @@ async function runOperation(command: OperationKind, options: Record<string, stri
   for (const target of report.targets) {
     output.write(`\n[${target.target}] ${target.operation} -> ${target.installPath}\n`);
     output.write(`  applied: ${target.appliedSkills.join(", ") || "(none)"}\n`);
+    output.write(`  applied workflows: ${target.appliedWorkflows.join(", ") || "(none)"}\n`);
     output.write(`  removed: ${target.removedSkills.join(", ") || "(none)"}\n`);
+    output.write(`  removed workflows: ${target.removedWorkflows.join(", ") || "(none)"}\n`);
     output.write(`  skipped: ${target.skippedSkills.join(", ") || "(none)"}\n`);
 
     if (target.warnings.length > 0) {

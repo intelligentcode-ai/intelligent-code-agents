@@ -35,6 +35,7 @@ test("planner computes install/remove delta", () => {
           sourcePath: "/tmp/src/skills/reviewer",
         },
       ],
+      managedWorkflows: [],
       managedBaselinePaths: [],
       history: [],
     },

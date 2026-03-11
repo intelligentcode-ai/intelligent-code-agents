@@ -1,0 +1,29 @@
+{
+  "$schema": "./src/schemas/ica.workflow.schema.json",
+  "version": "1.0.0",
+  "description": "Project-level GitHub workflow policy for intelligent-code-agents",
+  "medium": {
+    "pr_required": true,
+    "merge_strategy": "feature_branch",
+    "release_automation": true,
+    "auto_merge": true,
+    "require_github_approval": false
+  },
+  "large": {
+    "pr_required": true,
+    "merge_strategy": "feature_branch",
+    "release_automation": true,
+    "auto_merge": true,
+    "require_github_approval": false,
+    "coordination_required": true
+  },
+  "mega": {
+    "pr_required": true,
+    "merge_strategy": "feature_branch",
+    "release_automation": true,
+    "auto_merge": true,
+    "require_github_approval": false,
+    "coordination_required": true,
+    "breaking_change_assessment": true
+  }
+}

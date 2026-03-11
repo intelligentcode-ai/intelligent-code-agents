@@ -16,6 +16,7 @@ import { syncHookSource } from "../../installer-core/hookSync";
 import { loadHookCatalogFromSources, HookInstallSelection } from "../../installer-core/hookCatalog";
 import { executeHookOperation, HookInstallRequest, HookTargetPlatform } from "../../installer-core/hookExecutor";
 import { loadHookInstallState } from "../../installer-core/hookState";
+import { inspectInstallations } from "../../installer-core/installations";
 import { registerRepository } from "../../installer-core/repositories";
 import { redactSensitive, safeErrorMessage } from "../../installer-core/security";
 import { refreshSourcesAndHooks } from "../../installer-core/sourceRefresh";
@@ -36,15 +37,6 @@ import {
 import { dashboardServerPluginRegistry } from "../../installer-dashboard/server/pluginRegistry";
 import { createRealtimeHub } from "./realtime";
 import { createWsTicketStore } from "./wsTickets";
-
-interface InstallationSkillView {
-  name: string;
-  skillId?: string;
-  sourceId?: string;
-  installMode: string;
-  effectiveMode: string;
-  orphaned?: boolean;
-}
 
 interface InstallationHookView {
   name: string;
@@ -222,51 +214,6 @@ function asHookInstallSelection(input: unknown): HookInstallSelection[] | undefi
     }))
     .filter((item) => item.sourceId && item.hookName);
   return parsed.length > 0 ? parsed : undefined;
-}
-
-function detectLegacyInstalledSkills(installPath: string, catalogSkillNames: Set<string>): InstallationSkillView[] {
-  const skillsRoot = path.join(installPath, "skills");
-  if (!fs.existsSync(skillsRoot)) {
-    return [];
-  }
-
-  let entries: fs.Dirent[] = [];
-  try {
-    entries = fs.readdirSync(skillsRoot, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  const detected: InstallationSkillView[] = [];
-  for (const entry of entries) {
-    if (!catalogSkillNames.has(entry.name)) {
-      continue;
-    }
-
-    const skillPath = path.join(skillsRoot, entry.name);
-    let looksLikeSkill = false;
-    try {
-      const stat = fs.lstatSync(skillPath);
-      if (stat.isSymbolicLink()) {
-        const resolved = fs.realpathSync(skillPath);
-        looksLikeSkill = fs.existsSync(path.join(resolved, "SKILL.md"));
-      } else if (stat.isDirectory()) {
-        looksLikeSkill = fs.existsSync(path.join(skillPath, "SKILL.md"));
-      }
-    } catch {
-      looksLikeSkill = false;
-    }
-
-    if (looksLikeSkill) {
-      detected.push({
-        name: entry.name,
-        installMode: "unknown",
-        effectiveMode: "unknown",
-      });
-    }
-  }
-
-  return detected.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function detectLegacyInstalledHooks(installPath: string, catalogHookNames: Set<string>): InstallationHookView[] {
@@ -533,41 +480,7 @@ export async function createInstallerApiServer(options: InstallerApiServerOption
     const targets = parseTargets(query.targets);
     const resolved = resolveTargetPaths(targets, scope, projectPath);
     const catalog = await deps.loadCatalogFromSources(repoRoot, false);
-    const catalogSkillNames = new Set(catalog.skills.map((skill) => skill.skillName));
-    const activeSourceIds = new Set(catalog.sources.map((source) => source.id));
-
-    const rows = await Promise.all(
-      resolved.map(async (entry) => {
-        const state = await loadInstallState(entry.installPath);
-        const managedSkills: InstallationSkillView[] =
-          state?.managedSkills.map((skill) => ({
-            name: skill.name,
-            skillId: skill.skillId,
-            sourceId: skill.sourceId,
-            installMode: skill.installMode,
-            effectiveMode: skill.effectiveMode,
-            orphaned: skill.orphaned || (skill.sourceId ? !activeSourceIds.has(skill.sourceId) : false),
-          })) || [];
-        const skillsByName = new Map(managedSkills.map((skill) => [skill.name, skill]));
-        const detected = detectLegacyInstalledSkills(entry.installPath, catalogSkillNames);
-        for (const skill of detected) {
-          if (!skillsByName.has(skill.name)) {
-            skillsByName.set(skill.name, skill);
-          }
-        }
-        const combinedSkills = Array.from(skillsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
-
-        return {
-          target: entry.target,
-          installPath: entry.installPath,
-          scope: entry.scope,
-          projectPath: entry.projectPath,
-          installed: Boolean(state) || combinedSkills.length > 0,
-          managedSkills: combinedSkills,
-          updatedAt: state?.updatedAt,
-        };
-      }),
-    );
+    const rows = await inspectInstallations(resolved, catalog);
 
     return { installations: rows };
   });
