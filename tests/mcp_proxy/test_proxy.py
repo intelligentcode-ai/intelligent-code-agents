@@ -26,11 +26,11 @@ def _core_candidates():
     repo = _repo_root()
     split_repo_env = os.environ.get("ICA_SKILLS_REPO")
     candidates = [
-        repo / "src" / "skills" / "mcp-common" / "scripts",
-        repo.parent / "skills" / "skills" / "mcp-common" / "scripts",
+        repo / "src" / "skills" / "mcp-common" / "scripts" / "ica_mcp_core.py",
+        repo.parent / "skills" / "skills" / "mcp-common" / "scripts" / "ica_mcp_core.py",
     ]
     if split_repo_env:
-        candidates.append(Path(split_repo_env) / "skills" / "mcp-common" / "scripts")
+        candidates.append(Path(split_repo_env) / "skills" / "mcp-common" / "scripts" / "ica_mcp_core.py")
     return candidates
 
 
@@ -47,10 +47,10 @@ def _proxy_candidates():
 
 
 def _load_core():
-    core_dir = next((candidate for candidate in _core_candidates() if candidate.exists()), None)
-    if core_dir is None:
+    core_file = next((candidate for candidate in _core_candidates() if candidate.exists()), None)
+    if core_file is None:
         raise unittest.SkipTest("Skipping MCP proxy tests: ica_mcp_core.py not available in this checkout.")
-    sys.path.insert(0, str(core_dir))
+    sys.path.insert(0, str(core_file.parent))
     import ica_mcp_core  # type: ignore
 
     return ica_mcp_core
