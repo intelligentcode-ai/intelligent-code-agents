@@ -8,7 +8,7 @@ export const TARGET_HOME_DIR: Record<TargetPlatform, string> = {
   codex: ".codex",
   cursor: ".cursor",
   gemini: ".gemini",
-  antigravity: ".antigravity",
+  antigravity: path.join(".gemini", "antigravity"),
 };
 
 export const BASELINE_DIRECTORIES = ["behaviors", "roles", "agenttask-templates"];

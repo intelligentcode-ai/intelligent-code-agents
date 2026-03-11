@@ -64,6 +64,31 @@ Notes:
 - GitHub forbids approving your own PR (server-side rule). For self-authored PRs, approvals require a second GitHub
   identity/bot if you want this gate to pass.
 
+### GitHub-First Project Policy
+
+For a GitHub-first project, combine `ica.config.json`, `ica.workflow.json`, and tracking config so GitHub is the primary backend for both planning and merge flow:
+
+```json
+{
+  "mcp_integrations": {
+    "issue_tracking": {
+      "provider": "mcp__github",
+      "enabled": true
+    }
+  }
+}
+```
+
+```json
+{
+  "medium": { "pr_required": true, "auto_merge": true, "require_github_approval": true },
+  "large":  { "pr_required": true, "auto_merge": true, "require_github_approval": true },
+  "mega":   { "pr_required": true, "auto_merge": true, "require_github_approval": true }
+}
+```
+
+Use this pattern only if you want GitHub-native approvals on top of the ICA receipt gate. Self-authored PRs need a second approver identity or bot only when `require_github_approval` is enabled.
+
 ## Key Settings
 
 ### Autonomy + Work-Item Orchestration

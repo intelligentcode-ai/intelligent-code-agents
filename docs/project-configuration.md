@@ -28,6 +28,12 @@ Preferred project-local location for workflow defaults per tier.
 Start from:
 - `ica.workflow.default.json`
 
+## Antigravity Notes
+
+Antigravity workspace customizations default to `.agents` (with legacy `.agent` compatibility):
+- skills: `./.agents/skills/`
+- workflows: `./.agents/workflows/`
+
 ## Claude Integration (Optional)
 
 When Claude integration is enabled, ICA may manage:

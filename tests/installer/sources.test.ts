@@ -355,6 +355,7 @@ test("reconcileLegacyManagedSkills marks missing source bindings as orphaned", (
           sourcePath: "/tmp/skills/developer",
         },
       ],
+      managedWorkflows: [],
       managedBaselinePaths: [],
       history: [],
     },

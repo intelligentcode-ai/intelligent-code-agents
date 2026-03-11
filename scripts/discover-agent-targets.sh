@@ -57,7 +57,7 @@ if has_dir "${home}/.gemini" || has_cmd gemini || has_dir "${home}/.config/gemin
 fi
 
 # Antigravity (best-effort; tool-specific wiring varies)
-if has_dir "${home}/.antigravity" || has_cmd antigravity; then
+if has_dir "${home}/.gemini/antigravity" || has_dir "${home}/.antigravity" || has_cmd antigravity; then
   targets+=("antigravity")
 fi
 

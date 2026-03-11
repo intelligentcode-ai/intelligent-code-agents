@@ -15,7 +15,14 @@ export async function loadInstallState(installPath: string): Promise<InstallStat
   }
 
   const content = await readText(statePath);
-  return JSON.parse(content) as InstallState;
+  const parsed = JSON.parse(content) as Partial<InstallState>;
+  return {
+    ...parsed,
+    managedSkills: Array.isArray(parsed.managedSkills) ? parsed.managedSkills : [],
+    managedWorkflows: Array.isArray(parsed.managedWorkflows) ? parsed.managedWorkflows : [],
+    managedBaselinePaths: Array.isArray(parsed.managedBaselinePaths) ? parsed.managedBaselinePaths : [],
+    history: Array.isArray(parsed.history) ? parsed.history : [],
+  } as InstallState;
 }
 
 export async function saveInstallState(installPath: string, state: InstallState): Promise<void> {
@@ -40,6 +47,7 @@ export function createEmptyState(params: {
     installedAt: now,
     updatedAt: now,
     managedSkills: [],
+    managedWorkflows: [],
     managedBaselinePaths: [],
     history: [],
   };
@@ -111,6 +119,7 @@ export function reconcileLegacyManagedSkills(state: InstallState, catalog: Skill
 
   return {
     ...state,
+    managedWorkflows: Array.isArray(state.managedWorkflows) ? state.managedWorkflows : [],
     managedSkills: updated,
   };
 }

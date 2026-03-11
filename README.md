@@ -232,8 +232,14 @@ If symlink creation fails, ICA falls back to `copy` and records the effective mo
 
 ## Scope Modes
 
-- `user` scope: installs into tool home (`~/.claude`, `~/.codex`, ...)
-- `project` scope: installs into `<project>/<agent-home-dir>`
+- `user` scope: installs into tool home (`~/.claude`, `~/.codex`, `~/.gemini/antigravity`, ...)
+- `project` scope: installs into `<project>/<agent-home-dir>` (Antigravity uses `<project>/.agents`)
+
+For Antigravity installs, ICA also generates companion workflows:
+- user scope: `~/.gemini/antigravity/global_workflows/*.md`
+- project scope: `<project>/.agents/workflows/*.md`
+
+Antigravity legacy project path `.agent` remains compatibility-only; ICA now defaults to `.agents`.
 
 CLI default for project scope: when `--scope=project` is used without `--project-path`, ICA uses the current working directory.
 

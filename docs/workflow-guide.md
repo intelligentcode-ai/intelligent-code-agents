@@ -1,7 +1,8 @@
 # Workflow Guide (v10.2)
 
-This project is **dev-first** and **skills-gated**:
-- GitHub can require a PR, while ICA enforces “review required” via an `ICA-REVIEW-RECEIPT`.
+This project is **GitHub-first**, **dev-first**, and **skills-gated**:
+- GitHub PRs are the primary merge workflow.
+- ICA also enforces “review required” via an `ICA-REVIEW-RECEIPT`.
 - The agent performs merges itself (`gh pr merge`), never GitHub auto-merge (`--auto`).
 
 ## Branch Workflow (Dev-First)
@@ -37,17 +38,17 @@ Optional: standing approval ("auto-merge") once gates pass:
 
 ## Optional GitHub-Style Approvals
 
-By default, this repo uses **self-review-and-merge**:
-- PR required (branch protection), GitHub required approvals may remain at 0.
-- ICA Stage 3 receipt is the required review gate.
+This repo uses a **GitHub-first PR flow** with ICA Stage 3 receipts as the required review gate:
+- PR required (branch protection).
+- ICA Stage 3 receipt remains the required review gate.
+- GitHub-native approvals remain optional unless explicitly enabled in repo workflow policy or GitHub branch protection.
 
-If you want to also require a GitHub-native approval gate, set:
+If you want to add a GitHub-native approval gate, enable:
 
 - Tier default: `require_github_approval=true` in `ica.workflow.json`
 - Per-AgentTask override: `workflow.require_github_approval: true`
 
-Note: GitHub forbids approving your own PR. If you require GitHub approvals for self-authored PRs, you need a second
-GitHub identity/bot.
+Note: GitHub forbids approving your own PR. Self-authored PRs therefore require a second GitHub identity or bot only when this optional gate is enabled.
 
 ## Release Workflow
 

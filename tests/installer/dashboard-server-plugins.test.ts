@@ -80,6 +80,8 @@ test("loadDashboardServerPlugins registers only enabled plugins with scoped rout
     resolvedTarget: {
       target: "codex",
       installPath: "/tmp/.codex",
+      skillsPath: "/tmp/.codex/skills",
+      workflowsPath: "/tmp/.codex/workflows",
       scope: "user",
     },
   });
@@ -89,6 +91,8 @@ test("loadDashboardServerPlugins registers only enabled plugins with scoped rout
     resolvedTarget: {
       target: "codex",
       installPath: "/tmp/.codex",
+      skillsPath: "/tmp/.codex/skills",
+      workflowsPath: "/tmp/.codex/workflows",
       scope: "user",
     },
     report: {
@@ -96,7 +100,9 @@ test("loadDashboardServerPlugins registers only enabled plugins with scoped rout
       installPath: "/tmp/.codex",
       operation: "install",
       appliedSkills: [],
+      appliedWorkflows: [],
       removedSkills: [],
+      removedWorkflows: [],
       skippedSkills: [],
       warnings: [],
       errors: [],
