@@ -9,6 +9,8 @@
     "pm_always_active": true,
     "work_item_pipeline_enabled": true,
     "work_item_pipeline_mode": "batch_auto",
+    "interrupt_policy": "p0_only",
+    "dispatch_trigger": "on_completion",
     "l3_settings": {
       "max_parallel": 5,
       "auto_discover": true,
@@ -22,7 +24,7 @@
     "require_pr_for_main": true,
     "validate_commits": true,
     "worktree_branch_behavior": "always_new",
-    "worktree_branch_prefix": "agent/"
+    "worktree_branch_prefix": "codex/"
   },
   "quality": {
     "enforce_peer_review": true,

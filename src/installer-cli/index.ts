@@ -10,21 +10,13 @@ import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { executeOperation } from "../installer-core/executor";
 import { loadCatalogFromSources } from "../installer-core/catalog";
-import { createCredentialProvider } from "../installer-core/credentials";
-import { checkSourceAuth } from "../installer-core/sourceAuth";
-import { syncSource } from "../installer-core/sourceSync";
-import { ensureSourceRegistry, loadSources, removeSource, updateSource } from "../installer-core/sources";
-import { loadHookSources, removeHookSource, updateHookSource } from "../installer-core/hookSources";
-import { syncHookSource } from "../installer-core/hookSync";
 import { loadHookCatalogFromSources, HookInstallSelection } from "../installer-core/hookCatalog";
 import { executeHookOperation, HookInstallRequest, HookTargetPlatform } from "../installer-core/hookExecutor";
 import { loadHookInstallState } from "../installer-core/hookState";
-import { registerRepository } from "../installer-core/repositories";
-import { contributeOfficialSkillBundle, publishSkillBundle, validateSkillBundle } from "../installer-core/skillPublish";
-import { refreshSourcesAndHooks } from "../installer-core/sourceRefresh";
-import { inspectInstallations } from "../installer-core/installations";
+import { loadInstallState } from "../installer-core/state";
 import { parseTargets, resolveTargetPaths } from "../installer-core/targets";
 import { checkForAppUpdate } from "../installer-core/updateCheck";
+import { createInstallerApplicationService } from "../installer-core/applicationService";
 import { findRepoRoot } from "../installer-core/repo";
 import {
   GitProvider,
@@ -689,7 +681,7 @@ async function maybePrintUpdateNotifier(repoRoot: string, options: Record<string
     return;
   }
   const currentVersion = resolveInstallerVersion(repoRoot);
-  const update = await checkForAppUpdate(currentVersion);
+  const update = await createInstallerApplicationService({ repoRoot }).checkForUpdate(currentVersion);
   if (!update.updateAvailable || !update.latestVersion) {
     return;
   }
@@ -700,13 +692,9 @@ async function maybePrintUpdateNotifier(repoRoot: string, options: Record<string
 
 async function refreshSourcesOnCliStart(): Promise<void> {
   try {
-    const result = await refreshSourcesAndHooks({
-      credentials: createCredentialProvider(),
-      loadSources,
-      loadHookSources,
-      syncSource,
-      syncHookSource,
-    });
+    const repoRoot = findRepoRoot(__dirname);
+    const service = createInstallerApplicationService({ repoRoot });
+    const result = await service.refreshSources();
     const errors = result.refreshed.flatMap((entry) => [entry.skills?.error, entry.hooks?.error]).filter((item): item is string => Boolean(item));
     if (errors.length > 0) {
       output.write(`Warning: startup source refresh completed with ${errors.length} error(s).\n`);
@@ -849,22 +837,20 @@ async function runList(options: Record<string, string | boolean>): Promise<void>
   const scope = (stringOption(options, "scope", "user") === "project" ? "project" : "user") as InstallScope;
   const projectPath = stringOption(options, "project-path", "") || undefined;
   const targets = parseTargetsStrict(stringOption(options, "targets", ""));
-  const resolved = resolveTargetPaths(targets, scope, projectPath, stringOption(options, "agent-dir-name", "") || undefined);
   const repoRoot = findRepoRoot(__dirname);
-  const catalog = await loadCatalogFromSources(repoRoot, false);
-  const installations = await inspectInstallations(resolved, catalog);
-
-  const rows: Array<{ target: TargetPlatform; installPath: string; managedSkills: string[]; managedWorkflows: string[]; updatedAt?: string }> = [];
-
-  for (const target of installations) {
-    rows.push({
-      target: target.target,
-      installPath: target.installPath,
-      managedSkills: target.managedSkills.map((skill) => skill.skillId || skill.name),
-      managedWorkflows: target.managedWorkflows.map((workflow) => workflow.name),
-      updatedAt: target.updatedAt,
-    });
-  }
+  const service = createInstallerApplicationService({ repoRoot });
+  const rows = (await service.listInstallations({
+    scope,
+    projectPath,
+    targets,
+    agentDirName: stringOption(options, "agent-dir-name", "") || undefined,
+  })).installations.map((row) => ({
+    target: row.target,
+    installPath: row.installPath,
+    managedSkills: row.managedSkills.map((skill) => skill.skillId || skill.name),
+    managedWorkflows: row.managedWorkflows.map((workflow) => workflow.name),
+    updatedAt: row.updatedAt,
+  }));
 
   if (json) {
     output.write(`${JSON.stringify(rows, null, 2)}\n`);
@@ -945,8 +931,13 @@ async function runOperation(command: OperationKind, options: Record<string, stri
   const request = boolOption(options, "yes", false)
     ? await buildRequestFromFlags(command, options)
     : await promptInteractive(command, options);
-
-  const report = await executeOperation(repoRoot, request);
+  const service = createInstallerApplicationService({ repoRoot });
+  const report =
+    command === "install"
+      ? await service.executeInstallOperation(request)
+      : command === "uninstall"
+        ? await service.executeUninstallOperation(request)
+        : await service.executeSyncOperation(request);
 
   if (boolOption(options, "json", false)) {
     output.write(`${JSON.stringify(report, null, 2)}\n`);
@@ -978,87 +969,31 @@ async function runOperation(command: OperationKind, options: Record<string, stri
 async function runSources(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
   const action = (positionals[0] || "list").toLowerCase();
   const json = boolOption(options, "json", false);
-  const credentialProvider = createCredentialProvider();
-
-  const loadRepositoryRows = async (): Promise<
-    Array<{
-      id: string;
-      repoUrl: string;
-      transport: "https" | "ssh";
-      name: string;
-      skills?: Awaited<ReturnType<typeof loadSources>>[number];
-      hooks?: Awaited<ReturnType<typeof loadHookSources>>[number];
-    }>
-  > => {
-    const skillSources = await ensureSourceRegistry();
-    const hookSources = await loadHookSources();
-    const byId = new Map<
-      string,
-      {
-        id: string;
-        repoUrl: string;
-        transport: "https" | "ssh";
-        name: string;
-        skills?: Awaited<ReturnType<typeof loadSources>>[number];
-        hooks?: Awaited<ReturnType<typeof loadHookSources>>[number];
-      }
-    >();
-
-    for (const source of skillSources) {
-      byId.set(source.id, {
-        ...(byId.get(source.id) || {
-          id: source.id,
-          repoUrl: source.repoUrl,
-          transport: source.transport,
-          name: source.name,
-        }),
-        repoUrl: source.repoUrl,
-        transport: source.transport,
-        name: source.name,
-        skills: source,
-      });
-    }
-    for (const source of hookSources) {
-      byId.set(source.id, {
-        ...(byId.get(source.id) || {
-          id: source.id,
-          repoUrl: source.repoUrl,
-          transport: source.transport,
-          name: source.name,
-        }),
-        repoUrl: source.repoUrl,
-        transport: source.transport,
-        name: source.name,
-        hooks: source,
-      });
-    }
-    return Array.from(byId.values()).sort((a, b) => a.id.localeCompare(b.id));
-  };
+  const repoRoot = findRepoRoot(__dirname);
+  const service = createInstallerApplicationService({ repoRoot });
 
   if (action === "list") {
-    const repositories = await loadRepositoryRows();
+    const repositories = (await service.listSources()).sources;
     if (json) {
       output.write(`${JSON.stringify(repositories, null, 2)}\n`);
       return;
     }
     for (const repo of repositories) {
-      const enabled = repo.skills?.enabled !== false || repo.hooks?.enabled !== false;
+      const enabled = repo.enabled !== false;
       output.write(`${repo.id} (${repo.transport}) ${enabled ? "enabled" : "disabled"}\n`);
       output.write(`  name: ${repo.name}\n`);
       output.write(`  repo: ${repo.repoUrl}\n`);
-      if (repo.skills) {
-        output.write(`  skillsRoot: ${repo.skills.skillsRoot}\n`);
+      if (repo.skillsRoot) {
+        output.write(`  skillsRoot: ${repo.skillsRoot}\n`);
         output.write(
-          `  publish: ${repo.skills.publishDefaultMode} (base=${repo.skills.defaultBaseBranch || (repo.skills.official ? "dev" : "main")}, provider=${repo.skills.providerHint})\n`,
+          `  publish: ${repo.publishDefaultMode} (base=${repo.defaultBaseBranch || (repo.official ? "dev" : "main")}, provider=${repo.providerHint})\n`,
         );
-        output.write(`  officialContributionEnabled: ${repo.skills.officialContributionEnabled ? "true" : "false"}\n`);
-        output.write(`  skillsSynced: ${repo.skills.lastSyncAt || "(never)"}\n`);
-        if (repo.skills.lastError) output.write(`  skillsError: ${repo.skills.lastError}\n`);
+        output.write(`  officialContributionEnabled: ${repo.officialContributionEnabled ? "true" : "false"}\n`);
+        output.write(`  skillsSynced: ${repo.lastSyncAt || "(never)"}\n`);
+        if (repo.lastError) output.write(`  skillsError: ${repo.lastError}\n`);
       }
-      if (repo.hooks) {
-        output.write(`  hooksRoot: ${repo.hooks.hooksRoot}\n`);
-        output.write(`  hooksSynced: ${repo.hooks.lastSyncAt || "(never)"}\n`);
-        if (repo.hooks.lastError) output.write(`  hooksError: ${repo.hooks.lastError}\n`);
+      if (repo.hooksRoot) {
+        output.write(`  hooksRoot: ${repo.hooksRoot}\n`);
       }
     }
     return;
@@ -1072,36 +1007,24 @@ async function runSources(positionals: string[], options: Record<string, string 
       throw new Error(`Local repository path does not exist: ${localRepoPath}`);
     }
     const repoUrl = repoUrlOption || `file://${localRepoPath}`;
-    const token = stringOption(options, "token", stringOption(options, "api-key", "")).trim();
-    const registration = await registerRepository(
-      {
-        id: stringOption(options, "id", "") || undefined,
-        name: stringOption(options, "name", "") || undefined,
-        repoUrl,
-        transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
-        skillsRoot: stringOption(options, "skills-root", "") || undefined,
-        publishDefaultMode: parsePublishModeOption(options, "publish-default-mode"),
-        defaultBaseBranch: stringOption(options, "default-base-branch", "") || undefined,
-        providerHint: parseProviderHintOption(options, "provider-hint"),
-        officialContributionEnabled: parseOptionalBooleanOption(options, "official-contribution-enabled"),
-        hooksRoot: stringOption(options, "hooks-root", "") || undefined,
-        enabled: !stringOption(options, "enabled", "true").toLowerCase().startsWith("f"),
-        removable: true,
-        token,
-      },
-      credentialProvider,
-    );
-    const source = registration.skillSource;
-    const auth = await checkSourceAuth(
-      {
-        id: source.id,
-        repoUrl: source.repoUrl,
-        transport: source.transport,
-      },
-      credentialProvider,
-    );
-    if (!auth.ok) {
-      throw new Error(`Repository added but auth check failed: ${auth.message}`);
+    const registration = await service.registerSource({
+      id: stringOption(options, "id", "") || undefined,
+      name: stringOption(options, "name", "") || undefined,
+      repoUrl,
+      transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
+      skillsRoot: stringOption(options, "skills-root", "") || undefined,
+      publishDefaultMode: parsePublishModeOption(options, "publish-default-mode"),
+      defaultBaseBranch: stringOption(options, "default-base-branch", "") || undefined,
+      providerHint: parseProviderHintOption(options, "provider-hint"),
+      officialContributionEnabled: parseOptionalBooleanOption(options, "official-contribution-enabled"),
+      hooksRoot: stringOption(options, "hooks-root", "") || undefined,
+      enabled: !stringOption(options, "enabled", "true").toLowerCase().startsWith("f"),
+      removable: true,
+      token: stringOption(options, "token", stringOption(options, "api-key", "")).trim(),
+    });
+    const source = registration.source;
+    if (!registration.auth.ok) {
+      throw new Error(`Repository added but auth check failed: ${registration.auth.message}`);
     }
 
     if (json) {
@@ -1124,19 +1047,8 @@ async function runSources(positionals: string[], options: Record<string, string 
     if (!sourceId) {
       throw new Error("Missing required option --id");
     }
-    let removed: unknown = null;
-    try {
-      removed = await removeSource(sourceId);
-    } catch {
-      // allow hook-only removals in older setups
-    }
-    try {
-      await removeHookSource(sourceId);
-    } catch {
-      // ignore missing hook mirror
-    }
-    await credentialProvider.delete(sourceId);
-    output.write(json ? `${JSON.stringify(removed || { id: sourceId }, null, 2)}\n` : `Removed repository '${sourceId}'.\n`);
+    const removed = await service.removeSource(sourceId);
+    output.write(json ? `${JSON.stringify(removed.source, null, 2)}\n` : `Removed repository '${sourceId}'.\n`);
     return;
   }
 
@@ -1148,11 +1060,13 @@ async function runSources(positionals: string[], options: Record<string, string 
     const repoUrlOption = stringOption(options, "repo-url", "").trim();
     const repoPathOption = stringOption(options, "repo-path", "").trim();
     const repoUrl = repoUrlOption || (repoPathOption ? `file://${path.resolve(repoPathOption)}` : undefined);
-    const source = await updateSource(sourceId, {
+    const result = await service.updateSource({
+      sourceId,
       name: stringOption(options, "name", "") || undefined,
       repoUrl,
       transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
       skillsRoot: stringOption(options, "skills-root", "") || undefined,
+      hooksRoot: stringOption(options, "hooks-root", "") || undefined,
       publishDefaultMode: parsePublishModeOption(options, "publish-default-mode"),
       defaultBaseBranch: stringOption(options, "default-base-branch", "") || undefined,
       providerHint: parseProviderHintOption(options, "provider-hint"),
@@ -1161,34 +1075,10 @@ async function runSources(positionals: string[], options: Record<string, string 
         options.enabled !== undefined
           ? !stringOption(options, "enabled", "true").toLowerCase().startsWith("f")
           : undefined,
+      token: stringOption(options, "token", stringOption(options, "api-key", "")).trim(),
     });
-    try {
-      await updateHookSource(sourceId, {
-        name: stringOption(options, "name", "") || undefined,
-        repoUrl,
-        transport: (stringOption(options, "transport", "") as "https" | "ssh") || undefined,
-        hooksRoot: stringOption(options, "hooks-root", "") || undefined,
-        enabled:
-          options.enabled !== undefined
-            ? !stringOption(options, "enabled", "true").toLowerCase().startsWith("f")
-            : undefined,
-      });
-    } catch {
-      // Older environments may still have only skill sources configured.
-    }
 
-    const token = stringOption(options, "token", stringOption(options, "api-key", "")).trim();
-    if (token) {
-      await credentialProvider.store(sourceId, token);
-      await updateSource(sourceId, { credentialRef: `${sourceId}:stored` });
-      try {
-        await updateHookSource(sourceId, { credentialRef: `${sourceId}:stored` });
-      } catch {
-        // ignore missing hook mirror
-      }
-    }
-
-    output.write(json ? `${JSON.stringify(source, null, 2)}\n` : `Updated repository '${sourceId}'.\n`);
+    output.write(json ? `${JSON.stringify(result.source, null, 2)}\n` : `Updated repository '${sourceId}'.\n`);
     return;
   }
 
@@ -1197,32 +1087,10 @@ async function runSources(positionals: string[], options: Record<string, string 
     if (!sourceId) {
       throw new Error("Missing required option --id");
     }
-    const token = stringOption(options, "token", stringOption(options, "api-key", "")).trim();
-    if (token) {
-      await credentialProvider.store(sourceId, token);
-      try {
-        await updateSource(sourceId, { credentialRef: `${sourceId}:stored` });
-      } catch {
-        // ignore missing skill mirror
-      }
-      try {
-        await updateHookSource(sourceId, { credentialRef: `${sourceId}:stored` });
-      } catch {
-        // ignore missing hook mirror
-      }
-    }
-    const source = (await loadSources()).find((item) => item.id === sourceId) || (await loadHookSources()).find((item) => item.id === sourceId);
-    if (!source) {
-      throw new Error(`Unknown source '${sourceId}'`);
-    }
-    const result = await checkSourceAuth(
-      {
-        id: source.id,
-        repoUrl: source.repoUrl,
-        transport: source.transport,
-      },
-      credentialProvider,
-    );
+    const result = await service.checkSourceAuth({
+      sourceId,
+      token: stringOption(options, "token", stringOption(options, "api-key", "")).trim(),
+    });
     if (json) {
       output.write(`${JSON.stringify(result, null, 2)}\n`);
     } else {
@@ -1233,16 +1101,7 @@ async function runSources(positionals: string[], options: Record<string, string 
 
   if (action === "refresh") {
     const sourceId = stringOption(options, "id", "").trim();
-    const result = await refreshSourcesAndHooks(
-      {
-        credentials: credentialProvider,
-        loadSources,
-        loadHookSources,
-        syncSource,
-        syncHookSource,
-      },
-      { sourceId, onlyEnabled: true },
-    );
+    const result = await service.refreshSources({ sourceId, onlyEnabled: true });
     if (!result.matched) {
       throw new Error(sourceId ? `Unknown source '${sourceId}'` : "No enabled sources found.");
     }
@@ -1261,7 +1120,8 @@ async function runSources(positionals: string[], options: Record<string, string 
 async function runSkills(positionals: string[], options: Record<string, string | boolean>): Promise<void> {
   const action = (positionals[0] || "help").toLowerCase();
   const json = boolOption(options, "json", false);
-  const credentials = createCredentialProvider();
+  const repoRoot = findRepoRoot(__dirname);
+  const service = createInstallerApplicationService({ repoRoot });
 
   if (action === "help" || action === "") {
     output.write("Skills commands: validate|publish|contribute-official\n");
@@ -1275,7 +1135,7 @@ async function runSkills(positionals: string[], options: Record<string, string |
       throw new Error("Missing required option --path");
     }
     const profile = parseValidationProfileOption(options, "profile");
-    const result = await validateSkillBundle({ localPath: path.resolve(skillPath) }, profile);
+    const result = await service.validateSkillBundle({ localPath: path.resolve(skillPath), profile });
     if (json) {
       output.write(`${JSON.stringify(result, null, 2)}\n`);
     } else {
@@ -1296,16 +1156,13 @@ async function runSkills(positionals: string[], options: Record<string, string |
     if (!skillPath) {
       throw new Error("Missing required option --path");
     }
-    const result = await publishSkillBundle(
-      {
-        sourceId,
-        bundle: { localPath: path.resolve(skillPath) },
-        commitMessage: stringOption(options, "message", "").trim() || undefined,
-        overrideMode: parsePublishModeOption(options, "override-mode"),
-        overrideBaseBranch: stringOption(options, "override-base-branch", "").trim() || undefined,
-      },
-      credentials,
-    );
+    const result = await service.publishSkillBundle({
+      sourceId,
+      localPath: path.resolve(skillPath),
+      commitMessage: stringOption(options, "message", "").trim() || undefined,
+      overrideMode: parsePublishModeOption(options, "override-mode"),
+      overrideBaseBranch: stringOption(options, "override-base-branch", "").trim() || undefined,
+    });
     if (json) {
       output.write(`${JSON.stringify(result, null, 2)}\n`);
     } else {
@@ -1319,14 +1176,11 @@ async function runSkills(positionals: string[], options: Record<string, string |
     if (!skillPath) {
       throw new Error("Missing required option --path");
     }
-    const result = await contributeOfficialSkillBundle(
-      {
-        sourceId: stringOption(options, "source", "").trim() || undefined,
-        bundle: { localPath: path.resolve(skillPath) },
-        commitMessage: stringOption(options, "message", "").trim() || undefined,
-      },
-      credentials,
-    );
+    const result = await service.contributeOfficialSkillBundle({
+      sourceId: stringOption(options, "source", "").trim() || undefined,
+      localPath: path.resolve(skillPath),
+      commitMessage: stringOption(options, "message", "").trim() || undefined,
+    });
     if (json) {
       output.write(`${JSON.stringify(result, null, 2)}\n`);
     } else {
