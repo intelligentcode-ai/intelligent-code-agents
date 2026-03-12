@@ -22,24 +22,67 @@ fs.mkdirSync(outputDir, { recursive: true });
 const generatedAt = resolveGeneratedAt(process.env.SOURCE_DATE_EPOCH);
 
 const targets = [
-  { platform: "darwin", arch: "x64", osToken: "macos" },
-  { platform: "darwin", arch: "arm64", osToken: "macos" },
-  { platform: "win32", arch: "x64", osToken: "windows" },
-  { platform: "win32", arch: "arm64", osToken: "windows" },
-  { platform: "linux", arch: "x64", osToken: "linux" },
-  { platform: "linux", arch: "arm64", osToken: "linux" },
+  {
+    platform: "darwin",
+    arch: "x64",
+    osToken: "macos",
+    artifactFormat: "dmg",
+    signingRequirements: ["apple-codesign", "apple-notarization"],
+  },
+  {
+    platform: "darwin",
+    arch: "arm64",
+    osToken: "macos",
+    artifactFormat: "dmg",
+    signingRequirements: ["apple-codesign", "apple-notarization"],
+  },
+  {
+    platform: "win32",
+    arch: "x64",
+    osToken: "windows",
+    artifactFormat: "exe",
+    signingRequirements: ["authenticode"],
+  },
+  {
+    platform: "win32",
+    arch: "arm64",
+    osToken: "windows",
+    artifactFormat: "exe",
+    signingRequirements: ["authenticode"],
+  },
+  {
+    platform: "linux",
+    arch: "x64",
+    osToken: "linux",
+    artifactFormat: "AppImage",
+    signingRequirements: ["cosign"],
+  },
+  {
+    platform: "linux",
+    arch: "arm64",
+    osToken: "linux",
+    artifactFormat: "AppImage",
+    signingRequirements: ["cosign"],
+  },
 ];
 
 const releaseTargets = targets.map((target) => {
   const id = `${target.platform}-${target.arch}`;
+  const artifactName = `ica-desktop-${version}-${target.osToken}-${target.arch}.${target.artifactFormat}`;
+  const publishPath = `desktop/stable/${target.platform}/${target.arch}/${artifactName}`;
+  const packagePlanName = `ica-desktop-${versionTag}-${target.osToken}-${target.arch}.package.json`;
   return {
     id,
     platform: target.platform,
     arch: target.arch,
-    artifactName: `ica-desktop-${version}-${target.osToken}-${target.arch}.zip`,
+    artifactName,
+    artifactFormat: target.artifactFormat,
+    publishPath,
+    packagePlanName,
     updaterChannel: "stable",
     signing: {
       provider: "sigstore-keyless",
+      requirements: target.signingRequirements,
     },
   };
 });
@@ -74,6 +117,26 @@ fs.writeFileSync(
   `${JSON.stringify(updaterManifest, null, 2)}\n`,
   "utf8",
 );
+
+for (const target of releaseTargets) {
+  const packagePlan = {
+    schemaVersion: 1,
+    generatedAt,
+    version,
+    platform: target.platform,
+    arch: target.arch,
+    artifactName: target.artifactName,
+    artifactFormat: target.artifactFormat,
+    publishPath: target.publishPath,
+    updaterChannel: target.updaterChannel,
+    signing: target.signing,
+  };
+  fs.writeFileSync(
+    path.join(outputDir, target.packagePlanName),
+    `${JSON.stringify(packagePlan, null, 2)}\n`,
+    "utf8",
+  );
+}
 
 function resolveGeneratedAt(sourceDateEpoch) {
   if (typeof sourceDateEpoch === "string" && /^\d+$/.test(sourceDateEpoch)) {
