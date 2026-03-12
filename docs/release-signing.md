@@ -11,6 +11,7 @@ This repository publishes releases with a tag-driven GitHub Actions workflow:
 - `ica-<tag>-source.zip`
 - `desktop-release-plan.json`
 - `desktop-updater-manifest.json`
+- `desktop-validation-matrix.json`
 - `ica-desktop-<tag>-macos-x64.package.json`
 - `ica-desktop-<tag>-macos-arm64.package.json`
 - `ica-desktop-<tag>-windows-x64.package.json`
@@ -39,6 +40,7 @@ Reproducibility is enforced in two layers:
    - Uses `git archive` from the tagged commit
    - Uses `gzip -n` for deterministic gzip output
    - Generates desktop release metadata via `scripts/release/build-desktop-manifests.mjs`
+   - Generates desktop rollout validation metadata via `scripts/release/build-desktop-manifests.mjs`
    - Emits one deterministic package-plan JSON artifact per supported OS/arch target
    - Sets `SOURCE_DATE_EPOCH`, `TZ=UTC`, and `LC_ALL=C`
 2. CI rebuild verification
@@ -65,6 +67,8 @@ The desktop release plan now defines a concrete package format and publish path 
 - Linux x64 / arm64: AppImage packaging with Cosign verification requirements
 
 Each target also emits a `.package.json` asset that captures the packaging contract used by CI and release publishing.
+
+The same release metadata build now emits `desktop-validation-matrix.json`, which captures per-target smoke checks and rollout gates for release-readiness review. The operator checklist for that artifact lives in `docs/testing/desktop-rollout-validation.md`.
 
 ## Release Operator Flow
 

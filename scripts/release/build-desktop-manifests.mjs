@@ -2,6 +2,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { createDesktopSmokeChecks, desktopRolloutGates, desktopTargets } from "./desktop-targets.mjs";
 
 const [versionTag, outputDirArg] = process.argv.slice(2);
 
@@ -21,52 +22,7 @@ const outputDir = path.resolve(process.cwd(), outputDirArg);
 fs.mkdirSync(outputDir, { recursive: true });
 const generatedAt = resolveGeneratedAt(process.env.SOURCE_DATE_EPOCH);
 
-const targets = [
-  {
-    platform: "darwin",
-    arch: "x64",
-    osToken: "macos",
-    artifactFormat: "dmg",
-    signingRequirements: ["apple-codesign", "apple-notarization"],
-  },
-  {
-    platform: "darwin",
-    arch: "arm64",
-    osToken: "macos",
-    artifactFormat: "dmg",
-    signingRequirements: ["apple-codesign", "apple-notarization"],
-  },
-  {
-    platform: "win32",
-    arch: "x64",
-    osToken: "windows",
-    artifactFormat: "exe",
-    signingRequirements: ["authenticode"],
-  },
-  {
-    platform: "win32",
-    arch: "arm64",
-    osToken: "windows",
-    artifactFormat: "exe",
-    signingRequirements: ["authenticode"],
-  },
-  {
-    platform: "linux",
-    arch: "x64",
-    osToken: "linux",
-    artifactFormat: "AppImage",
-    signingRequirements: ["cosign"],
-  },
-  {
-    platform: "linux",
-    arch: "arm64",
-    osToken: "linux",
-    artifactFormat: "AppImage",
-    signingRequirements: ["cosign"],
-  },
-];
-
-const releaseTargets = targets.map((target) => {
+const releaseTargets = desktopTargets.map((target) => {
   const id = `${target.platform}-${target.arch}`;
   const artifactName = `ica-desktop-${version}-${target.osToken}-${target.arch}.${target.artifactFormat}`;
   const publishPath = `desktop/stable/${target.platform}/${target.arch}/${artifactName}`;
@@ -107,6 +63,21 @@ const updaterManifest = {
   })),
 };
 
+const validationMatrix = {
+  schemaVersion: 1,
+  generatedAt,
+  version,
+  rolloutGates: desktopRolloutGates,
+  targets: releaseTargets.map((target) => ({
+    id: target.id,
+    platform: target.platform,
+    arch: target.arch,
+    packagePlanName: target.packagePlanName,
+    updaterFeedPath: `desktop/stable/${target.platform}/${target.arch}/latest.json`,
+    smokeChecks: createDesktopSmokeChecks(),
+  })),
+};
+
 fs.writeFileSync(
   path.join(outputDir, "desktop-release-plan.json"),
   `${JSON.stringify(releasePlan, null, 2)}\n`,
@@ -115,6 +86,11 @@ fs.writeFileSync(
 fs.writeFileSync(
   path.join(outputDir, "desktop-updater-manifest.json"),
   `${JSON.stringify(updaterManifest, null, 2)}\n`,
+  "utf8",
+);
+fs.writeFileSync(
+  path.join(outputDir, "desktop-validation-matrix.json"),
+  `${JSON.stringify(validationMatrix, null, 2)}\n`,
   "utf8",
 );
 
