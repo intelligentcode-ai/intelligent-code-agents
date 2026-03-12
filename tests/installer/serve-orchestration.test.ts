@@ -5,53 +5,30 @@ import path from "node:path";
 
 const repoRoot = process.cwd();
 
-test("serve orchestrates both API and BFF runtimes", () => {
-  const cliPath = path.join(repoRoot, "src/installer-cli/index.ts");
-  const source = fs.readFileSync(cliPath, "utf8");
+function readCliSource(): string {
+  return fs.readFileSync(path.join(repoRoot, "src/installer-cli/index.ts"), "utf8");
+}
 
-  assert.match(source, /"installer-api",\s*"server",\s*"index\.js"/, "serve should reference installer API runtime");
-  assert.match(source, /"installer-bff",\s*"server",\s*"index\.js"/, "serve should reference installer BFF runtime");
-  assert.match(source, /spawn\(process\.execPath,\s*\[apiScript\]/, "serve should spawn API runtime process");
-  assert.match(source, /spawn\(process\.execPath,\s*\[bffScript\]/, "serve should spawn BFF runtime process");
+test("serve and launch share a single removed-command helper", () => {
+  const source = readCliSource();
+
+  assert.match(source, /async function runRemovedBrowserCommand\(/, "CLI should define one shared browser-command removal helper");
+  assert.match(source, /if \(normalized === "serve" \|\| normalized === "launch"\) \{/, "serve and launch should use the same dispatch path");
 });
 
-test("serve maps frontend container to localhost-only internal port without bind mounts", () => {
-  const cliPath = path.join(repoRoot, "src/installer-cli/index.ts");
-  const source = fs.readFileSync(cliPath, "utf8");
+test("launch no longer delegates to the legacy serve runtime", () => {
+  const source = readCliSource();
 
-  assert.match(source, /Math\.max\(uiPort,\s*apiPort\)\s*\+\s*1/, "serve should pick a non-conflicting default internal UI port");
-  assert.match(source, /127\.0\.0\.1:\$\{uiContainerPort\}:80/, "serve should publish container on loopback only");
-  assert.doesNotMatch(source, /\b-v\b|\s--volume\b/, "serve docker run args should not include bind mounts");
+  assert.doesNotMatch(source, /await runLaunch\(options\);/, "main dispatch should not invoke a dedicated launch alias path");
+  assert.doesNotMatch(source, /await runServe\(options\);/, "legacy browser runtime should not remain reachable from CLI dispatch");
+  assert.doesNotMatch(source, /alias of `ica serve`/, "source should not describe launch as a still-working alias");
 });
 
-test("serve reclaims internal static UI port when reuse mode is active", () => {
-  const cliPath = path.join(repoRoot, "src/installer-cli/index.ts");
-  const source = fs.readFileSync(cliPath, "utf8");
+test("help text treats serve-only flags as removed browser-runtime details", () => {
+  const source = readCliSource();
 
-  assert.match(
-    source,
-    /await reclaimDockerPublishedPort\(uiContainerPort,\s*containerName\)/,
-    "serve should reclaim existing dashboard containers bound to the internal static UI port",
-  );
-});
-
-test("serve only reclaims API/UI ports for ICA-owned processes", () => {
-  const cliPath = path.join(repoRoot, "src/installer-cli/index.ts");
-  const source = fs.readFileSync(cliPath, "utf8");
-
-  assert.match(
-    source,
-    /await isIcaOwnedServePid\(pid\)/,
-    "serve should verify process ownership before terminating listeners on configured host ports",
-  );
-});
-
-test("serve configures BFF with API key injection upstream, not browser runtime config", () => {
-  const cliPath = path.join(repoRoot, "src/installer-cli/index.ts");
-  const source = fs.readFileSync(cliPath, "utf8");
-
-  assert.match(source, /ICA_BFF_API_KEY/, "serve should pass API key to BFF process");
-  assert.match(source, /ICA_BFF_API_ORIGIN/, "serve should pass API origin to BFF process");
-  assert.match(source, /ICA_BFF_STATIC_ORIGIN/, "serve should pass static UI origin to BFF process");
-  assert.doesNotMatch(source, /ICA_UI_API_KEY/, "serve should not expose API key to browser/container env");
+  assert.match(source, /npm run start:desktop/, "help text should direct users to the desktop workflow");
+  assert.doesNotMatch(source, /--build-image=auto\|always\|never/, "help text should not advertise removed serve-only flags");
+  assert.doesNotMatch(source, /--reuse-ports=true\|false/, "help text should not advertise removed serve-only flags");
+  assert.doesNotMatch(source, /--sources-refresh-minutes=60 \(serve only/, "help text should not advertise removed serve-only flags");
 });

@@ -40,6 +40,8 @@ interface ParsedArgs {
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_DASHBOARD_IMAGE = "ghcr.io/intelligentcode-ai/ica-installer-dashboard:main";
+const REMOVED_BROWSER_COMMANDS_MESSAGE =
+  "Legacy browser commands: `ica serve` and `ica launch` have been removed. Use `npm run start:desktop` for the local desktop workflow.";
 
 export type ServeImageBuildMode = "auto" | "always" | "never";
 export type ServeReusePortsMode = boolean;
@@ -639,10 +641,10 @@ function printHelp(): void {
   output.write(`  ica hooks install [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks uninstall [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n`);
   output.write(`  ica hooks sync [--targets=claude,gemini] [--scope=user|project] [--project-path=/path] [--mode=symlink|copy] [--hooks=<source/hook,...>]\n\n`);
-  output.write(
-    `  ica serve [--host=127.0.0.1] [--ui-port=4173] [--open=true|false] [--api-port=4174] [--reuse-ports=true|false] [--image=ghcr.io/intelligentcode-ai/ica-installer-dashboard:main] [--build-image=auto|always|never]\n`,
-  );
-  output.write(`  ica launch (alias for serve; deprecated)\n\n`);
+  output.write(`Desktop workflow:\n`);
+  output.write(`  npm run start:desktop\n\n`);
+  output.write(`Removed commands:\n`);
+  output.write(`  ${REMOVED_BROWSER_COMMANDS_MESSAGE}\n\n`);
   output.write(`  Note: repository registration is unified. Adding one source auto-registers both skills and hooks mirrors.\n\n`);
   output.write(`Common flags:\n`);
   output.write(`  --targets=claude,codex\n`);
@@ -660,7 +662,6 @@ function printHelp(): void {
   output.write(`  --yes\n`);
   output.write(`  --json\n`);
   output.write(`  --refresh (for catalog: force live source refresh)\n`);
-  output.write(`  --sources-refresh-minutes=60 (serve only; set 0 to disable periodic source refresh)\n`);
 }
 
 function resolveInstallerVersion(repoRoot: string): string {
@@ -1505,15 +1506,19 @@ async function runServe(options: Record<string, string | boolean>): Promise<void
   }
 }
 
-async function runLaunch(options: Record<string, string | boolean>): Promise<void> {
-  output.write("Deprecation notice: `ica launch` is now an alias of `ica serve` and will be removed in a future release.\n");
-  await runServe(options);
+async function runRemovedBrowserCommand(): Promise<void> {
+  throw new Error(REMOVED_BROWSER_COMMANDS_MESSAGE);
 }
 
 async function main(): Promise<void> {
   const { command, options, positionals } = parseArgv(process.argv.slice(2));
   const normalized = command.toLowerCase();
   const repoRoot = findRepoRoot(__dirname);
+
+  if (normalized === "serve" || normalized === "launch") {
+    await runRemovedBrowserCommand();
+    return;
+  }
 
   if (normalized !== "help") {
     await refreshSourcesOnCliStart();
@@ -1552,16 +1557,6 @@ async function main(): Promise<void> {
 
   if (normalized === "hooks") {
     await runHooks(positionals, options);
-    return;
-  }
-
-  if (normalized === "serve") {
-    await runServe(options);
-    return;
-  }
-
-  if (normalized === "launch") {
-    await runLaunch(options);
     return;
   }
 
