@@ -46,6 +46,12 @@ jobs:
             dist/ica-${{ github.ref_name }}-source.zip
             dist/desktop-release-plan.json
             dist/desktop-updater-manifest.json
+            dist/ica-desktop-${{ github.ref_name }}-macos-x64.package.json
+            dist/ica-desktop-${{ github.ref_name }}-macos-arm64.package.json
+            dist/ica-desktop-${{ github.ref_name }}-windows-x64.package.json
+            dist/ica-desktop-${{ github.ref_name }}-windows-arm64.package.json
+            dist/ica-desktop-${{ github.ref_name }}-linux-x64.package.json
+            dist/ica-desktop-${{ github.ref_name }}-linux-arm64.package.json
             dist/SHA256SUMS.txt
           if-no-files-found: error
 
@@ -110,6 +116,12 @@ jobs:
             "dist/ica-${GITHUB_REF_NAME}-source.zip" \
             "dist/desktop-release-plan.json" \
             "dist/desktop-updater-manifest.json" \
+            "dist/ica-desktop-${GITHUB_REF_NAME}-macos-x64.package.json" \
+            "dist/ica-desktop-${GITHUB_REF_NAME}-macos-arm64.package.json" \
+            "dist/ica-desktop-${GITHUB_REF_NAME}-windows-x64.package.json" \
+            "dist/ica-desktop-${GITHUB_REF_NAME}-windows-arm64.package.json" \
+            "dist/ica-desktop-${GITHUB_REF_NAME}-linux-x64.package.json" \
+            "dist/ica-desktop-${GITHUB_REF_NAME}-linux-arm64.package.json" \
             "dist/SHA256SUMS.txt"
           do
             cosign sign-blob --yes \
@@ -128,6 +140,12 @@ jobs:
             "dist/ica-${GITHUB_REF_NAME}-source.zip" \
             "dist/desktop-release-plan.json" \
             "dist/desktop-updater-manifest.json" \
+            "dist/ica-desktop-${GITHUB_REF_NAME}-macos-x64.package.json" \
+            "dist/ica-desktop-${GITHUB_REF_NAME}-macos-arm64.package.json" \
+            "dist/ica-desktop-${GITHUB_REF_NAME}-windows-x64.package.json" \
+            "dist/ica-desktop-${GITHUB_REF_NAME}-windows-arm64.package.json" \
+            "dist/ica-desktop-${GITHUB_REF_NAME}-linux-x64.package.json" \
+            "dist/ica-desktop-${GITHUB_REF_NAME}-linux-arm64.package.json" \
             "dist/SHA256SUMS.txt"
           do
             cosign verify-blob \
@@ -163,6 +181,36 @@ jobs:
         with:
           subject-path: dist/desktop-updater-manifest.json
 
+      - name: Attest macOS x64 desktop package plan provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/ica-desktop-${{ github.ref_name }}-macos-x64.package.json
+
+      - name: Attest macOS arm64 desktop package plan provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/ica-desktop-${{ github.ref_name }}-macos-arm64.package.json
+
+      - name: Attest Windows x64 desktop package plan provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/ica-desktop-${{ github.ref_name }}-windows-x64.package.json
+
+      - name: Attest Windows arm64 desktop package plan provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/ica-desktop-${{ github.ref_name }}-windows-arm64.package.json
+
+      - name: Attest Linux x64 desktop package plan provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/ica-desktop-${{ github.ref_name }}-linux-x64.package.json
+
+      - name: Attest Linux arm64 desktop package plan provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/ica-desktop-${{ github.ref_name }}-linux-arm64.package.json
+
       - name: Publish GitHub release with signed assets
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
@@ -182,6 +230,24 @@ jobs:
             dist/desktop-updater-manifest.json
             dist/desktop-updater-manifest.json.sig
             dist/desktop-updater-manifest.json.pem
+            dist/ica-desktop-${{ github.ref_name }}-macos-x64.package.json
+            dist/ica-desktop-${{ github.ref_name }}-macos-x64.package.json.sig
+            dist/ica-desktop-${{ github.ref_name }}-macos-x64.package.json.pem
+            dist/ica-desktop-${{ github.ref_name }}-macos-arm64.package.json
+            dist/ica-desktop-${{ github.ref_name }}-macos-arm64.package.json.sig
+            dist/ica-desktop-${{ github.ref_name }}-macos-arm64.package.json.pem
+            dist/ica-desktop-${{ github.ref_name }}-windows-x64.package.json
+            dist/ica-desktop-${{ github.ref_name }}-windows-x64.package.json.sig
+            dist/ica-desktop-${{ github.ref_name }}-windows-x64.package.json.pem
+            dist/ica-desktop-${{ github.ref_name }}-windows-arm64.package.json
+            dist/ica-desktop-${{ github.ref_name }}-windows-arm64.package.json.sig
+            dist/ica-desktop-${{ github.ref_name }}-windows-arm64.package.json.pem
+            dist/ica-desktop-${{ github.ref_name }}-linux-x64.package.json
+            dist/ica-desktop-${{ github.ref_name }}-linux-x64.package.json.sig
+            dist/ica-desktop-${{ github.ref_name }}-linux-x64.package.json.pem
+            dist/ica-desktop-${{ github.ref_name }}-linux-arm64.package.json
+            dist/ica-desktop-${{ github.ref_name }}-linux-arm64.package.json.sig
+            dist/ica-desktop-${{ github.ref_name }}-linux-arm64.package.json.pem
             dist/SHA256SUMS.txt
             dist/SHA256SUMS.txt.sig
             dist/SHA256SUMS.txt.pem

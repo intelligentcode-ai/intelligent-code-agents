@@ -11,6 +11,12 @@ This repository publishes releases with a tag-driven GitHub Actions workflow:
 - `ica-<tag>-source.zip`
 - `desktop-release-plan.json`
 - `desktop-updater-manifest.json`
+- `ica-desktop-<tag>-macos-x64.package.json`
+- `ica-desktop-<tag>-macos-arm64.package.json`
+- `ica-desktop-<tag>-windows-x64.package.json`
+- `ica-desktop-<tag>-windows-arm64.package.json`
+- `ica-desktop-<tag>-linux-x64.package.json`
+- `ica-desktop-<tag>-linux-arm64.package.json`
 - `SHA256SUMS.txt`
 - Keyless signatures and certificates for each artifact (`.sig`, `.pem`)
 - GitHub artifact attestations (provenance) for each artifact
@@ -33,6 +39,7 @@ Reproducibility is enforced in two layers:
    - Uses `git archive` from the tagged commit
    - Uses `gzip -n` for deterministic gzip output
    - Generates desktop release metadata via `scripts/release/build-desktop-manifests.mjs`
+   - Emits one deterministic package-plan JSON artifact per supported OS/arch target
    - Sets `SOURCE_DATE_EPOCH`, `TZ=UTC`, and `LC_ALL=C`
 2. CI rebuild verification
    - Workflow rebuilds artifacts in a separate job
@@ -48,6 +55,16 @@ Reproducibility is enforced in two layers:
 - `contents: write` (publish release assets)
 - `id-token: write` (OIDC keyless signing)
 - `attestations: write` (artifact provenance attestations)
+
+## Desktop Packaging Contract
+
+The desktop release plan now defines a concrete package format and publish path for each supported target:
+
+- macOS x64 / arm64: DMG packaging with Apple code signing and notarization requirements
+- Windows x64 / arm64: EXE packaging with Authenticode requirements
+- Linux x64 / arm64: AppImage packaging with Cosign verification requirements
+
+Each target also emits a `.package.json` asset that captures the packaging contract used by CI and release publishing.
 
 ## Release Operator Flow
 

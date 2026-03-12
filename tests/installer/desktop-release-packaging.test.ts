@@ -61,6 +61,51 @@ test("desktop updater manifest defines stable feed paths for all desktop targets
   assert.ok(updaterManifest.channels.every((channel) => channel.artifactName.includes(channel.platform === "darwin" ? "macos" : channel.platform === "win32" ? "windows" : "linux")));
 });
 
+test("desktop release plan declares concrete package formats, publish paths, and platform signing requirements", () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "ica-desktop-release-contract-"));
+
+  execFileSync("node", ["scripts/release/build-desktop-manifests.mjs", "v12.3.0", outDir], {
+    cwd: process.cwd(),
+    stdio: "pipe",
+  });
+
+  const releaseManifest = JSON.parse(fs.readFileSync(path.join(outDir, "desktop-release-plan.json"), "utf8")) as {
+    targets: Array<{
+      platform: string;
+      arch: string;
+      artifactName: string;
+      artifactFormat?: string;
+      publishPath?: string;
+      signing: {
+        provider: string;
+        requirements?: string[];
+      };
+    }>;
+  };
+
+  assert.equal(releaseManifest.targets.length, 6);
+
+  for (const target of releaseManifest.targets) {
+    assert.ok(target.artifactFormat, `Expected ${target.platform}/${target.arch} to declare a package format.`);
+    assert.ok(
+      target.publishPath?.startsWith(`desktop/stable/${target.platform}/${target.arch}/`),
+      `Expected ${target.platform}/${target.arch} to publish into a stable desktop feed path.`,
+    );
+    assert.ok(
+      Array.isArray(target.signing.requirements) && target.signing.requirements.length > 0,
+      `Expected ${target.platform}/${target.arch} to declare signing requirements.`,
+    );
+
+    if (target.platform === "darwin") {
+      assert.ok(target.signing.requirements.includes("apple-notarization"));
+    } else if (target.platform === "win32") {
+      assert.ok(target.signing.requirements.includes("authenticode"));
+    } else {
+      assert.ok(target.signing.requirements.includes("cosign"));
+    }
+  }
+});
+
 test("release workflow publishes desktop release metadata alongside signed source artifacts", () => {
   const workflow = readWorkspaceFile(".github/workflows/release-sign.yml");
   const buildScript = readWorkspaceFile("scripts/release/build-artifacts.sh");
@@ -72,4 +117,30 @@ test("release workflow publishes desktop release metadata alongside signed sourc
   assert.match(workflow, /Keyless sign release artifacts/);
   assert.match(docs, /desktop-release-plan\.json/);
   assert.match(docs, /desktop-updater-manifest\.json/);
+});
+
+test("release workflow plans to publish desktop package artifacts for every supported target", () => {
+  const workflow = readWorkspaceFile(".github/workflows/release-sign.yml");
+  const docs = readWorkspaceFile("docs/release-signing.md");
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "ica-desktop-release-workflow-"));
+
+  execFileSync("node", ["scripts/release/build-desktop-manifests.mjs", "v12.3.0", outDir], {
+    cwd: process.cwd(),
+    stdio: "pipe",
+  });
+
+  assert.match(workflow, /ica-desktop-\$\{\{\s*github\.ref_name\s*\}\}-macos-x64/);
+  assert.match(workflow, /ica-desktop-\$\{\{\s*github\.ref_name\s*\}\}-macos-arm64/);
+  assert.match(workflow, /ica-desktop-\$\{\{\s*github\.ref_name\s*\}\}-windows-x64/);
+  assert.match(workflow, /ica-desktop-\$\{\{\s*github\.ref_name\s*\}\}-windows-arm64/);
+  assert.match(workflow, /ica-desktop-\$\{\{\s*github\.ref_name\s*\}\}-linux-x64/);
+  assert.match(workflow, /ica-desktop-\$\{\{\s*github\.ref_name\s*\}\}-linux-arm64/);
+  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-macos-x64.package.json")), true);
+  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-macos-arm64.package.json")), true);
+  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-windows-x64.package.json")), true);
+  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-windows-arm64.package.json")), true);
+  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-linux-x64.package.json")), true);
+  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-linux-arm64.package.json")), true);
+  assert.match(docs, /notarization/i);
+  assert.match(docs, /Authenticode/i);
 });
