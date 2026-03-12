@@ -441,6 +441,174 @@ input[type="radio"]:focus-visible {
   font-size: 0.7rem;
 }
 
+.desktop-shell-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: 0 0 var(--space-5);
+}
+
+.desktop-shell-card {
+  min-height: 100%;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--accent) 6%, var(--surface)) 0%, var(--surface) 68%),
+    var(--surface);
+  border-color: color-mix(in srgb, var(--line) 76%, transparent);
+}
+
+.desktop-shell-card-operation {
+  grid-column: span 2;
+}
+
+.desktop-shell-card-activity {
+  grid-column: span 2;
+}
+
+.desktop-shell-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.desktop-shell-kicker {
+  margin: 0 0 var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.desktop-shell-heading h2 {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.desktop-shell-title {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.desktop-shell-copy {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.desktop-shell-pill {
+  align-self: flex-start;
+  border-radius: 999px;
+  padding: 0.22rem 0.62rem;
+  font-size: 0.72rem;
+  border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: var(--text-soft);
+}
+
+.desktop-shell-pill.is-positive {
+  border-color: color-mix(in srgb, #45b07d 45%, var(--line));
+  color: color-mix(in srgb, #45b07d 72%, var(--text));
+}
+
+.desktop-shell-pill.is-warning {
+  border-color: color-mix(in srgb, #d39a37 45%, var(--line));
+  color: color-mix(in srgb, #d39a37 72%, var(--text));
+}
+
+.desktop-shell-pill.is-danger {
+  border-color: color-mix(in srgb, #d95d51 55%, var(--line));
+  color: color-mix(in srgb, #d95d51 78%, var(--text));
+}
+
+.desktop-shell-pill.is-busy {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+  color: var(--accent-ink);
+}
+
+.desktop-shell-pill.is-neutral {
+  color: var(--text-soft);
+}
+
+.desktop-shell-metrics {
+  margin: var(--space-5) 0 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.desktop-shell-metrics div {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.desktop-shell-metrics dt {
+  margin: 0 0 var(--space-1);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.desktop-shell-metrics dd {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.desktop-shell-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.desktop-activity-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-4) 0 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.desktop-activity-item {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+
+.desktop-activity-item div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.desktop-activity-item strong {
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.desktop-activity-item span {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.desktop-activity-item.is-danger {
+  border-color: color-mix(in srgb, #d95d51 45%, var(--line));
+}
+
+.desktop-activity-item.is-busy {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+}
+
 .status {
   border-radius: 12px;
   padding: var(--space-4) var(--space-5);
@@ -1718,6 +1886,15 @@ pre {
     gap: var(--space-5);
   }
 
+  .desktop-shell-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .desktop-shell-card-operation,
+  .desktop-shell-card-activity {
+    grid-column: span 2;
+  }
+
   .control-rail {
     position: static;
   }
@@ -1781,6 +1958,17 @@ pre {
 @media (max-width: 760px) {
   .shell {
     padding: var(--space-5) var(--space-4) var(--space-7);
+  }
+
+  .desktop-shell-grid,
+  .desktop-shell-actions,
+  .desktop-shell-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .desktop-shell-card-operation,
+  .desktop-shell-card-activity {
+    grid-column: span 1;
   }
 
   .hero {

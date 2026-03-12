@@ -50,6 +50,30 @@ test("ensureHookSourceRegistry bootstraps official hooks source", async () => {
   });
 });
 
+test("loadHookSources recovers malformed hook source registry files", async () => {
+  const stateHome = fs.mkdtempSync(path.join(os.tmpdir(), "ica-hooks-state-"));
+  await withStateHome(stateHome, async () => {
+    const sourceFile = getHookSourcesFilePath();
+    fs.mkdirSync(path.dirname(sourceFile), { recursive: true });
+    fs.writeFileSync(sourceFile, '{ "sources": [] }\nthis-is-not-json\n', "utf8");
+
+    const recovered = await loadHookSources();
+    assert.ok(recovered.some((source) => source.id === OFFICIAL_HOOK_SOURCE_ID));
+
+    const persisted = JSON.parse(fs.readFileSync(sourceFile, "utf8")) as { sources: Array<{ id: string }> };
+    assert.ok(Array.isArray(persisted.sources));
+    assert.ok(persisted.sources.some((source) => source.id === OFFICIAL_HOOK_SOURCE_ID));
+
+    const backupName = fs
+      .readdirSync(path.dirname(sourceFile))
+      .find((entry) => entry.startsWith("hook-sources.json.corrupt-"));
+    assert.ok(backupName, "Corrupted hook source registry should be backed up.");
+
+    const backupContents = fs.readFileSync(path.join(path.dirname(sourceFile), String(backupName)), "utf8");
+    assert.match(backupContents, /this-is-not-json/);
+  });
+});
+
 test("custom hook repositories are stored and reloaded from disk", async () => {
   const stateHome = fs.mkdtempSync(path.join(os.tmpdir(), "ica-hooks-state-"));
   await withStateHome(stateHome, async () => {

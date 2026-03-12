@@ -150,7 +150,8 @@ export async function loadHookSources(): Promise<HookSource[]> {
   }
 
   try {
-    const raw = JSON.parse(await readText(sourceFile)) as { sources?: HookSource[] };
+    const fileContents = await readText(sourceFile);
+    const raw = JSON.parse(fileContents) as { sources?: HookSource[] };
     const parsed = Array.isArray(raw.sources) ? raw.sources : [];
     const normalized = parsed.map((source) => normalizeHookSource(source));
     if (!normalized.find((source) => source.official)) {
@@ -158,7 +159,26 @@ export async function loadHookSources(): Promise<HookSource[]> {
     }
     return normalized;
   } catch (error) {
-    throw new Error(`Failed to read hook source registry (${sourceFile}): ${error instanceof Error ? error.message : String(error)}`);
+    const fallback = [defaultHookSource()];
+    const backupPath = `${sourceFile}.corrupt-${Date.now()}`;
+    let recoveryError = "";
+
+    try {
+      const corruptContent = await readText(sourceFile);
+      await writeText(backupPath, corruptContent);
+      await ensureDir(path.dirname(sourceFile));
+      await writeText(sourceFile, `${JSON.stringify({ sources: fallback }, null, 2)}\n`);
+    } catch (repairFailure) {
+      recoveryError = ` Recovery attempt failed: ${repairFailure instanceof Error ? repairFailure.message : String(repairFailure)}`;
+    }
+
+    if (recoveryError) {
+      throw new Error(
+        `Failed to read hook source registry (${sourceFile}): ${error instanceof Error ? error.message : String(error)}.${recoveryError}`,
+      );
+    }
+
+    return fallback;
   }
 }
 

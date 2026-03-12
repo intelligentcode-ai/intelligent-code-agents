@@ -44,6 +44,8 @@ jobs:
           path: |
             dist/ica-${{ github.ref_name }}-source.tar.gz
             dist/ica-${{ github.ref_name }}-source.zip
+            dist/desktop-release-plan.json
+            dist/desktop-updater-manifest.json
             dist/SHA256SUMS.txt
           if-no-files-found: error
 
@@ -106,6 +108,8 @@ jobs:
           for file in \
             "dist/ica-${GITHUB_REF_NAME}-source.tar.gz" \
             "dist/ica-${GITHUB_REF_NAME}-source.zip" \
+            "dist/desktop-release-plan.json" \
+            "dist/desktop-updater-manifest.json" \
             "dist/SHA256SUMS.txt"
           do
             cosign sign-blob --yes \
@@ -122,6 +126,8 @@ jobs:
           for file in \
             "dist/ica-${GITHUB_REF_NAME}-source.tar.gz" \
             "dist/ica-${GITHUB_REF_NAME}-source.zip" \
+            "dist/desktop-release-plan.json" \
+            "dist/desktop-updater-manifest.json" \
             "dist/SHA256SUMS.txt"
           do
             cosign verify-blob \
@@ -147,6 +153,16 @@ jobs:
         with:
           subject-path: dist/SHA256SUMS.txt
 
+      - name: Attest desktop release plan provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/desktop-release-plan.json
+
+      - name: Attest desktop updater manifest provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/desktop-updater-manifest.json
+
       - name: Publish GitHub release with signed assets
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
@@ -160,6 +176,12 @@ jobs:
             dist/ica-${{ github.ref_name }}-source.zip
             dist/ica-${{ github.ref_name }}-source.zip.sig
             dist/ica-${{ github.ref_name }}-source.zip.pem
+            dist/desktop-release-plan.json
+            dist/desktop-release-plan.json.sig
+            dist/desktop-release-plan.json.pem
+            dist/desktop-updater-manifest.json
+            dist/desktop-updater-manifest.json.sig
+            dist/desktop-updater-manifest.json.pem
             dist/SHA256SUMS.txt
             dist/SHA256SUMS.txt.sig
             dist/SHA256SUMS.txt.pem

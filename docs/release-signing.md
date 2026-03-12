@@ -9,6 +9,8 @@ This repository publishes releases with a tag-driven GitHub Actions workflow:
 
 - `ica-<tag>-source.tar.gz`
 - `ica-<tag>-source.zip`
+- `desktop-release-plan.json`
+- `desktop-updater-manifest.json`
 - `SHA256SUMS.txt`
 - Keyless signatures and certificates for each artifact (`.sig`, `.pem`)
 - GitHub artifact attestations (provenance) for each artifact
@@ -30,6 +32,7 @@ Reproducibility is enforced in two layers:
 1. Deterministic archive creation in `scripts/release/build-artifacts.sh`
    - Uses `git archive` from the tagged commit
    - Uses `gzip -n` for deterministic gzip output
+   - Generates desktop release metadata via `scripts/release/build-desktop-manifests.mjs`
    - Sets `SOURCE_DATE_EPOCH`, `TZ=UTC`, and `LC_ALL=C`
 2. CI rebuild verification
    - Workflow rebuilds artifacts in a separate job
