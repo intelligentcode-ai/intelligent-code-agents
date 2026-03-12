@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { controlPlaneFetch } from "./control-plane-client";
+import { describeRealtimeStatus, summarizeRealtimeEvent } from "./desktop-shell";
+import { startRealtimeClient, type RealtimeEvent, type RealtimeStatus } from "./realtime-client";
 
 type Target = "claude" | "codex" | "cursor" | "gemini" | "antigravity";
 
@@ -325,6 +328,8 @@ export function InstallerDashboard(): JSX.Element {
   const [hookReport, setHookReport] = useState<HookOperationReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("http-only");
+  const [activityFeed, setActivityFeed] = useState<RealtimeEvent[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogLoadingMessage, setCatalogLoadingMessage] = useState("");
   const [catalogLoadingProgress, setCatalogLoadingProgress] = useState(0);
@@ -547,7 +552,7 @@ export function InstallerDashboard(): JSX.Element {
   }, [hooks, hookSourceFilter, hooksInstalledOnly, installedHookIds, normalizedHookQuery]);
 
   async function fetchSources(): Promise<void> {
-    const res = await fetch("/api/v1/sources");
+    const res = await controlPlaneFetch("/api/v1/sources");
     const payload = (await res.json()) as { sources?: Source[]; error?: string };
     if (!res.ok) {
       throw new Error(asErrorMessage(payload, "Failed to load sources."));
@@ -557,7 +562,7 @@ export function InstallerDashboard(): JSX.Element {
 
   async function refreshSources(runRefresh = false): Promise<void> {
     if (runRefresh) {
-      await fetch("/api/v1/sources/refresh-all", {
+      await controlPlaneFetch("/api/v1/sources/refresh-all", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -578,7 +583,7 @@ export function InstallerDashboard(): JSX.Element {
         setCatalogLoadingProgress(58);
         setCatalogLoadingMessage("Loading refreshed skills catalog…");
       }
-      const res = await fetch("/api/v1/catalog/skills");
+      const res = await controlPlaneFetch("/api/v1/catalog/skills");
       const payload = (await res.json()) as { skills?: Skill[]; error?: string };
       if (!res.ok) {
         throw new Error(asErrorMessage(payload, "Failed to load skills catalog."));
@@ -597,7 +602,7 @@ export function InstallerDashboard(): JSX.Element {
   }
 
   async function fetchHooks(): Promise<void> {
-    const res = await fetch("/api/v1/catalog/hooks");
+    const res = await controlPlaneFetch("/api/v1/catalog/hooks");
     const payload = (await res.json()) as { hooks?: Hook[]; error?: string };
     if (!res.ok) {
       throw new Error(asErrorMessage(payload, "Failed to load hooks catalog."));
@@ -606,7 +611,7 @@ export function InstallerDashboard(): JSX.Element {
   }
 
   async function fetchDiscoveredTargets(): Promise<void> {
-    const res = await fetch("/api/v1/targets/discovered");
+    const res = await controlPlaneFetch("/api/v1/targets/discovered");
     const payload = (await res.json()) as { targets?: Target[]; error?: string };
     if (!res.ok) {
       throw new Error(asErrorMessage(payload, "Failed to discover targets."));
@@ -632,7 +637,7 @@ export function InstallerDashboard(): JSX.Element {
       targets: targetKey,
     });
 
-    const res = await fetch(`/api/v1/installations?${query.toString()}`);
+    const res = await controlPlaneFetch(`/api/v1/installations?${query.toString()}`);
     const payload = (await res.json()) as { installations?: InstallationRow[]; error?: string };
     if (!res.ok) {
       throw new Error(asErrorMessage(payload, "Failed to load installed state."));
@@ -657,7 +662,7 @@ export function InstallerDashboard(): JSX.Element {
       targets: selectedHookTargetList.join(","),
     });
 
-    const res = await fetch(`/api/v1/hooks/installations?${query.toString()}`);
+    const res = await controlPlaneFetch(`/api/v1/hooks/installations?${query.toString()}`);
     const payload = (await res.json()) as { installations?: HookInstallationRow[]; error?: string };
     if (!res.ok) {
       throw new Error(asErrorMessage(payload, "Failed to load installed hook state."));
@@ -753,7 +758,7 @@ export function InstallerDashboard(): JSX.Element {
         })
         .filter((item): item is { sourceId: string; skillName: string; skillId: string } => Boolean(item));
 
-      const res = await fetch(`/api/v1/${operation}/apply`, {
+      const res = await controlPlaneFetch(`/api/v1/${operation}/apply`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -813,7 +818,7 @@ export function InstallerDashboard(): JSX.Element {
         })
         .filter((item): item is { sourceId: string; hookName: string; hookId: string } => Boolean(item));
 
-      const res = await fetch(`/api/v1/hooks/${operation}/apply`, {
+      const res = await controlPlaneFetch(`/api/v1/hooks/${operation}/apply`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -847,7 +852,7 @@ export function InstallerDashboard(): JSX.Element {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/v1/sources", {
+      const res = await controlPlaneFetch("/api/v1/sources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -887,7 +892,7 @@ export function InstallerDashboard(): JSX.Element {
     setError("");
     try {
       const endpoint = sourceId ? `/api/v1/sources/${sourceId}/refresh` : "/api/v1/sources/refresh-all";
-      const res = await fetch(endpoint, {
+      const res = await controlPlaneFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -910,7 +915,7 @@ export function InstallerDashboard(): JSX.Element {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch(`/api/v1/sources/${source.id}`, { method: "DELETE" });
+      const res = await controlPlaneFetch(`/api/v1/sources/${source.id}`, { method: "DELETE" });
       const payload = await res.json();
       if (!res.ok) {
         throw new Error(asErrorMessage(payload, "Source removal failed."));
@@ -933,7 +938,7 @@ export function InstallerDashboard(): JSX.Element {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch(`/api/v1/sources/${editingSourceId}`, {
+      const res = await controlPlaneFetch(`/api/v1/sources/${editingSourceId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1015,7 +1020,7 @@ export function InstallerDashboard(): JSX.Element {
     setError("");
     setSkillValidationResult(null);
     try {
-      const res = await fetch("/api/v1/skills/validate", {
+      const res = await controlPlaneFetch("/api/v1/skills/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1052,7 +1057,7 @@ export function InstallerDashboard(): JSX.Element {
       throw new Error(blockReason);
     }
 
-    const res = await fetch("/api/v1/skills/publish", {
+    const res = await controlPlaneFetch("/api/v1/skills/publish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1131,7 +1136,7 @@ export function InstallerDashboard(): JSX.Element {
     setError("");
     setSkillPublishResult(null);
     try {
-      const pickerRes = await fetch("/api/v1/skills/pick", {
+      const pickerRes = await controlPlaneFetch("/api/v1/skills/pick", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1168,7 +1173,7 @@ export function InstallerDashboard(): JSX.Element {
     setError("");
     setSkillPublishResult(null);
     try {
-      const res = await fetch("/api/v1/skills/contribute-official", {
+      const res = await controlPlaneFetch("/api/v1/skills/contribute-official", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1200,7 +1205,7 @@ export function InstallerDashboard(): JSX.Element {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/v1/skills/pick", {
+      const res = await controlPlaneFetch("/api/v1/skills/pick", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1239,7 +1244,7 @@ export function InstallerDashboard(): JSX.Element {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/v1/projects/pick", {
+      const res = await controlPlaneFetch("/api/v1/projects/pick", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1268,7 +1273,7 @@ export function InstallerDashboard(): JSX.Element {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/v1/container/mount-project", {
+      const res = await controlPlaneFetch("/api/v1/container/mount-project", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1295,6 +1300,19 @@ export function InstallerDashboard(): JSX.Element {
         await fetchHooks();
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, []);
+
+  useEffect(() => {
+    const stopRealtime = startRealtimeClient({
+      onStatusChange: setRealtimeStatus,
+      onEvent(event) {
+        setActivityFeed((current) => [event, ...current].slice(0, 8));
+      },
+    });
+
+    return () => {
+      stopRealtime();
+    };
   }, []);
 
   useEffect(() => {
@@ -1484,6 +1502,58 @@ export function InstallerDashboard(): JSX.Element {
   }, [selectedHooks, hookById]);
   const selectedUnknownHookCount = Math.max(0, selectedHooks.size - selectedKnownHookCount);
   const installedHookCount = installedHookIds.size;
+  const connectionSummary = useMemo(
+    () =>
+      describeRealtimeStatus(realtimeStatus, {
+        busy,
+        catalogLoading,
+        error,
+        hasProjectPath: Boolean(trimmedProjectPath),
+      }),
+    [realtimeStatus, busy, catalogLoading, error, trimmedProjectPath],
+  );
+  const operationSummary = useMemo(() => {
+    if (busy) {
+      return {
+        title: "Applying desktop action",
+        detail: scope === "project" && trimmedProjectPath ? `Working against ${trimmedProjectPath}.` : "Running against the active user scope.",
+      };
+    }
+
+    if (catalogLoading) {
+      return {
+        title: "Refreshing catalog",
+        detail: catalogLoadingMessage || "Loading sources, skills, and hooks into the desktop shell.",
+      };
+    }
+
+    const latestOperation = hookReport || report;
+    if (latestOperation) {
+      const targetCount = Array.isArray(latestOperation.targets) ? latestOperation.targets.length : 0;
+      return {
+        title: "Latest run captured",
+        detail: `${targetCount} target${targetCount === 1 ? "" : "s"} updated in the latest shell report.`,
+      };
+    }
+
+    return {
+      title: "Ready for the next desktop action",
+      detail: "Choose a target set, then run install, sync, publish, or native project actions from this shell.",
+    };
+  }, [busy, scope, trimmedProjectPath, catalogLoading, catalogLoadingMessage, hookReport, report]);
+  const activityFeedItems = useMemo(
+    () =>
+      activityFeed.map((event) => ({
+        id: event.id,
+        title: summarizeRealtimeEvent(event),
+        timestamp: new Date(event.ts).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        tone: event.type.endsWith("failed") ? "is-danger" : event.type.endsWith("started") ? "is-busy" : "is-neutral",
+      })),
+    [activityFeed],
+  );
 
   return (
     <div className="shell">
@@ -1500,6 +1570,131 @@ export function InstallerDashboard(): JSX.Element {
           <span>{installedHookCount} hooks installed</span>
         </div>
       </header>
+
+      <section className="desktop-shell-grid" aria-label="Desktop workspace shell">
+        <article className="panel desktop-shell-card desktop-shell-card-operation panel-spacious">
+          <div className="desktop-shell-heading">
+            <div>
+              <p className="desktop-shell-kicker">Workspace</p>
+              <h2>Operation Center</h2>
+            </div>
+            <span className={`desktop-shell-pill ${busy || catalogLoading ? "is-busy" : "is-neutral"}`}>
+              {busy ? "Running" : catalogLoading ? "Loading" : "Ready"}
+            </span>
+          </div>
+          <p className="desktop-shell-title">{operationSummary.title}</p>
+          <p className="desktop-shell-copy">{operationSummary.detail}</p>
+          <dl className="desktop-shell-metrics">
+            <div>
+              <dt>Targets</dt>
+              <dd>{selectedTargetList.length}</dd>
+            </div>
+            <div>
+              <dt>Scope</dt>
+              <dd>{scope === "project" ? "Project" : "User"}</dd>
+            </div>
+            <div>
+              <dt>Selection</dt>
+              <dd>{selectedKnownSkillCount}</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article className="panel desktop-shell-card panel-spacious">
+          <div className="desktop-shell-heading">
+            <div>
+              <p className="desktop-shell-kicker">Connectivity</p>
+              <h2>Connection Status</h2>
+            </div>
+            <span className={`desktop-shell-pill is-${connectionSummary.tone}`}>{connectionSummary.badge}</span>
+          </div>
+          <p className="desktop-shell-title">{connectionSummary.title}</p>
+          <p className="desktop-shell-copy">{connectionSummary.detail}</p>
+        </article>
+
+        <article className="panel desktop-shell-card panel-spacious">
+          <div className="desktop-shell-heading">
+            <div>
+              <p className="desktop-shell-kicker">Native flow</p>
+              <h2>Native Operations</h2>
+            </div>
+          </div>
+          <p className="desktop-shell-copy">
+            Bring desktop-only actions forward so project selection, repository refresh, and publish flows stay one click away.
+          </p>
+          <div className="desktop-shell-actions">
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setActiveTab("settings");
+                void pickProjectPath();
+              }}
+            >
+              Pick project (native)
+            </button>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={busy || !trimmedProjectPath}
+              onClick={() => {
+                setActiveTab("settings");
+                void mountProjectInContainer();
+              }}
+            >
+              Mount in container
+            </button>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setActiveTab("skills");
+                void runPickFolderAndPublish();
+              }}
+            >
+              Pick & Publish
+            </button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setActiveTab("settings");
+                void refreshSource();
+              }}
+            >
+              Refresh repositories
+            </button>
+          </div>
+        </article>
+
+        <article className="panel desktop-shell-card desktop-shell-card-activity panel-spacious">
+          <div className="desktop-shell-heading">
+            <div>
+              <p className="desktop-shell-kicker">Realtime</p>
+              <h2>Activity Feed</h2>
+            </div>
+          </div>
+          {activityFeedItems.length === 0 ? (
+            <p className="desktop-shell-copy">
+              Desktop shell activity will appear here once a bridge event, refresh, or operation lifecycle update arrives.
+            </p>
+          ) : (
+            <ol className="desktop-activity-list">
+              {activityFeedItems.map((item) => (
+                <li key={item.id} className={`desktop-activity-item ${item.tone}`}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <span>{item.timestamp}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </article>
+      </section>
 
       {error && (
         <section className="status status-error">

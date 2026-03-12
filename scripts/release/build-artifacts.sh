@@ -50,6 +50,9 @@ if ! cmp -s "$ZIP_PATH" "${TMP_DIR}/rebuild.zip"; then
   exit 1
 fi
 
+echo "Generating desktop release metadata manifests"
+node scripts/release/build-desktop-manifests.mjs "$VERSION_TAG" "$OUTPUT_DIR"
+
 sha256_file() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" | awk '{print $1}'
@@ -64,6 +67,8 @@ sha256_file() {
 {
   printf "%s  %s\n" "$(sha256_file "$TAR_PATH")" "$(basename "$TAR_PATH")"
   printf "%s  %s\n" "$(sha256_file "$ZIP_PATH")" "$(basename "$ZIP_PATH")"
+  printf "%s  %s\n" "$(sha256_file "${OUTPUT_DIR}/desktop-release-plan.json")" "desktop-release-plan.json"
+  printf "%s  %s\n" "$(sha256_file "${OUTPUT_DIR}/desktop-updater-manifest.json")" "desktop-updater-manifest.json"
 } | sort >"${OUTPUT_DIR}/SHA256SUMS.txt"
 
 echo "Artifacts written to ${OUTPUT_DIR}"

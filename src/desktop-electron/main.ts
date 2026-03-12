@@ -1,0 +1,112 @@
+import path from "node:path";
+import { app, BrowserWindow, ipcMain } from "electron";
+import {
+  CONTROL_PLANE_IPC_CHANNEL,
+  REALTIME_EVENT_CHANNEL,
+  REALTIME_SUBSCRIBE_CHANNEL,
+  REALTIME_UNSUBSCRIBE_CHANNEL,
+  type DesktopBridgeRequestMap,
+} from "./bridge";
+import { createDesktopControlPlane } from "./controlPlane";
+import type { InstallerApplicationService } from "../installer-core/applicationService";
+import { findRepoRoot } from "../installer-core/repo";
+import {
+  installDesktopLoadDiagnostics,
+  normalizeStartupErrorMessage,
+  resolveDesktopStartUrl,
+  showDesktopLoadFailure,
+  type DesktopStartupLogger,
+} from "./startup";
+
+export interface RegisterElectronDesktopBridgeOptions {
+  repoRoot?: string;
+  applicationService?: Partial<InstallerApplicationService>;
+  startUrl?: string;
+  env?: NodeJS.ProcessEnv;
+  logger?: DesktopStartupLogger;
+}
+
+export async function registerElectronDesktopBridge(
+  options: RegisterElectronDesktopBridgeOptions = {},
+): Promise<{ createWindow: () => Promise<BrowserWindow>; dispose: () => Promise<void> }> {
+  const repoRoot = options.repoRoot || findRepoRoot(__dirname);
+  const startUrl = options.startUrl || resolveDesktopStartUrl(repoRoot, options.env || process.env);
+  const logger = options.logger || console;
+  const controlPlane = await createDesktopControlPlane({
+    repoRoot,
+    applicationService: options.applicationService,
+  });
+  const subscriptions = new Map<number, () => void>();
+
+  ipcMain.handle(CONTROL_PLANE_IPC_CHANNEL, async (_event, channel: keyof DesktopBridgeRequestMap, payload: DesktopBridgeRequestMap[keyof DesktopBridgeRequestMap]) => {
+    if (channel !== "control-plane.request") {
+      throw new Error(`Unsupported desktop bridge channel '${String(channel)}'.`);
+    }
+    return controlPlane.request(payload);
+  });
+
+  ipcMain.on(REALTIME_SUBSCRIBE_CHANNEL, (event) => {
+    const webContents = event.sender;
+    subscriptions.get(webContents.id)?.();
+    const unsubscribe = controlPlane.subscribeRealtime((payload) => {
+      if (!webContents.isDestroyed()) {
+        webContents.send(REALTIME_EVENT_CHANNEL, payload);
+      }
+    });
+    subscriptions.set(webContents.id, unsubscribe);
+    webContents.on("destroyed", () => {
+      subscriptions.get(webContents.id)?.();
+      subscriptions.delete(webContents.id);
+    });
+  });
+
+  ipcMain.on(REALTIME_UNSUBSCRIBE_CHANNEL, (event) => {
+    const webContents = event.sender;
+    subscriptions.get(webContents.id)?.();
+    subscriptions.delete(webContents.id);
+  });
+
+  return {
+    async createWindow() {
+      await app.whenReady();
+      const window = new BrowserWindow({
+        width: 1440,
+        height: 940,
+        show: true,
+        webPreferences: {
+          preload: path.join(__dirname, "preload.js"),
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: false,
+        },
+      });
+      installDesktopLoadDiagnostics(window, startUrl, logger);
+      try {
+        await window.loadURL(startUrl);
+      } catch (error) {
+        const reason = normalizeStartupErrorMessage(error);
+        logger.error(`[desktop] Initial renderer load rejected for '${startUrl}': ${reason}`);
+        await showDesktopLoadFailure(
+          window,
+          {
+            attemptedUrl: startUrl,
+            failingUrl: startUrl,
+            reason,
+          },
+          logger,
+        );
+      }
+      return window;
+    },
+    async dispose() {
+      for (const unsubscribe of subscriptions.values()) {
+        unsubscribe();
+      }
+      subscriptions.clear();
+      ipcMain.removeHandler(CONTROL_PLANE_IPC_CHANNEL);
+      ipcMain.removeAllListeners(REALTIME_SUBSCRIBE_CHANNEL);
+      ipcMain.removeAllListeners(REALTIME_UNSUBSCRIBE_CHANNEL);
+      await controlPlane.close();
+    },
+  };
+}
