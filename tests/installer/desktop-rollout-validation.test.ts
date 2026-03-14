@@ -13,7 +13,7 @@ interface ValidationMatrixTarget {
   id: string;
   platform: string;
   arch: string;
-  packagePlanName: string;
+  packageArtifactName: string;
   updaterFeedPath: string;
   smokeChecks: Array<{ id: string; required: boolean }>;
 }
@@ -56,7 +56,7 @@ test("desktop validation matrix defines required rollout checks for every suppor
   );
 
   for (const target of validationMatrix.targets) {
-    assert.ok(target.packagePlanName.endsWith(".package.json"));
+    assert.match(target.packageArtifactName, /^ica-desktop-v12\.3\.0-(macos|windows|linux)-(x64|arm64)\.(dmg|exe|AppImage)$/);
     assert.ok(target.updaterFeedPath.startsWith("desktop/stable/"));
     assert.deepEqual(
       target.smokeChecks.map((check) => check.id).sort(),

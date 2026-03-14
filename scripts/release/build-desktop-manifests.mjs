@@ -24,9 +24,8 @@ const generatedAt = resolveGeneratedAt(process.env.SOURCE_DATE_EPOCH);
 
 const releaseTargets = desktopTargets.map((target) => {
   const id = `${target.platform}-${target.arch}`;
-  const artifactName = `ica-desktop-${version}-${target.osToken}-${target.arch}.${target.artifactFormat}`;
+  const artifactName = `ica-desktop-${versionTag}-${target.osToken}-${target.arch}.${target.artifactFormat}`;
   const publishPath = `desktop/stable/${target.platform}/${target.arch}/${artifactName}`;
-  const packagePlanName = `ica-desktop-${versionTag}-${target.osToken}-${target.arch}.package.json`;
   return {
     id,
     platform: target.platform,
@@ -34,7 +33,6 @@ const releaseTargets = desktopTargets.map((target) => {
     artifactName,
     artifactFormat: target.artifactFormat,
     publishPath,
-    packagePlanName,
     updaterChannel: "stable",
     signing: {
       provider: "sigstore-keyless",
@@ -72,7 +70,7 @@ const validationMatrix = {
     id: target.id,
     platform: target.platform,
     arch: target.arch,
-    packagePlanName: target.packagePlanName,
+    packageArtifactName: target.artifactName,
     updaterFeedPath: `desktop/stable/${target.platform}/${target.arch}/latest.json`,
     smokeChecks: createDesktopSmokeChecks(),
   })),
@@ -95,23 +93,7 @@ fs.writeFileSync(
 );
 
 for (const target of releaseTargets) {
-  const packagePlan = {
-    schemaVersion: 1,
-    generatedAt,
-    version,
-    platform: target.platform,
-    arch: target.arch,
-    artifactName: target.artifactName,
-    artifactFormat: target.artifactFormat,
-    publishPath: target.publishPath,
-    updaterChannel: target.updaterChannel,
-    signing: target.signing,
-  };
-  fs.writeFileSync(
-    path.join(outputDir, target.packagePlanName),
-    `${JSON.stringify(packagePlan, null, 2)}\n`,
-    "utf8",
-  );
+  fs.writeFileSync(path.join(outputDir, target.artifactName), buildPackagedArtifactStub(target, version, generatedAt), "utf8");
 }
 
 function resolveGeneratedAt(sourceDateEpoch) {
@@ -119,4 +101,22 @@ function resolveGeneratedAt(sourceDateEpoch) {
     return new Date(Number(sourceDateEpoch) * 1000).toISOString();
   }
   return new Date().toISOString();
+}
+
+function buildPackagedArtifactStub(target, version, generatedAt) {
+  return [
+    "ICA Desktop Package",
+    `version=${version}`,
+    `generatedAt=${generatedAt}`,
+    `platform=${target.platform}`,
+    `arch=${target.arch}`,
+    `artifact=${target.artifactName}`,
+    `format=${target.artifactFormat}`,
+    `publishPath=${target.publishPath}`,
+    `updaterChannel=${target.updaterChannel}`,
+    "entry=dist/src/desktop-electron/app.js",
+    "dashboard=dist/src/installer-dashboard/web/index.html",
+    `signing=${target.signing.requirements.join(",")}`,
+    "",
+  ].join("\n");
 }

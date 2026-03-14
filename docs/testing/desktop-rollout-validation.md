@@ -15,7 +15,7 @@ The validation matrix covers every supported desktop target:
 
 Each target includes these required smoke checks:
 
-- `package-contract`: the per-target `.package.json` contract exists and matches the release plan
+- `package-contract`: the per-target desktop package artifact exists and matches the release plan
 - `updater-feed`: the updater feed path is stable and publishable
 - `desktop-startup`: the packaged dashboard bundle boots successfully in the desktop shell
 - `desktop-control-plane`: the Electron bridge and control-plane path stay available

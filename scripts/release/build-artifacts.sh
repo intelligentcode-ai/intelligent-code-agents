@@ -70,9 +70,9 @@ sha256_file() {
   printf "%s  %s\n" "$(sha256_file "${OUTPUT_DIR}/desktop-release-plan.json")" "desktop-release-plan.json"
   printf "%s  %s\n" "$(sha256_file "${OUTPUT_DIR}/desktop-updater-manifest.json")" "desktop-updater-manifest.json"
   printf "%s  %s\n" "$(sha256_file "${OUTPUT_DIR}/desktop-validation-matrix.json")" "desktop-validation-matrix.json"
-  while IFS= read -r package_plan; do
-    printf "%s  %s\n" "$(sha256_file "$package_plan")" "$(basename "$package_plan")"
-  done < <(find "$OUTPUT_DIR" -maxdepth 1 -name 'ica-desktop-*.package.json' | sort)
+  while IFS= read -r desktop_package; do
+    printf "%s  %s\n" "$(sha256_file "$desktop_package")" "$(basename "$desktop_package")"
+  done < <(find "$OUTPUT_DIR" -maxdepth 1 \( -name 'ica-desktop-*.dmg' -o -name 'ica-desktop-*.exe' -o -name 'ica-desktop-*.AppImage' \) | sort)
 } | sort >"${OUTPUT_DIR}/SHA256SUMS.txt"
 
 echo "Artifacts written to ${OUTPUT_DIR}"

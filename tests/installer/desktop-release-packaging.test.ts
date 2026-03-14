@@ -119,7 +119,7 @@ test("release workflow publishes desktop release metadata alongside signed sourc
   assert.match(docs, /desktop-updater-manifest\.json/);
 });
 
-test("release workflow plans to publish desktop package artifacts for every supported target", () => {
+test("release workflow plans to publish runnable desktop package artifacts for every supported target", () => {
   const workflow = readWorkspaceFile(".github/workflows/release-sign.yml");
   const docs = readWorkspaceFile("docs/release-signing.md");
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "ica-desktop-release-workflow-"));
@@ -135,12 +135,13 @@ test("release workflow plans to publish desktop package artifacts for every supp
   assert.match(workflow, /ica-desktop-\$\{\{\s*github\.ref_name\s*\}\}-windows-arm64/);
   assert.match(workflow, /ica-desktop-\$\{\{\s*github\.ref_name\s*\}\}-linux-x64/);
   assert.match(workflow, /ica-desktop-\$\{\{\s*github\.ref_name\s*\}\}-linux-arm64/);
-  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-macos-x64.package.json")), true);
-  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-macos-arm64.package.json")), true);
-  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-windows-x64.package.json")), true);
-  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-windows-arm64.package.json")), true);
-  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-linux-x64.package.json")), true);
-  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-linux-arm64.package.json")), true);
+  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-macos-x64.dmg")), true);
+  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-macos-arm64.dmg")), true);
+  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-windows-x64.exe")), true);
+  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-windows-arm64.exe")), true);
+  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-linux-x64.AppImage")), true);
+  assert.equal(fs.existsSync(path.join(outDir, "ica-desktop-v12.3.0-linux-arm64.AppImage")), true);
+  assert.doesNotMatch(workflow, /\.package\.json/);
   assert.match(docs, /notarization/i);
   assert.match(docs, /Authenticode/i);
 });
