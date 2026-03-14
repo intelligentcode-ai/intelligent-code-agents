@@ -2,7 +2,13 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { createDesktopSmokeChecks, desktopRolloutGates, desktopTargets } from "./desktop-targets.mjs";
+import {
+  createDesktopAcceptanceChecks,
+  desktopCertificationGates,
+  desktopTargets,
+  getDesktopSigningCredentialStatus,
+  getDesktopUpdaterArtifacts,
+} from "./desktop-targets.mjs";
 
 const [versionTag, outputDirArg] = process.argv.slice(2);
 
@@ -26,6 +32,7 @@ const releaseTargets = desktopTargets.map((target) => {
   const id = `${target.platform}-${target.arch}`;
   const artifactName = `ica-desktop-${versionTag}-${target.osToken}-${target.arch}.${target.artifactFormat}`;
   const publishPath = `desktop/stable/${target.platform}/${target.arch}/${artifactName}`;
+  const updaterArtifacts = getDesktopUpdaterArtifacts(target).map((artifact) => artifact.replace("ica-desktop-<tag>", `ica-desktop-${versionTag}`));
   return {
     id,
     platform: target.platform,
@@ -34,9 +41,11 @@ const releaseTargets = desktopTargets.map((target) => {
     artifactFormat: target.artifactFormat,
     publishPath,
     updaterChannel: "stable",
+    updaterArtifacts,
     signing: {
       provider: "sigstore-keyless",
       requirements: target.signingRequirements,
+      credentials: getDesktopSigningCredentialStatus(target),
     },
   };
 });
@@ -65,14 +74,18 @@ const validationMatrix = {
   schemaVersion: 1,
   generatedAt,
   version,
-  rolloutGates: desktopRolloutGates,
+  certificationGates: desktopCertificationGates,
   targets: releaseTargets.map((target) => ({
     id: target.id,
     platform: target.platform,
     arch: target.arch,
     packageArtifactName: target.artifactName,
+    packageFormat: target.artifactFormat,
     updaterFeedPath: `desktop/stable/${target.platform}/${target.arch}/latest.json`,
-    smokeChecks: createDesktopSmokeChecks(),
+    updaterArtifacts: target.updaterArtifacts,
+    signingRequirements: target.signing.requirements,
+    signingCredentials: target.signing.credentials,
+    acceptanceChecks: createDesktopAcceptanceChecks(),
   })),
 };
 

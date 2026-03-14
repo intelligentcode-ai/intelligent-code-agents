@@ -80,6 +80,50 @@ jobs:
           set -euo pipefail
           diff -u dist-original/SHA256SUMS.txt dist-rebuild/SHA256SUMS.txt
 
+  desktop-certification:
+    runs-on: ubuntu-latest
+    needs: verify-source
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run desktop certification tests
+        run: |
+          set -euo pipefail
+          npm run build:quick
+          node --test \
+            dist/tests/installer/control-plane-client.test.js \
+            dist/tests/installer/desktop-control-plane.test.js \
+            dist/tests/installer/desktop-preview-startup.test.js \
+            dist/tests/installer/desktop-rollout-validation.test.js \
+            dist/tests/installer/desktop-shell-ux.test.js \
+            dist/tests/installer/desktop-updater.test.js
+
+      - name: Generate desktop certification report
+        run: |
+          set -euo pipefail
+          ./scripts/release/build-artifacts.sh "${GITHUB_REF_NAME}" "${GITHUB_SHA}" dist
+          node scripts/release/validate-desktop-release.mjs --write-certification-report dist
+
+      - name: Upload desktop certification report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: desktop-certification-${{ github.ref_name }}
+          path: |
+            dist/desktop-certification-report.json
+          if-no-files-found: error
+
   build-desktop:
     strategy:
       fail-fast: false
@@ -138,6 +182,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - verify-source
+      - desktop-certification
       - build-desktop
     permissions:
       contents: write
@@ -170,6 +215,15 @@ jobs:
           name: desktop-ubuntu-latest-${{ github.ref_name }}
           path: dist/desktop
 
+      - name: Download desktop certification report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: desktop-certification-${{ github.ref_name }}
+          path: dist
+
+      - name: Validate desktop certification gate before draft release
+        run: npm run validate:desktop:release -- dist
+
       - name: Install Cosign
         uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
 
@@ -182,7 +236,7 @@ jobs:
               --output-signature "${file}.sig" \
               --output-certificate "${file}.pem" \
               "${file}"
-          done < <(find dist -type f \( -name '*.gz' -o -name '*.zip' -o -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name 'latest*.yml' -o -name '*.blockmap' -o -name 'SHA256SUMS.txt' -o -name 'desktop-validation-matrix.json' \) | sort)
+          done < <(find dist -type f \( -name '*.gz' -o -name '*.zip' -o -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name 'latest*.yml' -o -name '*.blockmap' -o -name 'SHA256SUMS.txt' -o -name 'desktop-validation-matrix.json' -o -name 'desktop-certification-report.json' \) | sort)
 
       - name: Create draft GitHub release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
@@ -195,6 +249,7 @@ jobs:
             dist/ica-${{ github.ref_name }}-source.zip
             dist/SHA256SUMS.txt
             dist/desktop-validation-matrix.json
+            dist/desktop-certification-report.json
             dist/desktop/**/*.dmg
             dist/desktop/**/*.exe
             dist/desktop/**/*.AppImage
@@ -202,6 +257,9 @@ jobs:
             dist/desktop/**/*.blockmap
             dist/**/*.sig
             dist/**/*.pem
+
+      - name: Re-validate desktop certification gate before release promotion
+        run: npm run validate:desktop:release -- dist
 
       - name: Publish release only after validation passes
         run: gh release edit "${GITHUB_REF_NAME}" --draft=false

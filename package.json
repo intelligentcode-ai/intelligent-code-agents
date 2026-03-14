@@ -14,6 +14,7 @@
     "build:desktop:preview": "npm run build:quick && npm run build:dashboard:web",
     "build:desktop:release": "npm run build:desktop:preview && electron-builder --config electron-builder.json --publish never",
     "build:desktop:publish": "npm run build:desktop:preview && electron-builder --config electron-builder.json --publish always",
+    "validate:desktop:release": "node scripts/release/validate-desktop-release.mjs",
     "start:desktop": "npm run build:desktop:preview && electron dist/src/desktop-electron/app.js",
     "start:desktop:dev": "npm run build:quick && ICA_DESKTOP_MODE=dev electron dist/src/desktop-electron/app.js",
     "start:dashboard": "node dist/src/installer-dashboard/server/index.js",

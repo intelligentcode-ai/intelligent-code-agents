@@ -20,7 +20,7 @@ export interface CreateDesktopControlPlaneOptions {
   applicationService?: Partial<InstallerApplicationService>;
 }
 
-interface OperationDescriptor {
+export interface OperationDescriptor {
   channel: RealtimeChannel;
   started: RealtimeEventType;
   completed: RealtimeEventType;
@@ -51,7 +51,7 @@ function parseJsonBody<T extends Record<string, unknown>>(value: unknown): T {
   return value as T;
 }
 
-function describeOperation(payload: DesktopBridgeRequestMap["control-plane.request"]): OperationDescriptor | null {
+export function describeDesktopOperation(payload: DesktopBridgeRequestMap["control-plane.request"]): OperationDescriptor | null {
   const method = (payload.method || "GET").toUpperCase();
   const body = parseJsonBody(payload.body);
 
@@ -122,6 +122,19 @@ function describeOperation(payload: DesktopBridgeRequestMap["control-plane.reque
     };
   }
 
+  if (method === "POST" && payload.pathname === "/api/v1/skills/publish") {
+    return {
+      channel: "operation",
+      started: "operation.started",
+      completed: "operation.completed",
+      failed: "operation.failed",
+      payload: {
+        operation: "publish",
+        sourceId: typeof body.sourceId === "string" ? body.sourceId : undefined,
+      },
+    };
+  }
+
   return null;
 }
 
@@ -154,7 +167,7 @@ export async function createDesktopControlPlane(options: CreateDesktopControlPla
 
   return {
     async request(payload) {
-      const operation = describeOperation(payload);
+      const operation = describeDesktopOperation(payload);
       const opId = operation ? `op_${crypto.randomUUID()}` : undefined;
       if (operation && opId) {
         emit(buildRealtimeEvent(operation.channel, operation.started, operation.payload, opId));
