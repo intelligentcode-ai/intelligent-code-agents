@@ -13,6 +13,17 @@ test("desktop bridge scaffolding exists for the Electron runtime", () => {
   assert.equal(fs.existsSync(path.resolve(process.cwd(), "src/desktop-electron/main.ts")), true, "Electron main bridge should exist.");
 });
 
+test("desktop bridge contract declares typed native host capabilities for the hard cutover", () => {
+  const bridgeSource = readWorkspaceFile("src/desktop-electron/bridge.ts");
+
+  assert.match(bridgeSource, /export interface DesktopRuntimeInfo/);
+  assert.match(bridgeSource, /export interface DesktopHostFailureReport/);
+  assert.match(bridgeSource, /pickProjectDirectory\(initialPath\?: string\): Promise<\{ path: string \}>;/);
+  assert.match(bridgeSource, /pickPublishDirectory\(initialPath\?: string\): Promise<\{ path: string \}>;/);
+  assert.match(bridgeSource, /getRuntimeInfo\(\): Promise<DesktopRuntimeInfo>;/);
+  assert.match(bridgeSource, /reportRendererFailure\(payload: DesktopHostFailureReport\): Promise<void>;/);
+});
+
 test("dashboard routes control-plane requests through the transport client", () => {
   const ui = readWorkspaceFile("src/installer-dashboard/web/src/InstallerDashboard.tsx");
 
@@ -33,4 +44,13 @@ test("realtime client delegates transport work to the control-plane client", () 
 
   assert.match(realtimeClient, /startControlPlaneRealtimeClient/);
   assert.doesNotMatch(realtimeClient, /\bnew WebSocket\(/, "Renderer realtime should not open raw websocket connections directly.");
+});
+
+test("desktop renderer routes native project and publish picking through typed host methods instead of control-plane endpoints", () => {
+  const ui = readWorkspaceFile("src/installer-dashboard/web/src/InstallerDashboard.tsx");
+
+  assert.match(ui, /\bpickProjectDirectory\(/, "Desktop hard cutover should use a typed host project picker.");
+  assert.match(ui, /\bpickPublishDirectory\(/, "Desktop hard cutover should use a typed host publish picker.");
+  assert.doesNotMatch(ui, /controlPlaneFetch\("\/api\/v1\/projects\/pick"/, "Project picking should leave the generic control-plane transport.");
+  assert.doesNotMatch(ui, /controlPlaneFetch\("\/api\/v1\/skills\/pick"/, "Publish-path picking should leave the generic control-plane transport.");
 });

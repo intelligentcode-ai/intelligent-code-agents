@@ -2,9 +2,14 @@ import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import {
   CONTROL_PLANE_IPC_CHANNEL,
+  DESKTOP_PICK_PROJECT_IPC_CHANNEL,
+  DESKTOP_PICK_PUBLISH_IPC_CHANNEL,
+  DESKTOP_REPORT_FAILURE_IPC_CHANNEL,
+  DESKTOP_RUNTIME_INFO_IPC_CHANNEL,
   REALTIME_EVENT_CHANNEL,
   REALTIME_SUBSCRIBE_CHANNEL,
   REALTIME_UNSUBSCRIBE_CHANNEL,
+  type DesktopHostFailureReport,
   type DesktopBridgeRequestMap,
 } from "./bridge";
 import { createDesktopControlPlane } from "./controlPlane";
@@ -43,6 +48,12 @@ export async function registerElectronDesktopBridge(
       throw new Error(`Unsupported desktop bridge channel '${String(channel)}'.`);
     }
     return controlPlane.request(payload);
+  });
+  ipcMain.handle(DESKTOP_PICK_PROJECT_IPC_CHANNEL, async (_event, initialPath?: string) => controlPlane.pickProjectDirectory(initialPath));
+  ipcMain.handle(DESKTOP_PICK_PUBLISH_IPC_CHANNEL, async (_event, initialPath?: string) => controlPlane.pickPublishDirectory(initialPath));
+  ipcMain.handle(DESKTOP_RUNTIME_INFO_IPC_CHANNEL, async () => controlPlane.getRuntimeInfo());
+  ipcMain.handle(DESKTOP_REPORT_FAILURE_IPC_CHANNEL, async (_event, payload: DesktopHostFailureReport) => {
+    await controlPlane.reportRendererFailure(payload);
   });
 
   ipcMain.on(REALTIME_SUBSCRIBE_CHANNEL, (event) => {
@@ -104,6 +115,10 @@ export async function registerElectronDesktopBridge(
       }
       subscriptions.clear();
       ipcMain.removeHandler(CONTROL_PLANE_IPC_CHANNEL);
+      ipcMain.removeHandler(DESKTOP_PICK_PROJECT_IPC_CHANNEL);
+      ipcMain.removeHandler(DESKTOP_PICK_PUBLISH_IPC_CHANNEL);
+      ipcMain.removeHandler(DESKTOP_RUNTIME_INFO_IPC_CHANNEL);
+      ipcMain.removeHandler(DESKTOP_REPORT_FAILURE_IPC_CHANNEL);
       ipcMain.removeAllListeners(REALTIME_SUBSCRIBE_CHANNEL);
       ipcMain.removeAllListeners(REALTIME_UNSUBSCRIBE_CHANNEL);
       await controlPlane.close();

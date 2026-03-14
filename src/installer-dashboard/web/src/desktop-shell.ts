@@ -56,11 +56,20 @@ export function describeRealtimeStatus(status: RealtimeStatus, context: Realtime
     };
   }
 
+  if (status === "web-preview") {
+    return {
+      tone: "warning",
+      badge: "Preview",
+      title: "Web preview active",
+      detail: "Browser preview is active. Native desktop host actions are only available in the desktop runtime.",
+    };
+  }
+
   return {
     tone: "warning",
-    badge: "Fallback",
-    title: "Browser transport active",
-    detail: "HTTP fallback is active. Native desktop actions are limited until the desktop bridge reconnects.",
+    badge: "Disconnected",
+    title: "Desktop host unavailable",
+    detail: "The desktop host bridge is unavailable. Reconnect the desktop host to restore native actions.",
   };
 }
 
