@@ -38,6 +38,8 @@ declare module "electron" {
   export class BrowserWindow {
     constructor(options?: BrowserWindowConstructorOptions);
     loadURL(url: string): Promise<void>;
+    show(): void;
+    focus(): void;
     webContents: WebContents;
   }
 
@@ -52,6 +54,10 @@ declare module "electron" {
     on(event: "window-all-closed" | "activate", listener: () => void): void;
     getVersion(): string;
     isPackaged: boolean;
+    focus(options?: { steal?: boolean }): void;
+    dock?: {
+      show(): void;
+    };
     quit(): void;
   };
 

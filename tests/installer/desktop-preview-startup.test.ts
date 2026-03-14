@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { installDesktopLoadDiagnostics, resolveDesktopStartUrl } from "../../src/desktop-electron/startup";
+import { focusDesktopWindow, shouldAutoStartDesktopApp } from "../../src/desktop-electron/app";
 
 interface FakeWebContents {
   on(
@@ -83,4 +84,38 @@ test("desktop load diagnostics present a readable fallback when renderer load fa
   assert.match(decoded, /ERR_FILE_NOT_FOUND/);
   assert.match(decoded, /file:\/\/\/broken\/index\.html/);
   assert.match(errors.join("\n"), /ERR_FILE_NOT_FOUND/);
+});
+
+test("desktop startup explicitly surfaces the first Electron window", () => {
+  const calls: string[] = [];
+  const fakeWindow = {
+    show() {
+      calls.push("window.show");
+    },
+    focus() {
+      calls.push("window.focus");
+    },
+  };
+  const fakeApp = {
+    dock: {
+      show() {
+        calls.push("dock.show");
+      },
+    },
+    focus(options?: { steal?: boolean }) {
+      calls.push(`app.focus:${options?.steal === true ? "steal" : "default"}`);
+    },
+  };
+
+  focusDesktopWindow(fakeWindow, fakeApp);
+
+  assert.deepEqual(calls, ["dock.show", "window.show", "window.focus", "app.focus:steal"]);
+});
+
+test("desktop app entrypoint auto-starts only for Electron script execution", () => {
+  const filename = "/workspace/dist/src/desktop-electron/app.js";
+
+  assert.equal(shouldAutoStartDesktopApp(["/electron", filename], filename, "35.1.4"), true);
+  assert.equal(shouldAutoStartDesktopApp(["/node", "/workspace/test-runner.js"], filename, undefined), false);
+  assert.equal(shouldAutoStartDesktopApp(["/electron"], filename, "35.1.4"), false);
 });
