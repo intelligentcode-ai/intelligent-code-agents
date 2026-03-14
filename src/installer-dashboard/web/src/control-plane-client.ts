@@ -1,7 +1,7 @@
-import type { RealtimeEvent } from "../../../desktop-electron/bridge";
+import type { DesktopHostFailureReport, DesktopRuntimeInfo, RealtimeEvent } from "../../../desktop-electron/bridge";
 import { CONTROL_PLANE_REQUEST_CHANNEL } from "../../../desktop-electron/bridge";
 
-export type RealtimeStatus = "connected" | "reconnecting" | "http-only";
+export type RealtimeStatus = "connected" | "reconnecting" | "disconnected" | "web-preview";
 
 interface WsSessionResponse {
   wsUrl: string;
@@ -22,6 +22,29 @@ function getDesktopBridge() {
     return undefined;
   }
   return window.icaDesktop;
+}
+
+async function resolveRuntimeInfo(): Promise<DesktopRuntimeInfo> {
+  const desktopBridge = getDesktopBridge();
+  if (desktopBridge) {
+    return desktopBridge.getRuntimeInfo();
+  }
+
+  if (typeof navigator !== "undefined" && /\bElectron\b/i.test(navigator.userAgent || "")) {
+    return {
+      runtime: "desktop",
+      hostVersion: "ica-desktop-host-v1",
+    };
+  }
+
+  return {
+    runtime: "web-preview",
+    hostVersion: "ica-desktop-host-v1",
+  };
+}
+
+function createHostBridgeUnavailableError(): Error {
+  return new Error("Desktop host bridge unavailable.");
 }
 
 function normalizeHeaders(headers?: HeadersInit): Record<string, string> {
@@ -79,6 +102,10 @@ function asErrorMessage(error: unknown, fallback: string): string {
 export async function controlPlaneFetch(pathname: string, init?: RequestInit): Promise<Response> {
   const desktopBridge = getDesktopBridge();
   if (!desktopBridge) {
+    const runtimeInfo = await resolveRuntimeInfo();
+    if (runtimeInfo.runtime === "desktop") {
+      throw createHostBridgeUnavailableError();
+    }
     return fetch(pathname, init);
   }
 
@@ -95,6 +122,54 @@ export async function controlPlaneFetch(pathname: string, init?: RequestInit): P
   return toJsonResponse(response.body, response.status);
 }
 
+export async function pickProjectDirectory(initialPath?: string): Promise<{ path: string }> {
+  const desktopBridge = getDesktopBridge();
+  if (desktopBridge) {
+    return desktopBridge.pickProjectDirectory(initialPath);
+  }
+
+  const response = await controlPlaneFetch("/api/v1/projects/pick", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      initialPath,
+    }),
+  });
+  const payload = (await response.json()) as { path?: string; error?: string };
+  if (!response.ok || typeof payload.path !== "string") {
+    throw new Error(asErrorMessage(payload, "Project picker failed."));
+  }
+  return { path: payload.path };
+}
+
+export async function pickPublishDirectory(initialPath?: string): Promise<{ path: string }> {
+  const desktopBridge = getDesktopBridge();
+  if (desktopBridge) {
+    return desktopBridge.pickPublishDirectory(initialPath);
+  }
+
+  const response = await controlPlaneFetch("/api/v1/skills/pick", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      initialPath,
+    }),
+  });
+  const payload = (await response.json()) as { path?: string; error?: string };
+  if (!response.ok || typeof payload.path !== "string") {
+    throw new Error(asErrorMessage(payload, "Skill picker failed."));
+  }
+  return { path: payload.path };
+}
+
+export async function reportRendererFailure(payload: DesktopHostFailureReport): Promise<void> {
+  const desktopBridge = getDesktopBridge();
+  if (!desktopBridge) {
+    return;
+  }
+  await desktopBridge.reportRendererFailure(payload);
+}
+
 export function startControlPlaneRealtimeClient(options: RealtimeClientOptions = {}): () => void {
   const desktopBridge = getDesktopBridge();
   if (desktopBridge) {
@@ -105,7 +180,7 @@ export function startControlPlaneRealtimeClient(options: RealtimeClientOptions =
   }
 
   if (typeof window === "undefined" || typeof WebSocket === "undefined") {
-    options.onStatusChange?.("http-only");
+    options.onStatusChange?.("disconnected");
     return () => undefined;
   }
 
@@ -148,6 +223,13 @@ export function startControlPlaneRealtimeClient(options: RealtimeClientOptions =
     }
 
     try {
+      const runtimeInfo = await resolveRuntimeInfo();
+      if (runtimeInfo.runtime === "desktop") {
+        options.onStatusChange?.("disconnected");
+        options.onError?.(createHostBridgeUnavailableError().message);
+        return;
+      }
+
       const response = await controlPlaneFetch("/api/v1/ws/session", {
         method: "POST",
         headers: {
@@ -184,16 +266,16 @@ export function startControlPlaneRealtimeClient(options: RealtimeClientOptions =
           return;
         }
         if (!hasConnected) {
-          options.onStatusChange?.("http-only");
+          options.onStatusChange?.("web-preview");
         }
         scheduleReconnect();
       };
     } catch (error) {
       if (!stopped) {
         if (hasConnected) {
-          options.onError?.(asErrorMessage(error, "Live updates unavailable; continuing in HTTP-only mode."));
+          options.onError?.(asErrorMessage(error, "Live updates unavailable; continuing in web preview mode."));
         }
-        options.onStatusChange?.(hasConnected ? "reconnecting" : "http-only");
+        options.onStatusChange?.(hasConnected ? "reconnecting" : "web-preview");
         scheduleReconnect();
       }
     }

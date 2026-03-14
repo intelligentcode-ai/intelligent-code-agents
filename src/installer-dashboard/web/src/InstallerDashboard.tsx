@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { controlPlaneFetch } from "./control-plane-client";
+import { controlPlaneFetch, pickProjectDirectory, pickPublishDirectory } from "./control-plane-client";
 import { describeRealtimeStatus, summarizeRealtimeEvent } from "./desktop-shell";
 import { startRealtimeClient, type RealtimeEvent, type RealtimeStatus } from "./realtime-client";
 
@@ -328,7 +328,7 @@ export function InstallerDashboard(): JSX.Element {
   const [hookReport, setHookReport] = useState<HookOperationReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("http-only");
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("disconnected");
   const [activityFeed, setActivityFeed] = useState<RealtimeEvent[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogLoadingMessage, setCatalogLoadingMessage] = useState("");
@@ -1136,18 +1136,7 @@ export function InstallerDashboard(): JSX.Element {
     setError("");
     setSkillPublishResult(null);
     try {
-      const pickerRes = await controlPlaneFetch("/api/v1/skills/pick", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          initialPath: skillPublishPath.trim() || undefined,
-        }),
-      });
-      const pickerPayload = (await pickerRes.json()) as { path?: string; error?: string };
-      if (!pickerRes.ok) {
-        throw new Error(asErrorMessage(pickerPayload, "Skill picker failed."));
-      }
-      const pickedPath = pickerPayload.path?.trim();
+      const pickedPath = (await pickPublishDirectory(skillPublishPath.trim() || undefined)).path?.trim();
       if (!pickedPath) {
         return;
       }
@@ -1205,19 +1194,8 @@ export function InstallerDashboard(): JSX.Element {
     setBusy(true);
     setError("");
     try {
-      const res = await controlPlaneFetch("/api/v1/skills/pick", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          initialPath: skillPublishPath.trim() || undefined,
-        }),
-      });
-      const payload = (await res.json()) as { path?: string; error?: string };
-      if (!res.ok) {
-        throw new Error(asErrorMessage(payload, "Skill picker failed."));
-      }
-      if (payload.path) {
-        const pickedPath = payload.path.trim();
+      const pickedPath = (await pickPublishDirectory(skillPublishPath.trim() || undefined)).path?.trim();
+      if (pickedPath) {
         setSkillPublishPath(pickedPath);
         const matched = resolveSkillForPath(pickedPath);
         setPublishOriginSourceId(matched?.sourceId);
@@ -1244,17 +1222,7 @@ export function InstallerDashboard(): JSX.Element {
     setBusy(true);
     setError("");
     try {
-      const res = await controlPlaneFetch("/api/v1/projects/pick", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          initialPath: trimmedProjectPath || undefined,
-        }),
-      });
-      const payload = (await res.json()) as { path?: string; error?: string };
-      if (!res.ok) {
-        throw new Error(asErrorMessage(payload, "Project picker failed."));
-      }
+      const payload = await pickProjectDirectory(trimmedProjectPath || undefined);
       if (payload.path) {
         setProjectPath(payload.path);
       }

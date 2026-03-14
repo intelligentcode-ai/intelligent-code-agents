@@ -3,11 +3,15 @@ import { createInstallerDashboardServer } from "../installer-dashboard/server/in
 import { createInstallerApplicationService, type InstallerApplicationService } from "../installer-core/applicationService";
 import { findRepoRoot } from "../installer-core/repo";
 import type { RealtimeChannel, RealtimeEvent, RealtimeEventType } from "../installer-api/server/realtime";
-import type { DesktopBridgeRequestMap, DesktopBridgeResponseMap } from "./bridge";
+import type { DesktopBridgeRequestMap, DesktopBridgeResponseMap, DesktopHostFailureReport, DesktopRuntimeInfo } from "./bridge";
 
 export interface DesktopControlPlane {
   request(payload: DesktopBridgeRequestMap["control-plane.request"]): Promise<DesktopBridgeResponseMap["control-plane.request"]>;
   subscribeRealtime(listener: (event: RealtimeEvent) => void): () => void;
+  pickProjectDirectory(initialPath?: string): Promise<{ path: string }>;
+  pickPublishDirectory(initialPath?: string): Promise<{ path: string }>;
+  getRuntimeInfo(): Promise<DesktopRuntimeInfo>;
+  reportRendererFailure(payload: DesktopHostFailureReport): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -202,6 +206,41 @@ export async function createDesktopControlPlane(options: CreateDesktopControlPla
       return () => {
         listeners.delete(listener);
       };
+    },
+
+    async pickProjectDirectory(initialPath) {
+      return applicationService.pickProjectDirectory(initialPath);
+    },
+
+    async pickPublishDirectory(initialPath) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/skills/pick",
+        remoteAddress: "127.0.0.1",
+        headers: {
+          "content-type": "application/json",
+        },
+        payload: JSON.stringify({
+          initialPath,
+        }),
+      } as never);
+      const body = parseInjectedBody(response.body);
+      if (response.statusCode >= 400 || !body || typeof body !== "object" || typeof (body as { path?: unknown }).path !== "string") {
+        throw new Error(extractErrorMessage(body, "Skill picker failed."));
+      }
+      return { path: (body as { path: string }).path };
+    },
+
+    async getRuntimeInfo() {
+      return {
+        runtime: "desktop",
+        hostVersion: "ica-desktop-host-v1",
+      };
+    },
+
+    async reportRendererFailure(payload) {
+      const message = payload.context ? `[desktop] ${payload.context}: ${payload.reason}` : `[desktop] ${payload.reason}`;
+      console.error(message, payload.details || {});
     },
 
     async close() {

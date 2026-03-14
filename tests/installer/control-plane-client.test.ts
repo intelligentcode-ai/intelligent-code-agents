@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { controlPlaneFetch, startControlPlaneRealtimeClient } from "../../src/installer-dashboard/web/src/control-plane-client";
 import type { RealtimeEvent } from "../../src/desktop-electron/bridge";
 
@@ -97,6 +98,15 @@ test("controlPlaneFetch falls back to browser fetch when no desktop bridge is av
   assert.deepEqual(await response.json(), { ok: true, via: "http" });
 });
 
+test("desktop-mode renderer must fail explicitly instead of silently falling back to browser fetch when the host bridge is unavailable", () => {
+  const clientSource = fs.readFileSync(`${process.cwd()}/src/installer-dashboard/web/src/control-plane-client.ts`, "utf8");
+
+  assert.match(clientSource, /type RealtimeStatus = "connected" \| "reconnecting" \| "disconnected" \| "web-preview"/);
+  assert.match(clientSource, /getRuntimeInfo/);
+  assert.match(clientSource, /host bridge unavailable/i);
+  assert.doesNotMatch(clientSource, /if \(!desktopBridge\) {\s*return fetch\(pathname, init\);\s*}/m);
+});
+
 test("startControlPlaneRealtimeClient consumes realtime events from the desktop bridge", async (t) => {
   const statuses: string[] = [];
   const events: RealtimeEvent[] = [];
@@ -156,4 +166,12 @@ test("startControlPlaneRealtimeClient consumes realtime events from the desktop 
 
   stop();
   assert.equal(disposeCalled, true);
+});
+
+test("web preview mode remains allowed to use browser realtime fallback", () => {
+  const clientSource = fs.readFileSync(`${process.cwd()}/src/installer-dashboard/web/src/control-plane-client.ts`, "utf8");
+
+  assert.match(clientSource, /web-preview/);
+  assert.match(clientSource, /new WebSocket\(/);
+  assert.match(clientSource, /controlPlaneFetch\("\/api\/v1\/ws\/session"/);
 });

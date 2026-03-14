@@ -23,7 +23,7 @@ test("desktop shell subscribes to realtime updates for connection state and acti
   const ui = readWorkspaceFile("src/installer-dashboard/web/src/InstallerDashboard.tsx");
 
   assert.match(ui, /startRealtimeClient\(/);
-  assert.match(ui, /const \[realtimeStatus, setRealtimeStatus\] = useState<RealtimeStatus>\("http-only"\)/);
+  assert.match(ui, /const \[realtimeStatus, setRealtimeStatus\] = useState<RealtimeStatus>\("disconnected"\)/);
   assert.match(ui, /const \[activityFeed, setActivityFeed\] = useState<RealtimeEvent\[]>\(\[\]\)/);
 });
 
@@ -39,8 +39,8 @@ test("describeRealtimeStatus prioritizes busy work over fallback transport messa
   assert.match(summary.title, /Operation running/i);
 });
 
-test("describeRealtimeStatus surfaces fallback mode when browser transport is active", () => {
-  const summary = describeRealtimeStatus("http-only", {
+test("describeRealtimeStatus treats missing desktop host as a disconnected desktop boundary instead of HTTP fallback", () => {
+  const summary = describeRealtimeStatus("disconnected", {
     busy: false,
     catalogLoading: false,
     error: "",
@@ -48,7 +48,8 @@ test("describeRealtimeStatus surfaces fallback mode when browser transport is ac
   });
 
   assert.equal(summary.tone, "warning");
-  assert.match(summary.detail, /HTTP fallback/i);
+  assert.doesNotMatch(summary.detail, /HTTP fallback/i);
+  assert.match(summary.detail, /desktop host|host bridge|reconnect/i);
 });
 
 test("summarizeRealtimeEvent formats operation and source lifecycle updates for the desktop activity feed", () => {
