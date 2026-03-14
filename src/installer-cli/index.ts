@@ -8,14 +8,10 @@ import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { executeOperation } from "../installer-core/executor";
-import { loadCatalogFromSources } from "../installer-core/catalog";
 import { loadHookCatalogFromSources, HookInstallSelection } from "../installer-core/hookCatalog";
 import { executeHookOperation, HookInstallRequest, HookTargetPlatform } from "../installer-core/hookExecutor";
 import { loadHookInstallState } from "../installer-core/hookState";
-import { loadInstallState } from "../installer-core/state";
 import { parseTargets, resolveTargetPaths } from "../installer-core/targets";
-import { checkForAppUpdate } from "../installer-core/updateCheck";
 import { createInstallerApplicationService } from "../installer-core/applicationService";
 import { findRepoRoot } from "../installer-core/repo";
 import {
@@ -616,7 +612,7 @@ async function ensureDashboardImage(options: {
 
 function printHelp(): void {
   output.write(`ICA Installer CLI\n\n`);
-  output.write(`Commands:\n`);
+  output.write(`Headless automation commands:\n`);
   output.write(`  ica install\n`);
   output.write(`  ica uninstall\n`);
   output.write(`  ica sync\n`);
@@ -734,7 +730,8 @@ function isLoopbackHost(host: string): boolean {
 
 async function promptInteractive(command: OperationKind, options: Record<string, string | boolean>): Promise<InstallRequest> {
   const repoRoot = findRepoRoot(__dirname);
-  const catalog = await loadCatalogFromSources(repoRoot, false);
+  const service = createInstallerApplicationService({ repoRoot });
+  const catalog = await service.getCatalogSnapshot();
   const rl = readline.createInterface({ input, output });
 
   try {
@@ -797,7 +794,8 @@ async function promptInteractive(command: OperationKind, options: Record<string,
 
 async function buildRequestFromFlags(command: OperationKind, options: Record<string, string | boolean>): Promise<InstallRequest> {
   const repoRoot = findRepoRoot(__dirname);
-  const catalog = await loadCatalogFromSources(repoRoot, false);
+  const service = createInstallerApplicationService({ repoRoot });
+  const catalog = await service.getCatalogSnapshot();
   const targets = parseTargetsStrict(stringOption(options, "targets", ""));
   const scope = (stringOption(options, "scope", "user") === "project" ? "project" : "user") as InstallScope;
   const projectPath =
@@ -870,15 +868,16 @@ async function runList(options: Record<string, string | boolean>): Promise<void>
 
 async function runDoctor(options: Record<string, string | boolean>): Promise<void> {
   const repoRoot = findRepoRoot(__dirname);
-  const catalog = await loadCatalogFromSources(repoRoot, false);
+  const service = createInstallerApplicationService({ repoRoot });
+  const diagnostics = await service.getDiagnosticSnapshot();
   const discovered = parseTargetsStrict(stringOption(options, "targets", ""));
 
   const payload = {
-    node: process.version,
-    platform: `${os.platform()} ${os.arch()}`,
+    node: diagnostics.node,
+    platform: diagnostics.platform,
     discoveredTargets: discovered,
-    catalogVersion: catalog.version,
-    skills: catalog.skills.length,
+    catalogVersion: diagnostics.catalogVersion,
+    skills: diagnostics.skills,
   };
 
   if (boolOption(options, "json", false)) {
@@ -895,7 +894,8 @@ async function runDoctor(options: Record<string, string | boolean>): Promise<voi
 async function runCatalog(options: Record<string, string | boolean>): Promise<void> {
   const repoRoot = findRepoRoot(__dirname);
   const refresh = boolOption(options, "refresh", false);
-  const catalog = await loadCatalogFromSources(repoRoot, refresh);
+  const service = createInstallerApplicationService({ repoRoot });
+  const catalog = await service.getCatalogSnapshot({ refresh });
   if (boolOption(options, "json", false)) {
     output.write(`${JSON.stringify(catalog, null, 2)}\n`);
     return;

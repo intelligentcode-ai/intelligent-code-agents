@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 
 const repoRoot = process.cwd();
 
-async function waitForApiReady(port: number, apiKey: string, retries = 40): Promise<void> {
+async function waitForApiReady(port: number, apiKey: string, retries = 120): Promise<void> {
   for (let i = 0; i < retries; i += 1) {
     try {
       const res = await fetch(`http://127.0.0.1:${port}/api/v1/health`, {

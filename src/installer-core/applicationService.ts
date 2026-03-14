@@ -187,10 +187,33 @@ export interface RegisterSourceResult {
   auth: SourceAuthCheckResult;
 }
 
+export interface DiagnosticSnapshot {
+  node: string;
+  platform: string;
+  catalogVersion: string;
+  skills: number;
+}
+
 export interface InstallerApplicationService {
   listInstallations(input: InstallationInspectionQuery): Promise<{ installations: InstallationRow[] }>;
   listHookInstallations(input: InstallationInspectionQuery): Promise<{ installations: HookInstallationRow[] }>;
   listSources(): Promise<{ sources: PublicSourceView[] }>;
+  getDiagnosticSnapshot(): Promise<{
+    node: string;
+    platform: string;
+    catalogVersion: string;
+    skills: number;
+  }>;
+  getCatalogSnapshot(input?: { refresh?: boolean }): Promise<{
+    version: string;
+    generatedAt: string;
+    catalogSource?: string;
+    stale?: boolean;
+    staleReason?: string;
+    cacheAgeSeconds?: number;
+    nextRefreshAt?: string;
+    skills: Awaited<ReturnType<typeof loadCatalogFromSources>>["skills"];
+  }>;
   executeInstallOperation(request: InstallRequest): Promise<OperationReport>;
   executeUninstallOperation(request: InstallRequest): Promise<OperationReport>;
   executeSyncOperation(request: InstallRequest): Promise<OperationReport>;
@@ -466,6 +489,20 @@ export function createInstallerApplicationService(
           .map((source) => toPublicSource(source))
           .sort((a, b) => a.id.localeCompare(b.id)),
       };
+    },
+
+    async getDiagnosticSnapshot() {
+      const catalog = await deps.loadCatalogFromSources(options.repoRoot, false);
+      return {
+        node: process.version,
+        platform: `${process.platform} ${process.arch}`,
+        catalogVersion: catalog.version,
+        skills: catalog.skills.length,
+      };
+    },
+
+    getCatalogSnapshot(input = {}) {
+      return deps.loadCatalogFromSources(options.repoRoot, input.refresh === true);
     },
 
     executeInstallOperation(request) {
