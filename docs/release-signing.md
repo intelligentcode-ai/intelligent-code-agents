@@ -12,12 +12,12 @@ This repository publishes releases with a tag-driven GitHub Actions workflow:
 - `desktop-release-plan.json`
 - `desktop-updater-manifest.json`
 - `desktop-validation-matrix.json`
-- `ica-desktop-<tag>-macos-x64.package.json`
-- `ica-desktop-<tag>-macos-arm64.package.json`
-- `ica-desktop-<tag>-windows-x64.package.json`
-- `ica-desktop-<tag>-windows-arm64.package.json`
-- `ica-desktop-<tag>-linux-x64.package.json`
-- `ica-desktop-<tag>-linux-arm64.package.json`
+- `ica-desktop-<tag>-macos-x64.dmg`
+- `ica-desktop-<tag>-macos-arm64.dmg`
+- `ica-desktop-<tag>-windows-x64.exe`
+- `ica-desktop-<tag>-windows-arm64.exe`
+- `ica-desktop-<tag>-linux-x64.AppImage`
+- `ica-desktop-<tag>-linux-arm64.AppImage`
 - `SHA256SUMS.txt`
 - Keyless signatures and certificates for each artifact (`.sig`, `.pem`)
 - GitHub artifact attestations (provenance) for each artifact
@@ -41,7 +41,7 @@ Reproducibility is enforced in two layers:
    - Uses `gzip -n` for deterministic gzip output
    - Generates desktop release metadata via `scripts/release/build-desktop-manifests.mjs`
    - Generates desktop rollout validation metadata via `scripts/release/build-desktop-manifests.mjs`
-   - Emits one deterministic package-plan JSON artifact per supported OS/arch target
+   - Emits one deterministic desktop package asset per supported OS/arch target
    - Sets `SOURCE_DATE_EPOCH`, `TZ=UTC`, and `LC_ALL=C`
 2. CI rebuild verification
    - Workflow rebuilds artifacts in a separate job
@@ -66,7 +66,7 @@ The desktop release plan now defines a concrete package format and publish path 
 - Windows x64 / arm64: EXE packaging with Authenticode requirements
 - Linux x64 / arm64: AppImage packaging with Cosign verification requirements
 
-Each target also emits a `.package.json` asset that captures the packaging contract used by CI and release publishing.
+Each target now emits a concrete desktop package asset under its final release filename so CI, signing, and release publishing operate on the same file names that users download.
 
 The same release metadata build now emits `desktop-validation-matrix.json`, which captures per-target smoke checks and rollout gates for release-readiness review. The operator checklist for that artifact lives in `docs/testing/desktop-rollout-validation.md`.
 
