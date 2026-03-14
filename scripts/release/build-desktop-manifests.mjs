@@ -30,7 +30,7 @@ const generatedAt = resolveGeneratedAt(process.env.SOURCE_DATE_EPOCH);
 
 const releaseTargets = desktopTargets.map((target) => {
   const id = `${target.platform}-${target.arch}`;
-  const artifactName = `ica-desktop-${versionTag}-${target.osToken}-${target.arch}.${target.artifactFormat}`;
+  const artifactName = `ica-desktop-${versionTag}-${target.artifactNameToken}-${target.arch}.${target.artifactFormat}`;
   const publishPath = `desktop/stable/${target.platform}/${target.arch}/${artifactName}`;
   const updaterArtifacts = getDesktopUpdaterArtifacts(target).map((artifact) => artifact.replace("ica-desktop-<tag>", `ica-desktop-${versionTag}`));
   return {

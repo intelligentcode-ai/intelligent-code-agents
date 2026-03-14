@@ -3,6 +3,7 @@ export const desktopTargets = [
     platform: "darwin",
     arch: "x64",
     osToken: "macos",
+    artifactNameToken: "mac",
     artifactFormat: "dmg",
     signingRequirements: ["apple-codesign", "apple-notarization"],
   },
@@ -10,6 +11,7 @@ export const desktopTargets = [
     platform: "darwin",
     arch: "arm64",
     osToken: "macos",
+    artifactNameToken: "mac",
     artifactFormat: "dmg",
     signingRequirements: ["apple-codesign", "apple-notarization"],
   },
@@ -17,6 +19,7 @@ export const desktopTargets = [
     platform: "win32",
     arch: "x64",
     osToken: "windows",
+    artifactNameToken: "win",
     artifactFormat: "exe",
     signingRequirements: ["authenticode"],
   },
@@ -24,6 +27,7 @@ export const desktopTargets = [
     platform: "win32",
     arch: "arm64",
     osToken: "windows",
+    artifactNameToken: "win",
     artifactFormat: "exe",
     signingRequirements: ["authenticode"],
   },
@@ -31,6 +35,7 @@ export const desktopTargets = [
     platform: "linux",
     arch: "x64",
     osToken: "linux",
+    artifactNameToken: "linux",
     artifactFormat: "AppImage",
     signingRequirements: ["cosign"],
   },
@@ -38,6 +43,7 @@ export const desktopTargets = [
     platform: "linux",
     arch: "arm64",
     osToken: "linux",
+    artifactNameToken: "linux",
     artifactFormat: "AppImage",
     signingRequirements: ["cosign"],
   },
@@ -78,10 +84,10 @@ export const desktopCertificationGates = [
 
 export function getDesktopUpdaterArtifacts(target) {
   if (target.platform === "darwin") {
-    return ["latest-mac.yml", `ica-desktop-<tag>-macos-${target.arch}.${target.artifactFormat}.blockmap`];
+    return ["latest-mac.yml", `ica-desktop-<tag>-mac-${target.arch}.${target.artifactFormat}.blockmap`];
   }
   if (target.platform === "win32") {
-    return ["latest.yml", `ica-desktop-<tag>-windows-${target.arch}.${target.artifactFormat}.blockmap`];
+    return ["latest.yml", `ica-desktop-<tag>-win-${target.arch}.${target.artifactFormat}.blockmap`];
   }
   return ["latest-linux.yml", `ica-desktop-<tag>-linux-${target.arch}.${target.artifactFormat}.blockmap`];
 }

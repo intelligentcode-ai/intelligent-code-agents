@@ -76,7 +76,7 @@ test("desktop validation matrix defines required acceptance and certification ch
   assert.ok(validationMatrix.certificationGates.some((gate) => gate.validationSource === "ci"));
 
   for (const target of validationMatrix.targets) {
-    assert.match(target.packageArtifactName, /^ica-desktop-v12\.3\.0-(macos|windows|linux)-(x64|arm64)\.(dmg|exe|AppImage)$/);
+    assert.match(target.packageArtifactName, /^ica-desktop-v12\.3\.0-(mac|win|linux)-(x64|arm64)\.(dmg|exe|AppImage)$/);
     assert.ok(target.packageFormat.length > 0);
     assert.ok(target.updaterFeedPath.startsWith("desktop/stable/"));
     assert.ok(target.updaterArtifacts.length > 0);

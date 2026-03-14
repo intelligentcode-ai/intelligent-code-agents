@@ -130,14 +130,29 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            target: "--mac dmg"
-            artifact_glob: "dist/desktop-release/*.dmg\ndist/desktop-release/latest-mac.yml\ndist/desktop-release/*.blockmap"
+            arch: x64
+            target: "--mac dmg --x64"
+            artifact_glob: "dist/desktop-release/*-mac-x64.dmg\ndist/desktop-release/latest-mac.yml\ndist/desktop-release/*-mac-x64.dmg.blockmap"
           - os: windows-latest
-            target: "--win nsis"
-            artifact_glob: "dist/desktop-release/*.exe\ndist/desktop-release/latest.yml\ndist/desktop-release/*.blockmap"
+            arch: x64
+            target: "--win nsis --x64"
+            artifact_glob: "dist/desktop-release/*-win-x64.exe\ndist/desktop-release/latest.yml\ndist/desktop-release/*-win-x64.exe.blockmap"
           - os: ubuntu-latest
-            target: "--linux AppImage"
-            artifact_glob: "dist/desktop-release/*.AppImage\ndist/desktop-release/latest-linux.yml\ndist/desktop-release/*.blockmap"
+            arch: x64
+            target: "--linux AppImage --x64"
+            artifact_glob: "dist/desktop-release/*-linux-x64.AppImage\ndist/desktop-release/latest-linux.yml\ndist/desktop-release/*-linux-x64.AppImage.blockmap"
+          - os: macos-latest
+            arch: arm64
+            target: "--mac dmg --arm64"
+            artifact_glob: "dist/desktop-release/*-mac-arm64.dmg\ndist/desktop-release/latest-mac.yml\ndist/desktop-release/*-mac-arm64.dmg.blockmap"
+          - os: windows-latest
+            arch: arm64
+            target: "--win nsis --arm64"
+            artifact_glob: "dist/desktop-release/*-win-arm64.exe\ndist/desktop-release/latest.yml\ndist/desktop-release/*-win-arm64.exe.blockmap"
+          - os: ubuntu-latest
+            arch: arm64
+            target: "--linux AppImage --arm64"
+            artifact_glob: "dist/desktop-release/*-linux-arm64.AppImage\ndist/desktop-release/latest-linux.yml\ndist/desktop-release/*-linux-arm64.AppImage.blockmap"
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -174,7 +189,7 @@ jobs:
       - name: Upload desktop release assets
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: desktop-${{ matrix.os }}-${{ github.ref_name }}
+          name: desktop-${{ matrix.os }}-${{ matrix.arch }}-${{ github.ref_name }}
           path: ${{ matrix.artifact_glob }}
           if-no-files-found: error
 
@@ -200,19 +215,37 @@ jobs:
       - name: Download macOS desktop assets
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: desktop-macos-latest-${{ github.ref_name }}
+          name: desktop-macos-latest-x64-${{ github.ref_name }}
+          path: dist/desktop
+
+      - name: Download macOS arm64 desktop assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: desktop-macos-latest-arm64-${{ github.ref_name }}
           path: dist/desktop
 
       - name: Download Windows desktop assets
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: desktop-windows-latest-${{ github.ref_name }}
+          name: desktop-windows-latest-x64-${{ github.ref_name }}
+          path: dist/desktop
+
+      - name: Download Windows arm64 desktop assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: desktop-windows-latest-arm64-${{ github.ref_name }}
           path: dist/desktop
 
       - name: Download Linux desktop assets
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: desktop-ubuntu-latest-${{ github.ref_name }}
+          name: desktop-ubuntu-latest-x64-${{ github.ref_name }}
+          path: dist/desktop
+
+      - name: Download Linux arm64 desktop assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: desktop-ubuntu-latest-arm64-${{ github.ref_name }}
           path: dist/desktop
 
       - name: Download desktop certification report
