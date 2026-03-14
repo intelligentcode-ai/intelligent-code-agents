@@ -374,6 +374,78 @@ input[type="radio"]:focus-visible {
   padding: var(--space-8) var(--space-6) var(--space-9);
 }
 
+.desktop-shell-app {
+  min-height: 100vh;
+}
+
+.desktop-shell-app-main {
+  display: block;
+}
+
+.desktop-shell-frame {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.desktop-shell-header {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 7%, var(--surface)) 0%, var(--surface) 62%),
+    var(--surface);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 14px;
+  padding: var(--space-5) var(--space-6);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 36%, transparent);
+}
+
+.desktop-shell-header-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.desktop-shell-header-copyblock {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 46rem;
+}
+
+.desktop-shell-header h1 {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.5vw, 1.82rem);
+  line-height: 1.12;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+}
+
+.desktop-shell-header-copy {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+  line-height: 1.58;
+}
+
+.desktop-shell-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.desktop-shell-header-meta span {
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: var(--text-soft);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+}
+
+.desktop-shell-workspace {
+  display: grid;
+  gap: var(--space-5);
+}
+
 .hero {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -1877,6 +1949,19 @@ pre {
     padding: var(--space-5);
   }
 
+  .desktop-shell-header {
+    padding: var(--space-5);
+  }
+
+  .desktop-shell-header-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .desktop-shell-header-meta {
+    justify-content: flex-start;
+  }
+
   .panel-spacious {
     padding: var(--space-6);
   }
@@ -1977,6 +2062,10 @@ pre {
 
   .hero-meta {
     gap: var(--space-1);
+  }
+
+  .desktop-shell-header {
+    padding: var(--space-5);
   }
 
   .tab-nav {
