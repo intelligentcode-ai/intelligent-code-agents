@@ -1,5 +1,6 @@
 import type { DesktopHostFailureReport, DesktopRuntimeInfo, RealtimeEvent } from "../../../desktop-electron/bridge";
 import { CONTROL_PLANE_REQUEST_CHANNEL } from "../../../desktop-electron/bridge";
+import type { AppUpdateStatus } from "../../../installer-core/updateCheck";
 
 export type RealtimeStatus = "connected" | "reconnecting" | "disconnected" | "web-preview";
 
@@ -15,6 +16,10 @@ export interface RealtimeClientOptions {
   onStatusChange?: (status: RealtimeStatus) => void;
   onEvent?: (event: RealtimeEvent) => void;
   onError?: (message: string) => void;
+}
+
+interface HealthPayload {
+  update?: AppUpdateStatus;
 }
 
 function getDesktopBridge() {
@@ -140,6 +145,36 @@ export async function pickProjectDirectory(initialPath?: string): Promise<{ path
     throw new Error(asErrorMessage(payload, "Project picker failed."));
   }
   return { path: payload.path };
+}
+
+export async function checkAppUpdate(force = false): Promise<AppUpdateStatus> {
+  const desktopBridge = getDesktopBridge();
+  if (desktopBridge) {
+    return desktopBridge.checkForAppUpdate(force);
+  }
+
+  const response = await controlPlaneFetch("/api/v1/health");
+  const payload = (await response.json()) as HealthPayload & { error?: string };
+  if (!response.ok || !payload.update) {
+    throw new Error(asErrorMessage(payload, "Update status unavailable."));
+  }
+  return payload.update;
+}
+
+export async function downloadAppUpdate(): Promise<AppUpdateStatus> {
+  const desktopBridge = getDesktopBridge();
+  if (!desktopBridge) {
+    throw createHostBridgeUnavailableError();
+  }
+  return desktopBridge.downloadAppUpdate();
+}
+
+export async function quitAndInstallAppUpdate(): Promise<{ accepted: boolean }> {
+  const desktopBridge = getDesktopBridge();
+  if (!desktopBridge) {
+    throw createHostBridgeUnavailableError();
+  }
+  return desktopBridge.quitAndInstallAppUpdate();
 }
 
 export async function pickPublishDirectory(initialPath?: string): Promise<{ path: string }> {

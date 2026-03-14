@@ -1,7 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { controlPlaneFetch, pickProjectDirectory, pickPublishDirectory } from "./control-plane-client";
+import {
+  checkAppUpdate,
+  controlPlaneFetch,
+  downloadAppUpdate,
+  pickProjectDirectory,
+  pickPublishDirectory,
+  quitAndInstallAppUpdate,
+} from "./control-plane-client";
 import { describeRealtimeStatus, summarizeRealtimeEvent } from "./desktop-shell";
 import { startRealtimeClient, type RealtimeEvent, type RealtimeStatus } from "./realtime-client";
+import type { AppUpdateStatus } from "../../../installer-core/updateCheck";
 
 type Target = "claude" | "codex" | "cursor" | "gemini" | "antigravity";
 
@@ -156,6 +164,7 @@ type SkillPublishResult = {
 };
 
 type PublishMode = "direct-push" | "branch-only" | "branch-pr";
+type DesktopUpdateTone = "neutral" | "busy" | "success" | "danger";
 
 type DashboardTab = "skills" | "hooks" | "settings" | "state";
 type DashboardMode = "light" | "dark";
@@ -369,6 +378,8 @@ export function InstallerDashboard(): JSX.Element {
   const [publishComposerOpen, setPublishComposerOpen] = useState(false);
   const [publishAdvancedOpen, setPublishAdvancedOpen] = useState(false);
   const [publishOriginSourceId, setPublishOriginSourceId] = useState<string | undefined>(undefined);
+  const [appUpdate, setAppUpdate] = useState<AppUpdateStatus | null>(null);
+  const [appUpdateBusy, setAppUpdateBusy] = useState(false);
   const appearancePanelRef = useRef<HTMLElement | null>(null);
   const appearanceTriggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -1260,12 +1271,61 @@ export function InstallerDashboard(): JSX.Element {
     }
   }
 
+  async function refreshAppUpdate(force = false): Promise<void> {
+    try {
+      const next = await checkAppUpdate(force);
+      setAppUpdate(next);
+    } catch (err) {
+      setAppUpdate((current) =>
+        current || {
+          currentVersion: "unknown",
+          checkedAt: new Date().toISOString(),
+          updateAvailable: false,
+          channel: "stable",
+          runtime: "desktop-preview",
+          canAutoApply: false,
+          downloaded: false,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      );
+    }
+  }
+
+  async function handleDownloadAppUpdate(): Promise<void> {
+    setAppUpdateBusy(true);
+    setError("");
+    try {
+      const next = await downloadAppUpdate();
+      setAppUpdate(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAppUpdateBusy(false);
+    }
+  }
+
+  async function handleQuitAndInstallAppUpdate(): Promise<void> {
+    setAppUpdateBusy(true);
+    setError("");
+    try {
+      const result = await quitAndInstallAppUpdate();
+      if (!result.accepted) {
+        throw new Error("Desktop update is not ready to install yet.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAppUpdateBusy(false);
+    }
+  }
+
   useEffect(() => {
     fetchDiscoveredTargets().catch((err) => setError(err instanceof Error ? err.message : String(err)));
     fetchSources()
       .then(async () => {
         await fetchSkills(true);
         await fetchHooks();
+        await refreshAppUpdate(true);
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, []);
@@ -1522,6 +1582,56 @@ export function InstallerDashboard(): JSX.Element {
       })),
     [activityFeed],
   );
+  const updateSummary = useMemo((): { badge: string; title: string; detail: string; tone: DesktopUpdateTone } => {
+    if (appUpdateBusy) {
+      return {
+        badge: "Working",
+        title: "Processing desktop update",
+        detail: "Downloading or installing the staged desktop release.",
+        tone: "busy",
+      };
+    }
+    if (!appUpdate) {
+      return {
+        badge: "Unknown",
+        title: "Desktop update status unavailable",
+        detail: "Run a manual check to load release state for this workspace.",
+        tone: "neutral",
+      };
+    }
+    if (appUpdate.error) {
+      return {
+        badge: "Issue",
+        title: "Desktop updates need attention",
+        detail: appUpdate.error,
+        tone: "danger",
+      };
+    }
+    if (appUpdate.downloaded) {
+      return {
+        badge: "Ready",
+        title: `ICA ${appUpdate.latestVersion || appUpdate.currentVersion} is ready to install`,
+        detail: "Quit and install will restart the packaged desktop app into the downloaded release.",
+        tone: "success",
+      };
+    }
+    if (appUpdate.updateAvailable) {
+      return {
+        badge: "Update",
+        title: `ICA ${appUpdate.latestVersion || "next"} is available`,
+        detail: appUpdate.canAutoApply
+          ? "Download the packaged desktop update now, then restart into the staged release."
+          : "A newer release exists, but this runtime can only open the release manually.",
+        tone: "busy",
+      };
+    }
+    return {
+      badge: "Current",
+      title: `ICA ${appUpdate.currentVersion} is up to date`,
+      detail: "No newer stable desktop release is waiting on the selected channel.",
+      tone: "neutral",
+    };
+  }, [appUpdate, appUpdateBusy]);
 
   return (
     <div className="shell">
@@ -1634,6 +1744,39 @@ export function InstallerDashboard(): JSX.Element {
               }}
             >
               Refresh repositories
+            </button>
+          </div>
+        </article>
+
+        <article className="panel desktop-shell-card panel-spacious">
+          <div className="desktop-shell-heading">
+            <div>
+              <p className="desktop-shell-kicker">Release</p>
+              <h2>Update Center</h2>
+            </div>
+            <span className={`desktop-shell-pill is-${updateSummary.tone}`}>{updateSummary.badge}</span>
+          </div>
+          <p className="desktop-shell-title">{updateSummary.title}</p>
+          <p className="desktop-shell-copy">{updateSummary.detail}</p>
+          <div className="desktop-shell-actions">
+            <button className="btn btn-secondary" type="button" disabled={busy || appUpdateBusy} onClick={() => void refreshAppUpdate(true)}>
+              Check now
+            </button>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={busy || appUpdateBusy || !appUpdate?.updateAvailable || !appUpdate.canAutoApply || Boolean(appUpdate.downloaded)}
+              onClick={() => void handleDownloadAppUpdate()}
+            >
+              Download update
+            </button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              disabled={busy || appUpdateBusy || !appUpdate?.downloaded}
+              onClick={() => void handleQuitAndInstallAppUpdate()}
+            >
+              Quit & Install
             </button>
           </div>
         </article>

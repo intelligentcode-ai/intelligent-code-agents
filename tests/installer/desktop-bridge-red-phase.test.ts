@@ -18,6 +18,9 @@ test("desktop bridge contract declares typed native host capabilities for the ha
 
   assert.match(bridgeSource, /export interface DesktopRuntimeInfo/);
   assert.match(bridgeSource, /export interface DesktopHostFailureReport/);
+  assert.match(bridgeSource, /checkForAppUpdate\(force\?: boolean\): Promise<AppUpdateStatus>;/);
+  assert.match(bridgeSource, /downloadAppUpdate\(\): Promise<AppUpdateStatus>;/);
+  assert.match(bridgeSource, /quitAndInstallAppUpdate\(\): Promise<\{ accepted: boolean \}>;/);
   assert.match(bridgeSource, /pickProjectDirectory\(initialPath\?: string\): Promise<\{ path: string \}>;/);
   assert.match(bridgeSource, /pickPublishDirectory\(initialPath\?: string\): Promise<\{ path: string \}>;/);
   assert.match(bridgeSource, /getRuntimeInfo\(\): Promise<DesktopRuntimeInfo>;/);

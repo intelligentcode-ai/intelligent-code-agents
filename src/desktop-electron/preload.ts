@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
 import {
   CONTROL_PLANE_IPC_CHANNEL,
+  DESKTOP_UPDATE_CHECK_IPC_CHANNEL,
+  DESKTOP_UPDATE_DOWNLOAD_IPC_CHANNEL,
+  DESKTOP_UPDATE_QUIT_AND_INSTALL_IPC_CHANNEL,
   DESKTOP_PICK_PROJECT_IPC_CHANNEL,
   DESKTOP_PICK_PUBLISH_IPC_CHANNEL,
   DESKTOP_REPORT_FAILURE_IPC_CHANNEL,
@@ -35,6 +38,18 @@ const desktopBridge: DesktopBridgeApi = {
       ipcRenderer.off(REALTIME_EVENT_CHANNEL, wrappedListener);
       ipcRenderer.send(REALTIME_UNSUBSCRIBE_CHANNEL);
     };
+  },
+
+  checkForAppUpdate(force) {
+    return ipcRenderer.invoke(DESKTOP_UPDATE_CHECK_IPC_CHANNEL, force) as Promise<import("../installer-core/updateCheck").AppUpdateStatus>;
+  },
+
+  downloadAppUpdate() {
+    return ipcRenderer.invoke(DESKTOP_UPDATE_DOWNLOAD_IPC_CHANNEL) as Promise<import("../installer-core/updateCheck").AppUpdateStatus>;
+  },
+
+  quitAndInstallAppUpdate() {
+    return ipcRenderer.invoke(DESKTOP_UPDATE_QUIT_AND_INSTALL_IPC_CHANNEL) as Promise<{ accepted: boolean }>;
   },
 
   pickProjectDirectory(initialPath) {
