@@ -50,6 +50,14 @@ test("release workflow builds signed desktop artifacts on platform runners and p
   assert.match(workflow, /ubuntu-latest/);
   assert.match(workflow, /windows-latest/);
   assert.match(workflow, /macos-latest/);
+  assert.match(workflow, /arch:\s*x64/);
+  assert.match(workflow, /arch:\s*arm64/);
+  assert.match(workflow, /--mac dmg --x64/);
+  assert.match(workflow, /--mac dmg --arm64/);
+  assert.match(workflow, /--win nsis --x64/);
+  assert.match(workflow, /--win nsis --arm64/);
+  assert.match(workflow, /--linux AppImage --x64/);
+  assert.match(workflow, /--linux AppImage --arm64/);
   assert.match(workflow, /npm run build:desktop:release/);
   assert.match(workflow, /\.dmg/);
   assert.match(workflow, /\.exe/);
