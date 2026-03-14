@@ -50,6 +50,8 @@ declare module "electron" {
   export const app: {
     whenReady(): Promise<void>;
     on(event: "window-all-closed" | "activate", listener: () => void): void;
+    getVersion(): string;
+    isPackaged: boolean;
     quit(): void;
   };
 

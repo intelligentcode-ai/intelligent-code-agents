@@ -6,6 +6,10 @@ export interface AppUpdateStatus {
   latestReleaseUrl?: string;
   checkedAt: string;
   updateAvailable: boolean;
+  channel: string;
+  runtime: "server" | "desktop-preview" | "desktop-packaged";
+  canAutoApply: boolean;
+  downloaded: boolean;
   error?: string;
 }
 
@@ -81,6 +85,10 @@ export async function checkForAppUpdate(currentVersion: string, force = false): 
       latestReleaseUrl: latest.url,
       checkedAt: new Date(nowMs).toISOString(),
       updateAvailable: isVersionNewer(latest.version, currentVersion),
+      channel: "stable",
+      runtime: "server",
+      canAutoApply: false,
+      downloaded: false,
     };
     updateCache.set(cacheKey, { status, expiresAtMs: nowMs + ttlMs });
     return status;
@@ -89,6 +97,10 @@ export async function checkForAppUpdate(currentVersion: string, force = false): 
       currentVersion,
       checkedAt: new Date(nowMs).toISOString(),
       updateAvailable: false,
+      channel: "stable",
+      runtime: "server",
+      canAutoApply: false,
+      downloaded: false,
       error: safeErrorMessage(error, "Unable to check for updates."),
     };
     updateCache.set(cacheKey, { status, expiresAtMs: nowMs + ttlMs });

@@ -1,0 +1,56 @@
+{
+  "appId": "ai.intelligentcode.ica.desktop",
+  "productName": "ICA Desktop",
+  "directories": {
+    "output": "dist/desktop-release"
+  },
+  "files": [
+    "dist/src/**/*",
+    "dist/installer-dashboard/web-build/**/*",
+    "VERSION",
+    "README.md",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "main": "dist/src/desktop-electron/app.js"
+  },
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "intelligentcode-ai",
+      "repo": "intelligent-code-agents",
+      "releaseType": "draft"
+    }
+  ],
+  "artifactName": "ica-desktop-${version}-${os}-${arch}.${ext}",
+  "mac": {
+    "target": [
+      "dmg"
+    ],
+    "category": "public.app-category.developer-tools",
+    "hardenedRuntime": true,
+    "notarize": true
+  },
+  "dmg": {
+    "sign": false
+  },
+  "win": {
+    "target": [
+      "nsis"
+    ],
+    "signingHashAlgorithms": [
+      "sha256"
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false
+  },
+  "linux": {
+    "target": [
+      "AppImage"
+    ],
+    "category": "Development"
+  },
+  "afterSign": "scripts/release/notarize.cjs"
+}

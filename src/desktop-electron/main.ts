@@ -6,6 +6,9 @@ import {
   DESKTOP_PICK_PUBLISH_IPC_CHANNEL,
   DESKTOP_REPORT_FAILURE_IPC_CHANNEL,
   DESKTOP_RUNTIME_INFO_IPC_CHANNEL,
+  DESKTOP_UPDATE_CHECK_IPC_CHANNEL,
+  DESKTOP_UPDATE_DOWNLOAD_IPC_CHANNEL,
+  DESKTOP_UPDATE_QUIT_AND_INSTALL_IPC_CHANNEL,
   REALTIME_EVENT_CHANNEL,
   REALTIME_SUBSCRIBE_CHANNEL,
   REALTIME_UNSUBSCRIBE_CHANNEL,
@@ -13,6 +16,7 @@ import {
   type DesktopBridgeRequestMap,
 } from "./bridge";
 import { createDesktopControlPlane } from "./controlPlane";
+import { createDesktopUpdateCoordinator, createNativeDesktopUpdater, type DesktopUpdateCoordinator } from "./updater";
 import type { InstallerApplicationService } from "../installer-core/applicationService";
 import { findRepoRoot } from "../installer-core/repo";
 import {
@@ -26,6 +30,7 @@ import {
 export interface RegisterElectronDesktopBridgeOptions {
   repoRoot?: string;
   applicationService?: Partial<InstallerApplicationService>;
+  updateCoordinator?: DesktopUpdateCoordinator;
   startUrl?: string;
   env?: NodeJS.ProcessEnv;
   logger?: DesktopStartupLogger;
@@ -37,6 +42,13 @@ export async function registerElectronDesktopBridge(
   const repoRoot = options.repoRoot || findRepoRoot(__dirname);
   const startUrl = options.startUrl || resolveDesktopStartUrl(repoRoot, options.env || process.env);
   const logger = options.logger || console;
+  const updateCoordinator =
+    options.updateCoordinator ||
+    createDesktopUpdateCoordinator({
+      currentVersion: app.getVersion(),
+      packaged: app.isPackaged,
+      nativeUpdater: app.isPackaged ? createNativeDesktopUpdater() : undefined,
+    });
   const controlPlane = await createDesktopControlPlane({
     repoRoot,
     applicationService: options.applicationService,
@@ -55,6 +67,9 @@ export async function registerElectronDesktopBridge(
   ipcMain.handle(DESKTOP_REPORT_FAILURE_IPC_CHANNEL, async (_event, payload: DesktopHostFailureReport) => {
     await controlPlane.reportRendererFailure(payload);
   });
+  ipcMain.handle(DESKTOP_UPDATE_CHECK_IPC_CHANNEL, async (_event, force?: boolean) => updateCoordinator.checkForAppUpdate(force));
+  ipcMain.handle(DESKTOP_UPDATE_DOWNLOAD_IPC_CHANNEL, async () => updateCoordinator.downloadAppUpdate());
+  ipcMain.handle(DESKTOP_UPDATE_QUIT_AND_INSTALL_IPC_CHANNEL, async () => updateCoordinator.quitAndInstallAppUpdate());
 
   ipcMain.on(REALTIME_SUBSCRIBE_CHANNEL, (event) => {
     const webContents = event.sender;
@@ -119,6 +134,9 @@ export async function registerElectronDesktopBridge(
       ipcMain.removeHandler(DESKTOP_PICK_PUBLISH_IPC_CHANNEL);
       ipcMain.removeHandler(DESKTOP_RUNTIME_INFO_IPC_CHANNEL);
       ipcMain.removeHandler(DESKTOP_REPORT_FAILURE_IPC_CHANNEL);
+      ipcMain.removeHandler(DESKTOP_UPDATE_CHECK_IPC_CHANNEL);
+      ipcMain.removeHandler(DESKTOP_UPDATE_DOWNLOAD_IPC_CHANNEL);
+      ipcMain.removeHandler(DESKTOP_UPDATE_QUIT_AND_INSTALL_IPC_CHANNEL);
       ipcMain.removeAllListeners(REALTIME_SUBSCRIBE_CHANNEL);
       ipcMain.removeAllListeners(REALTIME_UNSUBSCRIBE_CHANNEL);
       await controlPlane.close();

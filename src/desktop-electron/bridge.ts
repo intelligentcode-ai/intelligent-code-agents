@@ -1,4 +1,5 @@
 import type { RealtimeEvent } from "../installer-api/server/realtime";
+import type { AppUpdateStatus } from "../installer-core/updateCheck";
 
 export const CONTROL_PLANE_REQUEST_CHANNEL = "control-plane.request" as const;
 export const REALTIME_EVENT_CHANNEL = "ica:realtime:event" as const;
@@ -9,6 +10,9 @@ export const DESKTOP_PICK_PROJECT_IPC_CHANNEL = "ica:desktop:pick-project" as co
 export const DESKTOP_PICK_PUBLISH_IPC_CHANNEL = "ica:desktop:pick-publish" as const;
 export const DESKTOP_RUNTIME_INFO_IPC_CHANNEL = "ica:desktop:runtime-info" as const;
 export const DESKTOP_REPORT_FAILURE_IPC_CHANNEL = "ica:desktop:report-failure" as const;
+export const DESKTOP_UPDATE_CHECK_IPC_CHANNEL = "ica:desktop:update-check" as const;
+export const DESKTOP_UPDATE_DOWNLOAD_IPC_CHANNEL = "ica:desktop:update-download" as const;
+export const DESKTOP_UPDATE_QUIT_AND_INSTALL_IPC_CHANNEL = "ica:desktop:update-quit-install" as const;
 
 export interface DesktopControlPlaneRequest {
   pathname: string;
@@ -44,6 +48,9 @@ export interface DesktopBridgeResponseMap {
 export interface DesktopBridgeApi {
   request<K extends keyof DesktopBridgeRequestMap>(channel: K, payload: DesktopBridgeRequestMap[K]): Promise<DesktopBridgeResponseMap[K]>;
   subscribeRealtime(listener: (event: RealtimeEvent) => void): () => void;
+  checkForAppUpdate(force?: boolean): Promise<AppUpdateStatus>;
+  downloadAppUpdate(): Promise<AppUpdateStatus>;
+  quitAndInstallAppUpdate(): Promise<{ accepted: boolean }>;
   pickProjectDirectory(initialPath?: string): Promise<{ path: string }>;
   pickPublishDirectory(initialPath?: string): Promise<{ path: string }>;
   getRuntimeInfo(): Promise<DesktopRuntimeInfo>;

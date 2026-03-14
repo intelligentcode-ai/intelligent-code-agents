@@ -1,84 +1,49 @@
-# Release Signing and Reproducibility
+# Release Signing and Desktop Promotion
 
-This repository publishes releases with a tag-driven GitHub Actions workflow:
+This repository publishes releases from `.github/workflows/release-sign.yml` when a SemVer tag such as `v12.3.0` is pushed.
 
-- Workflow: `.github/workflows/release-sign.yml`
-- Trigger: push a SemVer tag like `v10.2.9`
+## Source Artifacts
 
-## What the Workflow Produces
+The workflow still produces deterministic source archives and verifies them in a second job:
 
 - `ica-<tag>-source.tar.gz`
 - `ica-<tag>-source.zip`
-- `desktop-release-plan.json`
-- `desktop-updater-manifest.json`
-- `desktop-validation-matrix.json`
-- `ica-desktop-<tag>-macos-x64.dmg`
-- `ica-desktop-<tag>-macos-arm64.dmg`
-- `ica-desktop-<tag>-windows-x64.exe`
-- `ica-desktop-<tag>-windows-arm64.exe`
-- `ica-desktop-<tag>-linux-x64.AppImage`
-- `ica-desktop-<tag>-linux-arm64.AppImage`
 - `SHA256SUMS.txt`
-- Keyless signatures and certificates for each artifact (`.sig`, `.pem`)
-- GitHub artifact attestations (provenance) for each artifact
+- `desktop-validation-matrix.json`
 
-## Keyless Signing Model
+These source artifacts are rebuilt and compared before any desktop release publication continues.
 
-The signing job uses GitHub OIDC (`id-token: write`) and Cosign keyless signing:
+## Desktop Artifact Matrix
 
-- No long-lived signing private key is stored in repo secrets.
-- Signatures are bound to the workflow identity.
-- Verification in CI pins:
-  - OIDC issuer: `https://token.actions.githubusercontent.com`
-  - Identity: `https://github.com/<owner>/<repo>/.github/workflows/release-sign.yml@refs/tags/<tag>`
+Desktop packaging now runs on platform-native runners instead of shipping placeholder package contracts:
 
-## Reproducibility Controls
+- `macos-latest`: DMG output plus `latest-mac.yml`
+- `windows-latest`: NSIS/EXE output plus `latest.yml`
+- `ubuntu-latest`: AppImage output plus Linux updater metadata
 
-Reproducibility is enforced in two layers:
+The Electron packaging contract lives in `electron-builder.json` and publishes to GitHub Releases only.
 
-1. Deterministic archive creation in `scripts/release/build-artifacts.sh`
-   - Uses `git archive` from the tagged commit
-   - Uses `gzip -n` for deterministic gzip output
-   - Generates desktop release metadata via `scripts/release/build-desktop-manifests.mjs`
-   - Generates desktop rollout validation metadata via `scripts/release/build-desktop-manifests.mjs`
-   - Emits one deterministic desktop package asset per supported OS/arch target
-   - Sets `SOURCE_DATE_EPOCH`, `TZ=UTC`, and `LC_ALL=C`
-2. CI rebuild verification
-   - Workflow rebuilds artifacts in a separate job
-   - Compares `SHA256SUMS.txt` between original and rebuilt outputs
-   - Signing/release only proceeds if hashes match
-3. Immutable workflow dependencies
-   - Third-party GitHub Actions are pinned to commit SHAs, not floating tags
+## Signing and Notarization
 
-## Required GitHub Permissions
+- macOS uses Apple code signing and notarization when `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` are configured.
+- Windows uses Authenticode-compatible signing inputs via `CSC_LINK` and `CSC_KEY_PASSWORD`.
+- Linux artifacts and updater metadata are signed with Cosign in the release workflow.
+- Release assets are signed only after the platform matrix and source verification complete.
 
-`release-sign.yml` requires:
+## Draft Promotion Flow
 
-- `contents: write` (publish release assets)
-- `id-token: write` (OIDC keyless signing)
-- `attestations: write` (artifact provenance attestations)
+Desktop releases are created as a draft release first. The release is published only after validation passes:
 
-## Desktop Packaging Contract
+1. source reproducibility succeeds
+2. every desktop platform job uploads its signed artifact set
+3. updater metadata files (`latest*.yml`) are present for the packaged outputs
+4. `desktop-validation-matrix.json` ships with the signed release asset set
 
-The desktop release plan now defines a concrete package format and publish path for each supported target:
+If any platform packaging, signing, or updater verification step fails, the release remains unpublished.
 
-- macOS x64 / arm64: DMG packaging with Apple code signing and notarization requirements
-- Windows x64 / arm64: EXE packaging with Authenticode requirements
-- Linux x64 / arm64: AppImage packaging with Cosign verification requirements
+## Local Operator Flow
 
-Each target now emits a concrete desktop package asset under its final release filename so CI, signing, and release publishing operate on the same file names that users download.
-
-The same release metadata build now emits `desktop-validation-matrix.json`, which captures per-target smoke checks and rollout gates for release-readiness review. The operator checklist for that artifact lives in `docs/testing/desktop-rollout-validation.md`.
-
-## Release Operator Flow
-
-1. Merge release PR to `main` (per team process).
-2. Create and push tag:
-
-```bash
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-git push origin vX.Y.Z
-```
-
-3. Wait for `release-sign` workflow to complete.
-4. Optionally verify assets locally using checksums and Cosign certificates.
+1. Install dependencies: `npm ci`
+2. Build preview bundle: `npm run build:desktop:preview`
+3. Build release artifacts locally: `npm run build:desktop:release`
+4. Publish from CI using the tag-driven workflow
