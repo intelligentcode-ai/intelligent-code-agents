@@ -1634,22 +1634,26 @@ export function InstallerDashboard(): JSX.Element {
   }, [appUpdate, appUpdateBusy]);
 
   return (
-    <div className="shell">
-      <header className="hero">
-        <div className="hero-topline">
-          <p className="eyebrow">ICA COMMAND CENTER</p>
-          <p className="stamp">Multi-source</p>
-        </div>
-        <h1>Skills & Hooks Dashboard</h1>
-        <p>Manage repositories once, then install source-pinned skills and hooks across targets.</p>
-        <div className="hero-meta">
-          <span>{sources.length} sources</span>
-          <span>{installedSkillCount} skills installed</span>
-          <span>{installedHookCount} hooks installed</span>
+    <div className="shell desktop-shell-frame">
+      <header className="desktop-shell-header">
+        <div className="desktop-shell-header-bar">
+          <div className="desktop-shell-header-copyblock">
+            <p className="eyebrow">ICA DESKTOP WORKSPACE</p>
+            <h1>Installer Workspace</h1>
+            <p className="desktop-shell-header-copy">
+              Keep source and installation operations in a persistent desktop shell instead of a dashboard landing page.
+            </p>
+          </div>
+          <div className="desktop-shell-header-meta" aria-label="Desktop workspace summary">
+            <span>{sources.length} sources</span>
+            <span>{installedSkillCount} skills installed</span>
+            <span>{installedHookCount} hooks installed</span>
+          </div>
         </div>
       </header>
 
-      <section className="desktop-shell-grid" aria-label="Desktop workspace shell">
+      <div className="desktop-shell-workspace">
+        <section className="desktop-shell-grid" aria-label="Desktop workspace shell">
         <article className="panel desktop-shell-card desktop-shell-card-operation panel-spacious">
           <div className="desktop-shell-heading">
             <div>
@@ -1805,28 +1809,28 @@ export function InstallerDashboard(): JSX.Element {
             </ol>
           )}
         </article>
-      </section>
-
-      {error && (
-        <section className="status status-error">
-          <strong>Action needed:</strong> {error}
         </section>
-      )}
-      {catalogLoading && (
-        <section className="status status-info" role="status" aria-live="polite">
-          <div className="status-head">
-            <strong>Loading skills catalog</strong>
-            <span>{Math.round(catalogLoadingProgress)}%</span>
-          </div>
-          <div className="status-subtle">{catalogLoadingMessage || "Working…"}</div>
-          <div className="status-progress" aria-hidden="true">
-            <div className="status-progress-bar" style={{ width: `${Math.max(5, Math.min(catalogLoadingProgress, 100))}%` }} />
-          </div>
-        </section>
-      )}
 
-      <div className="toolbar">
-        <nav className="tab-nav" role="tablist" aria-label="Dashboard sections">
+        {error && (
+          <section className="status status-error">
+            <strong>Action needed:</strong> {error}
+          </section>
+        )}
+        {catalogLoading && (
+          <section className="status status-info" role="status" aria-live="polite">
+            <div className="status-head">
+              <strong>Loading skills catalog</strong>
+              <span>{Math.round(catalogLoadingProgress)}%</span>
+            </div>
+            <div className="status-subtle">{catalogLoadingMessage || "Working…"}</div>
+            <div className="status-progress" aria-hidden="true">
+              <div className="status-progress-bar" style={{ width: `${Math.max(5, Math.min(catalogLoadingProgress, 100))}%` }} />
+            </div>
+          </section>
+        )}
+
+        <div className="toolbar">
+          <nav className="tab-nav" role="tablist" aria-label="Dashboard sections">
           <button
             className={`tab-btn ${activeTab === "skills" ? "is-active" : ""}`}
             type="button"
@@ -1939,9 +1943,9 @@ export function InstallerDashboard(): JSX.Element {
             </section>
           )}
         </div>
-      </div>
+          </div>
 
-      {activeTab === "skills" && (
+        {activeTab === "skills" && (
         <div className="workspace tab-section">
           <aside className="control-rail skills-rail">
             <section className="panel action-panel panel-spacious">
@@ -2234,9 +2238,9 @@ export function InstallerDashboard(): JSX.Element {
             </section>
           </main>
         </div>
-      )}
+        )}
 
-      {activeTab === "hooks" && (
+        {activeTab === "hooks" && (
         <div className="workspace tab-section">
           <aside className="control-rail skills-rail">
             <section className="panel action-panel panel-spacious">
@@ -2367,9 +2371,9 @@ export function InstallerDashboard(): JSX.Element {
             </section>
           </main>
         </div>
-      )}
+        )}
 
-      {activeTab === "settings" && (
+        {activeTab === "settings" && (
         <section className="settings-grid tab-section">
           <article className="panel panel-settings panel-spacious">
             <h2>Repository Management</h2>
@@ -2571,9 +2575,9 @@ export function InstallerDashboard(): JSX.Element {
             </div>
           </article>
         </section>
-      )}
+        )}
 
-      {activeTab === "state" && (
+        {activeTab === "state" && (
         <section className="state-grid tab-section">
           <article className="panel state-intro panel-spacious">
             <h2>States & Reports</h2>
@@ -2826,6 +2830,8 @@ export function InstallerDashboard(): JSX.Element {
         </div>
       )}
 
+      </div>
+
       {skillPickerOpen && (
         <div className="publish-picker-overlay" role="presentation" onClick={() => setSkillPickerOpen(false)}>
           <section
@@ -2844,13 +2850,13 @@ export function InstallerDashboard(): JSX.Element {
                 Close
               </button>
             </div>
-              <input
-                className="input input-search"
-                name="skill-picker-search"
-                autoComplete="off"
-                placeholder="Search by skill, source, or path…"
-                value={skillPickerQuery}
-                onChange={(event) => setSkillPickerQuery(event.target.value)}
+            <input
+              className="input input-search"
+              name="skill-picker-search"
+              autoComplete="off"
+              placeholder="Search by skill, source, or path…"
+              value={skillPickerQuery}
+              onChange={(event) => setSkillPickerQuery(event.target.value)}
               aria-label="Search local skill bundles"
             />
             <div className="publish-picker-list">
