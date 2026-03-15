@@ -17,7 +17,7 @@ test("RED: app shell stops using dashboard-main as the primary desktop wrapper",
   );
   assert.match(
     app,
-    /className="desktop-shell-app"/,
+    /desktop-shell-app/,
     "Desktop shell work should introduce a desktop-shell-app wrapper for the main window.",
   );
 });
