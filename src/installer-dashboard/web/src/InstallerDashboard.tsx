@@ -9,7 +9,7 @@ import {
   quitAndInstallAppUpdate,
 } from "./control-plane-client";
 import { DesktopAppearanceSettings } from "./DesktopAppearanceSettings";
-import { describeRealtimeStatus, summarizeRealtimeEvent } from "./desktop-shell";
+import { desktopMainRoutes, type DesktopRouteId, describeRealtimeStatus, summarizeRealtimeEvent } from "./desktop-shell";
 import { useDashboardAppearance } from "./appearance";
 import { startRealtimeClient, type RealtimeEvent, type RealtimeStatus } from "./realtime-client";
 import type { DashboardWindowRole } from "./window-role";
@@ -170,8 +170,6 @@ type SkillPublishResult = {
 type PublishMode = "direct-push" | "branch-only" | "branch-pr";
 type DesktopUpdateTone = "neutral" | "busy" | "success" | "danger";
 
-type DashboardTab = "skills" | "hooks" | "state";
-
 const allTargets: Target[] = ["claude", "codex", "cursor", "gemini", "antigravity"];
 
 function asErrorMessage(payload: unknown, fallback: string): string {
@@ -290,7 +288,7 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
   const [skillValidationProfile, setSkillValidationProfile] = useState<"personal" | "official">("personal");
   const [skillValidationResult, setSkillValidationResult] = useState<SkillValidationResult | null>(null);
   const [skillPublishResult, setSkillPublishResult] = useState<SkillPublishResult | null>(null);
-  const [activeTab, setActiveTab] = useState<DashboardTab>("skills");
+  const [activeRoute, setActiveRoute] = useState<DesktopRouteId>("workspace");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [scopeFilter, setScopeFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -1537,6 +1535,10 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
       tone: "neutral",
     };
   }, [appUpdate, appUpdateBusy]);
+  const activeRouteDefinition = useMemo(
+    () => desktopMainRoutes.find((route) => route.id === activeRoute) ?? desktopMainRoutes[0],
+    [activeRoute],
+  );
 
   if (windowRole === "settings") {
     return (
@@ -1810,161 +1812,6 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
       </header>
 
       <div className="desktop-shell-workspace">
-        <section className="desktop-shell-grid" aria-label="Desktop workspace shell">
-        <article className="panel desktop-shell-card desktop-shell-card-operation panel-spacious">
-          <div className="desktop-shell-heading">
-            <div>
-              <p className="desktop-shell-kicker">Workspace</p>
-              <h2>Operation Center</h2>
-            </div>
-            <span className={`desktop-shell-pill ${busy || catalogLoading ? "is-busy" : "is-neutral"}`}>
-              {busy ? "Running" : catalogLoading ? "Loading" : "Ready"}
-            </span>
-          </div>
-          <p className="desktop-shell-title">{operationSummary.title}</p>
-          <p className="desktop-shell-copy">{operationSummary.detail}</p>
-          <dl className="desktop-shell-metrics">
-            <div>
-              <dt>Targets</dt>
-              <dd>{selectedTargetList.length}</dd>
-            </div>
-            <div>
-              <dt>Scope</dt>
-              <dd>{scope === "project" ? "Project" : "User"}</dd>
-            </div>
-            <div>
-              <dt>Selection</dt>
-              <dd>{selectedKnownSkillCount}</dd>
-            </div>
-          </dl>
-        </article>
-
-        <article className="panel desktop-shell-card panel-spacious">
-          <div className="desktop-shell-heading">
-            <div>
-              <p className="desktop-shell-kicker">Connectivity</p>
-              <h2>Connection Status</h2>
-            </div>
-            <span className={`desktop-shell-pill is-${connectionSummary.tone}`}>{connectionSummary.badge}</span>
-          </div>
-          <p className="desktop-shell-title">{connectionSummary.title}</p>
-          <p className="desktop-shell-copy">{connectionSummary.detail}</p>
-        </article>
-
-        <article className="panel desktop-shell-card panel-spacious">
-          <div className="desktop-shell-heading">
-            <div>
-              <p className="desktop-shell-kicker">Native flow</p>
-              <h2>Native Operations</h2>
-            </div>
-          </div>
-          <p className="desktop-shell-copy">
-            Bring desktop-only actions forward so project selection, repository refresh, and publish flows stay one click away.
-          </p>
-          <div className="desktop-shell-actions">
-            <button
-              className="btn btn-secondary"
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                void pickProjectPath();
-              }}
-            >
-              Pick project (native)
-            </button>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              disabled={busy || !trimmedProjectPath}
-              onClick={() => {
-                void mountProjectInContainer();
-              }}
-            >
-              Mount in container
-            </button>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setActiveTab("skills");
-                void runPickFolderAndPublish();
-              }}
-            >
-              Pick & Publish
-            </button>
-            <button
-              className="btn btn-ghost"
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                void handleOpenSettingsWindow();
-              }}
-            >
-              Open Settings
-            </button>
-          </div>
-        </article>
-
-        <article className="panel desktop-shell-card panel-spacious">
-          <div className="desktop-shell-heading">
-            <div>
-              <p className="desktop-shell-kicker">Release</p>
-              <h2>Update Center</h2>
-            </div>
-            <span className={`desktop-shell-pill is-${updateSummary.tone}`}>{updateSummary.badge}</span>
-          </div>
-          <p className="desktop-shell-title">{updateSummary.title}</p>
-          <p className="desktop-shell-copy">{updateSummary.detail}</p>
-          <div className="desktop-shell-actions">
-            <button className="btn btn-secondary" type="button" disabled={busy || appUpdateBusy} onClick={() => void refreshAppUpdate(true)}>
-              Check now
-            </button>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              disabled={busy || appUpdateBusy || !appUpdate?.updateAvailable || !appUpdate.canAutoApply || Boolean(appUpdate.downloaded)}
-              onClick={() => void handleDownloadAppUpdate()}
-            >
-              Download update
-            </button>
-            <button
-              className="btn btn-ghost"
-              type="button"
-              disabled={busy || appUpdateBusy || !appUpdate?.downloaded}
-              onClick={() => void handleQuitAndInstallAppUpdate()}
-            >
-              Quit & Install
-            </button>
-          </div>
-        </article>
-
-        <article className="panel desktop-shell-card desktop-shell-card-activity panel-spacious">
-          <div className="desktop-shell-heading">
-            <div>
-              <p className="desktop-shell-kicker">Realtime</p>
-              <h2>Activity Feed</h2>
-            </div>
-          </div>
-          {activityFeedItems.length === 0 ? (
-            <p className="desktop-shell-copy">
-              Desktop shell activity will appear here once a bridge event, refresh, or operation lifecycle update arrives.
-            </p>
-          ) : (
-            <ol className="desktop-activity-list">
-              {activityFeedItems.map((item) => (
-                <li key={item.id} className={`desktop-activity-item ${item.tone}`}>
-                  <div>
-                    <strong>{item.title}</strong>
-                    <span>{item.timestamp}</span>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </article>
-        </section>
-
         {error && (
           <section className="status status-error">
             <strong>Action needed:</strong> {error}
@@ -1978,520 +1825,708 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
             </div>
             <div className="status-subtle">{catalogLoadingMessage || "Working…"}</div>
             <div className="status-progress" aria-hidden="true">
-              <div className="status-progress-bar" style={{ width: `${Math.max(5, Math.min(catalogLoadingProgress, 100))}%` }} />
+            <div className="status-progress-bar" style={{ width: `${Math.max(5, Math.min(catalogLoadingProgress, 100))}%` }} />
             </div>
           </section>
         )}
 
-        <div className="toolbar">
-          <nav className="tab-nav" role="tablist" aria-label="Dashboard sections">
-          <button
-            className={`tab-btn ${activeTab === "skills" ? "is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "skills"}
-            onClick={() => setActiveTab("skills")}
-          >
-            Skills
-          </button>
-          <button
-            className={`tab-btn ${activeTab === "hooks" ? "is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "hooks"}
-            onClick={() => setActiveTab("hooks")}
-          >
-            Hooks
-          </button>
-          <button
-            className={`tab-btn ${activeTab === "state" ? "is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "state"}
-            onClick={() => setActiveTab("state")}
-          >
-            States & Reports
-          </button>
-        </nav>
-        <div className="toolbar-actions">
-          <button
-            className="btn btn-ghost"
-            type="button"
-            onClick={() => void handleOpenSettingsWindow()}
-          >
-            Open Settings
-          </button>
-        </div>
-          </div>
-
-        {activeTab === "skills" && (
-        <div className="workspace tab-section">
-          <aside className="control-rail skills-rail">
-            <section className="panel action-panel panel-spacious">
-              <h2>Actions</h2>
-              <p className="subtle">Apply source-pinned selections across your active targets.</p>
-              <dl className="action-meta">
-                <div>
-                  <dt>Targets</dt>
-                  <dd>{selectedTargetList.length}</dd>
-                </div>
-                <div>
-                  <dt>Selection</dt>
-                  <dd>{selectedKnownSkillCount}</dd>
-                </div>
-                <div>
-                  <dt>Scope</dt>
-                  <dd>{scope === "project" ? "Project" : "User"}</dd>
-                </div>
-                <div>
-                  <dt>Mode</dt>
-                  <dd>{mode}</dd>
-                </div>
-              </dl>
-              {scope === "project" && <p className="operation-hint">Project path: {trimmedProjectPath || "not set"}</p>}
-              <div className="action-row">
-                <button className="btn btn-primary" disabled={busy} onClick={() => runOperation("install")} type="button">
-                  Install selected
-                </button>
-                <button className="btn btn-secondary" disabled={busy} onClick={() => runOperation("uninstall")} type="button">
-                  Uninstall selected
-                </button>
-                <button className="btn btn-tertiary" disabled={busy} onClick={() => runOperation("sync")} type="button">
-                  Sync to selection
-                </button>
+        <div className="desktop-route-shell">
+          <aside className="desktop-route-sidebar">
+            <section className="panel desktop-route-sidebar-panel panel-spacious">
+              <p className="desktop-shell-kicker">Desktop routes</p>
+              <div className="desktop-route-sidebar-copy">
+                <strong>{activeRouteDefinition.label}</strong>
+                <p className="subtle">{activeRouteDefinition.description}</p>
               </div>
+              <nav className="desktop-route-nav" aria-label="Desktop routes">
+                {desktopMainRoutes.map((route) => (
+                  <button
+                    key={route.id}
+                    className={`desktop-route-link ${activeRoute === route.id ? "is-active" : ""}`}
+                    type="button"
+                    aria-current={activeRoute === route.id ? "page" : undefined}
+                    onClick={() => setActiveRoute(route.id)}
+                  >
+                    <span className="desktop-route-link-eyebrow">{route.eyebrow}</span>
+                    <strong>{route.label}</strong>
+                    <span>{route.description}</span>
+                  </button>
+                ))}
+              </nav>
             </section>
 
-            <section className="panel panel-publish panel-spacious">
-              <div className="publish-head">
-                <div>
-                  <h2>Skill Publishing</h2>
-                  <p className="subtle">Quick publish from selected skills or picked folders. Target and advanced settings appear only in overlays.</p>
-                </div>
-                <span className="publish-chip">{skillPublishCandidates.length} local bundles</span>
-              </div>
-
-              <div className="publish-quick-actions">
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  disabled={busy || !quickPublishCandidate}
-                  onClick={runQuickPublishFromCatalogSelection}
-                >
-                  Publish
-                </button>
-                <button className="btn btn-secondary" type="button" disabled={busy} onClick={runPickFolderAndPublish}>
-                  Pick & Publish
-                </button>
-              </div>
-              <p className="publish-quick-hint subtle">
-                {selectedVisibleSkillPublishCandidates.length === 0 &&
-                  "Select one visible local catalog skill, then publish it in one click."}
-                {selectedVisibleSkillPublishCandidates.length === 1 &&
-                  `Ready to publish "${selectedVisibleSkillPublishCandidates[0].skillName}" from selected catalog skill.`}
-                {selectedVisibleSkillPublishCandidates.length > 1 &&
-                  "Multiple visible local catalog skills are selected. Keep one selected to enable one-click publish."}
+            <section className="panel desktop-route-sidebar-panel panel-spacious">
+              <h2>Settings boundary</h2>
+              <p className="subtle">
+                Preferences, theme controls, and repository defaults stay in the dedicated Settings window for this slice.
               </p>
-
-              {selectedPublishSource && (
-                <p className="publish-hint">
-                  Last target: <code>{selectedPublishSource.name || selectedPublishSource.id}</code> • flow{" "}
-                  <code>{selectedPublishSource.publishDefaultMode || "branch-pr"}</code>.
-                </p>
-              )}
-
-              {skillValidationResult && (
-                <details className="collapsible" open>
-                  <summary>Validation Result ({skillValidationResult.profile})</summary>
-                  <pre>{JSON.stringify(skillValidationResult, null, 2)}</pre>
-                </details>
-              )}
-              {skillPublishResult && (
-                <details className="collapsible" open>
-                  <summary>Publish Result</summary>
-                  <pre>{JSON.stringify(skillPublishResult, null, 2)}</pre>
-                </details>
-              )}
+              <div className="action-row">
+                <button className="btn btn-secondary" type="button" disabled={busy} onClick={() => void handleOpenSettingsWindow()}>
+                  Open Settings
+                </button>
+                <button className="btn btn-ghost" type="button" disabled={busy || appUpdateBusy} onClick={() => void refreshAppUpdate(true)}>
+                  Check desktop update
+                </button>
+              </div>
             </section>
           </aside>
 
-          <main className="catalog-column">
-            <section className="panel panel-catalog panel-spacious">
-              <div className="catalog-head">
-                <div>
-                  <h2>Skill Catalog</h2>
-                  <p className="subtle">
-                    {catalogLoading
-                      ? "Refreshing catalog…"
-                      : totalSkills > 0
-                        ? `${selectedKnownSkillCount}/${totalSkills} selected`
-                        : `${selectedKnownSkillCount} selected`}
-                    {!catalogLoading && selectedUnknownSkillCount > 0 ? ` • ${selectedUnknownSkillCount} unavailable` : ""}
-                    {!catalogLoading && normalizedQuery ? ` • ${filteredSkillsCount} shown` : ""}
-                  </p>
-                </div>
-                <div className="bulk-actions">
-                  <button className="btn btn-ghost" onClick={() => setSkillsSelection(skills.map((skill) => skill.skillId), true)} type="button">
-                    Select all
-                  </button>
-                  <button className="btn btn-ghost" onClick={() => setSkillsSelection(skills.map((skill) => skill.skillId), false)} type="button">
-                    Clear all
-                  </button>
-                </div>
-              </div>
+          <main className="desktop-route-content">
+            <section className="panel desktop-route-hero panel-spacious">
+              <p className="desktop-shell-kicker">{activeRouteDefinition.eyebrow}</p>
+              <h2>{activeRouteDefinition.title}</h2>
+              <p className="subtle">{activeRouteDefinition.description}</p>
+            </section>
 
-              <div className="catalog-controls">
-                <input
-                  className="input input-search"
-                  placeholder="Search source/skill, descriptions, resources…"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                />
-                <div className="catalog-filters">
-                  <div className="source-filter">
-                    <span className="filter-label">Source</span>
-                    <div className="source-chip-row">
-                      <button
-                        className={`chip chip-filter ${sourceFilter === "all" ? "is-active" : ""}`}
-                        type="button"
-                        onClick={() => setSourceFilter("all")}
-                      >
-                        all
-                      </button>
-                      {sourceFilterOptions.map((sourceId) => (
-                        <button
-                          key={sourceId}
-                          className={`chip chip-filter ${sourceFilter === sourceId ? "is-active" : ""}`}
-                          type="button"
-                          onClick={() => setSourceFilter(sourceId)}
-                        >
-                          {sourceNameById.get(sourceId) || sourceId}
-                        </button>
-                      ))}
+            {activeRoute === "workspace" && (
+              <>
+                <section className="desktop-shell-grid" aria-label="Desktop workspace shell">
+                  <article className="panel desktop-shell-card desktop-shell-card-operation panel-spacious">
+                    <div className="desktop-shell-heading">
+                      <div>
+                        <p className="desktop-shell-kicker">Workspace</p>
+                        <h2>Operation Center</h2>
+                      </div>
+                      <span className={`desktop-shell-pill ${busy || catalogLoading ? "is-busy" : "is-neutral"}`}>
+                        {busy ? "Running" : catalogLoading ? "Loading" : "Ready"}
+                      </span>
                     </div>
-                  </div>
-                  <div className="source-filter">
-                    <span className="filter-label">Scope</span>
-                    <div className="source-chip-row">
-                      <button
-                        className={`chip chip-filter ${scopeFilter === "all" ? "is-active" : ""}`}
-                        type="button"
-                        onClick={() => setScopeFilter("all")}
-                      >
-                        all
-                      </button>
-                      {scopeFilterOptions.map((scopeValue) => (
-                        <button
-                          key={scopeValue}
-                          className={`chip chip-filter ${scopeFilter === scopeValue ? "is-active" : ""}`}
-                          type="button"
-                          onClick={() => setScopeFilter(scopeValue)}
-                        >
-                          {titleCase(scopeValue)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="source-filter">
-                    <span className="filter-label">Category</span>
-                    <div className="source-chip-row">
-                      <button
-                        className={`chip chip-filter ${categoryFilter === "all" ? "is-active" : ""}`}
-                        type="button"
-                        onClick={() => setCategoryFilter("all")}
-                      >
-                        all
-                      </button>
-                      {categoryFilterOptions.map((categoryValue) => (
-                        <button
-                          key={categoryValue}
-                          className={`chip chip-filter ${categoryFilter === categoryValue ? "is-active" : ""}`}
-                          type="button"
-                          onClick={() => setCategoryFilter(categoryValue)}
-                        >
-                          {titleCase(categoryValue)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="source-filter">
-                    <span className="filter-label">Tag</span>
-                    <div className="source-chip-row">
-                      <button
-                        className={`chip chip-filter ${tagFilter === "all" ? "is-active" : ""}`}
-                        type="button"
-                        onClick={() => setTagFilter("all")}
-                      >
-                        all
-                      </button>
-                      {tagFilterOptions.map((tagValue) => (
-                        <button
-                          key={tagValue}
-                          className={`chip chip-filter ${tagFilter === tagValue ? "is-active" : ""}`}
-                          type="button"
-                          onClick={() => setTagFilter(tagValue)}
-                        >
-                          {tagValue}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <label className="toggle">
-                    <input type="checkbox" checked={installedOnly} onChange={(event) => setInstalledOnly(event.target.checked)} />
-                    Installed only
-                  </label>
-                </div>
-              </div>
+                    <p className="desktop-shell-title">{operationSummary.title}</p>
+                    <p className="desktop-shell-copy">{operationSummary.detail}</p>
+                    <dl className="desktop-shell-metrics">
+                      <div>
+                        <dt>Targets</dt>
+                        <dd>{selectedTargetList.length}</dd>
+                      </div>
+                      <div>
+                        <dt>Scope</dt>
+                        <dd>{scope === "project" ? "Project" : "User"}</dd>
+                      </div>
+                      <div>
+                        <dt>Selection</dt>
+                        <dd>{selectedKnownSkillCount}</dd>
+                      </div>
+                    </dl>
+                  </article>
 
-              {filteredCategorized.length === 0 && <div className="empty-state">No skills match this search. Try a broader term.</div>}
+                  <article className="panel desktop-shell-card panel-spacious">
+                    <div className="desktop-shell-heading">
+                      <div>
+                        <p className="desktop-shell-kicker">Connectivity</p>
+                        <h2>Connection Status</h2>
+                      </div>
+                      <span className={`desktop-shell-pill is-${connectionSummary.tone}`}>{connectionSummary.badge}</span>
+                    </div>
+                    <p className="desktop-shell-title">{connectionSummary.title}</p>
+                    <p className="desktop-shell-copy">{connectionSummary.detail}</p>
+                  </article>
 
-              {filteredCategorized.map(([category, categorySkills]) => {
-                const ids = categorySkills.map((skill) => skill.skillId);
-                const selectedInCategory = ids.filter((id) => selectedSkills.has(id)).length;
-                const allSelectedInCategory = selectedInCategory === ids.length && ids.length > 0;
+                  <article className="panel desktop-shell-card panel-spacious">
+                    <div className="desktop-shell-heading">
+                      <div>
+                        <p className="desktop-shell-kicker">Native flow</p>
+                        <h2>Native Operations</h2>
+                      </div>
+                    </div>
+                    <p className="desktop-shell-copy">
+                      Bring desktop-only actions forward so project selection, repository refresh, and publish flows stay one click away.
+                    </p>
+                    <div className="desktop-shell-actions">
+                      <button className="btn btn-secondary" type="button" disabled={busy} onClick={() => void pickProjectPath()}>
+                        Pick project (native)
+                      </button>
+                      <button className="btn btn-secondary" type="button" disabled={busy || !trimmedProjectPath} onClick={() => void mountProjectInContainer()}>
+                        Mount in container
+                      </button>
+                      <button className="btn btn-secondary" type="button" disabled={busy} onClick={() => void runPickFolderAndPublish()}>
+                        Pick & Publish
+                      </button>
+                      <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => void handleOpenSettingsWindow()}>
+                        Open Settings
+                      </button>
+                    </div>
+                  </article>
 
-                return (
-                  <section key={category} className="category-block">
-                    <header className="category-head">
-                      <h3>{titleCase(category)}</h3>
-                      <div className="category-actions">
-                        <span>
-                          {selectedInCategory}/{ids.length}
-                        </span>
-                        <button className="btn btn-inline" onClick={() => setSkillsSelection(ids, !allSelectedInCategory)} type="button">
-                          {allSelectedInCategory ? "Clear category" : "Select category"}
+                  <article className="panel desktop-shell-card panel-spacious">
+                    <div className="desktop-shell-heading">
+                      <div>
+                        <p className="desktop-shell-kicker">Release</p>
+                        <h2>Update Center</h2>
+                      </div>
+                      <span className={`desktop-shell-pill is-${updateSummary.tone}`}>{updateSummary.badge}</span>
+                    </div>
+                    <p className="desktop-shell-title">{updateSummary.title}</p>
+                    <p className="desktop-shell-copy">{updateSummary.detail}</p>
+                    <div className="desktop-shell-actions">
+                      <button className="btn btn-secondary" type="button" disabled={busy || appUpdateBusy} onClick={() => void refreshAppUpdate(true)}>
+                        Check now
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        type="button"
+                        disabled={busy || appUpdateBusy || !appUpdate?.updateAvailable || !appUpdate.canAutoApply || Boolean(appUpdate.downloaded)}
+                        onClick={() => void handleDownloadAppUpdate()}
+                      >
+                        Download update
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        type="button"
+                        disabled={busy || appUpdateBusy || !appUpdate?.downloaded}
+                        onClick={() => void handleQuitAndInstallAppUpdate()}
+                      >
+                        Quit & Install
+                      </button>
+                    </div>
+                  </article>
+
+                  <article className="panel desktop-shell-card desktop-shell-card-activity panel-spacious">
+                    <div className="desktop-shell-heading">
+                      <div>
+                        <p className="desktop-shell-kicker">Realtime</p>
+                        <h2>Activity Feed</h2>
+                      </div>
+                    </div>
+                    {activityFeedItems.length === 0 ? (
+                      <p className="desktop-shell-copy">
+                        Desktop shell activity will appear here once a bridge event, refresh, or operation lifecycle update arrives.
+                      </p>
+                    ) : (
+                      <ol className="desktop-activity-list">
+                        {activityFeedItems.map((item) => (
+                          <li key={item.id} className={`desktop-activity-item ${item.tone}`}>
+                            <div>
+                              <strong>{item.title}</strong>
+                              <span>{item.timestamp}</span>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </article>
+                </section>
+
+                <div className="workspace desktop-route-section">
+                  <aside className="control-rail skills-rail">
+                    <section className="panel action-panel panel-spacious">
+                      <h2>Actions</h2>
+                      <p className="subtle">Apply source-pinned selections across your active targets.</p>
+                      <dl className="action-meta">
+                        <div>
+                          <dt>Targets</dt>
+                          <dd>{selectedTargetList.length}</dd>
+                        </div>
+                        <div>
+                          <dt>Selection</dt>
+                          <dd>{selectedKnownSkillCount}</dd>
+                        </div>
+                        <div>
+                          <dt>Scope</dt>
+                          <dd>{scope === "project" ? "Project" : "User"}</dd>
+                        </div>
+                        <div>
+                          <dt>Mode</dt>
+                          <dd>{mode}</dd>
+                        </div>
+                      </dl>
+                      {scope === "project" && <p className="operation-hint">Project path: {trimmedProjectPath || "not set"}</p>}
+                      <div className="action-row">
+                        <button className="btn btn-primary" disabled={busy} onClick={() => runOperation("install")} type="button">
+                          Install selected
+                        </button>
+                        <button className="btn btn-secondary" disabled={busy} onClick={() => runOperation("uninstall")} type="button">
+                          Uninstall selected
+                        </button>
+                        <button className="btn btn-tertiary" disabled={busy} onClick={() => runOperation("sync")} type="button">
+                          Sync to selection
                         </button>
                       </div>
-                    </header>
+                    </section>
+
+                    <section className="panel panel-publish panel-spacious">
+                      <div className="publish-head">
+                        <div>
+                          <h2>Skill Publishing</h2>
+                          <p className="subtle">Quick publish from selected skills or picked folders. Target and advanced settings appear only in overlays.</p>
+                        </div>
+                        <span className="publish-chip">{skillPublishCandidates.length} local bundles</span>
+                      </div>
+
+                      <div className="publish-quick-actions">
+                        <button className="btn btn-primary" type="button" disabled={busy || !quickPublishCandidate} onClick={runQuickPublishFromCatalogSelection}>
+                          Publish
+                        </button>
+                        <button className="btn btn-secondary" type="button" disabled={busy} onClick={runPickFolderAndPublish}>
+                          Pick & Publish
+                        </button>
+                      </div>
+                      <p className="publish-quick-hint subtle">
+                        {selectedVisibleSkillPublishCandidates.length === 0 &&
+                          "Select one visible local catalog skill, then publish it in one click."}
+                        {selectedVisibleSkillPublishCandidates.length === 1 &&
+                          `Ready to publish "${selectedVisibleSkillPublishCandidates[0].skillName}" from selected catalog skill.`}
+                        {selectedVisibleSkillPublishCandidates.length > 1 &&
+                          "Multiple visible local catalog skills are selected. Keep one selected to enable one-click publish."}
+                      </p>
+
+                      {selectedPublishSource && (
+                        <p className="publish-hint">
+                          Last target: <code>{selectedPublishSource.name || selectedPublishSource.id}</code> • flow{" "}
+                          <code>{selectedPublishSource.publishDefaultMode || "branch-pr"}</code>.
+                        </p>
+                      )}
+
+                      {skillValidationResult && (
+                        <details className="collapsible" open>
+                          <summary>Validation Result ({skillValidationResult.profile})</summary>
+                          <pre>{JSON.stringify(skillValidationResult, null, 2)}</pre>
+                        </details>
+                      )}
+                      {skillPublishResult && (
+                        <details className="collapsible" open>
+                          <summary>Publish Result</summary>
+                          <pre>{JSON.stringify(skillPublishResult, null, 2)}</pre>
+                        </details>
+                      )}
+                    </section>
+                  </aside>
+
+                  <main className="catalog-column">
+                    <section className="panel panel-catalog panel-spacious">
+                      <div className="catalog-head">
+                        <div>
+                          <h2>Skill Catalog</h2>
+                          <p className="subtle">
+                            {catalogLoading
+                              ? "Refreshing catalog…"
+                              : totalSkills > 0
+                                ? `${selectedKnownSkillCount}/${totalSkills} selected`
+                                : `${selectedKnownSkillCount} selected`}
+                            {!catalogLoading && selectedUnknownSkillCount > 0 ? ` • ${selectedUnknownSkillCount} unavailable` : ""}
+                            {!catalogLoading && normalizedQuery ? ` • ${filteredSkillsCount} shown` : ""}
+                          </p>
+                        </div>
+                        <div className="bulk-actions">
+                          <button className="btn btn-ghost" onClick={() => setSkillsSelection(skills.map((skill) => skill.skillId), true)} type="button">
+                            Select all
+                          </button>
+                          <button className="btn btn-ghost" onClick={() => setSkillsSelection(skills.map((skill) => skill.skillId), false)} type="button">
+                            Clear all
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="catalog-controls">
+                        <input
+                          className="input input-search"
+                          placeholder="Search source/skill, descriptions, resources…"
+                          value={searchQuery}
+                          onChange={(event) => setSearchQuery(event.target.value)}
+                        />
+                        <div className="catalog-filters">
+                          <div className="source-filter">
+                            <span className="filter-label">Source</span>
+                            <div className="source-chip-row">
+                              <button className={`chip chip-filter ${sourceFilter === "all" ? "is-active" : ""}`} type="button" onClick={() => setSourceFilter("all")}>
+                                all
+                              </button>
+                              {sourceFilterOptions.map((sourceId) => (
+                                <button
+                                  key={sourceId}
+                                  className={`chip chip-filter ${sourceFilter === sourceId ? "is-active" : ""}`}
+                                  type="button"
+                                  onClick={() => setSourceFilter(sourceId)}
+                                >
+                                  {sourceNameById.get(sourceId) || sourceId}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="source-filter">
+                            <span className="filter-label">Scope</span>
+                            <div className="source-chip-row">
+                              <button className={`chip chip-filter ${scopeFilter === "all" ? "is-active" : ""}`} type="button" onClick={() => setScopeFilter("all")}>
+                                all
+                              </button>
+                              {scopeFilterOptions.map((scopeValue) => (
+                                <button
+                                  key={scopeValue}
+                                  className={`chip chip-filter ${scopeFilter === scopeValue ? "is-active" : ""}`}
+                                  type="button"
+                                  onClick={() => setScopeFilter(scopeValue)}
+                                >
+                                  {titleCase(scopeValue)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="source-filter">
+                            <span className="filter-label">Category</span>
+                            <div className="source-chip-row">
+                              <button className={`chip chip-filter ${categoryFilter === "all" ? "is-active" : ""}`} type="button" onClick={() => setCategoryFilter("all")}>
+                                all
+                              </button>
+                              {categoryFilterOptions.map((categoryValue) => (
+                                <button
+                                  key={categoryValue}
+                                  className={`chip chip-filter ${categoryFilter === categoryValue ? "is-active" : ""}`}
+                                  type="button"
+                                  onClick={() => setCategoryFilter(categoryValue)}
+                                >
+                                  {titleCase(categoryValue)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="source-filter">
+                            <span className="filter-label">Tag</span>
+                            <div className="source-chip-row">
+                              <button className={`chip chip-filter ${tagFilter === "all" ? "is-active" : ""}`} type="button" onClick={() => setTagFilter("all")}>
+                                all
+                              </button>
+                              {tagFilterOptions.map((tagValue) => (
+                                <button
+                                  key={tagValue}
+                                  className={`chip chip-filter ${tagFilter === tagValue ? "is-active" : ""}`}
+                                  type="button"
+                                  onClick={() => setTagFilter(tagValue)}
+                                >
+                                  {tagValue}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <label className="toggle">
+                            <input type="checkbox" checked={installedOnly} onChange={(event) => setInstalledOnly(event.target.checked)} />
+                            Installed only
+                          </label>
+                        </div>
+                      </div>
+
+                      {filteredCategorized.length === 0 && <div className="empty-state">No skills match this search. Try a broader term.</div>}
+
+                      {filteredCategorized.map(([category, categorySkills]) => {
+                        const ids = categorySkills.map((skill) => skill.skillId);
+                        const selectedInCategory = ids.filter((id) => selectedSkills.has(id)).length;
+                        const allSelectedInCategory = selectedInCategory === ids.length && ids.length > 0;
+
+                        return (
+                          <section key={category} className="category-block">
+                            <header className="category-head">
+                              <h3>{titleCase(category)}</h3>
+                              <div className="category-actions">
+                                <span>
+                                  {selectedInCategory}/{ids.length}
+                                </span>
+                                <button className="btn btn-inline" onClick={() => setSkillsSelection(ids, !allSelectedInCategory)} type="button">
+                                  {allSelectedInCategory ? "Clear category" : "Select category"}
+                                </button>
+                              </div>
+                            </header>
+
+                            <div className="skill-grid">
+                              {categorySkills.map((skill) => {
+                                const isSelected = selectedSkills.has(skill.skillId);
+                                const isInstalled = installedSkillIds.has(skill.skillId);
+                                return (
+                                  <article key={skill.skillId} className={`skill ${isSelected ? "selected" : ""}`}>
+                                    <div className="skill-top">
+                                      <label className="skill-title">
+                                        <input type="checkbox" checked={isSelected} onChange={() => toggleSkill(skill.skillId)} />
+                                        <span className="skill-title-copy">
+                                          <strong>{skill.skillName}</strong>
+                                          <code className="skill-id">{skill.skillId}</code>
+                                        </span>
+                                      </label>
+                                      <div className="skill-badges">
+                                        <span className="badge badge-source">{sourceNameById.get(skill.sourceId) || skill.sourceId}</span>
+                                        {skill.scope && <span className="badge">{titleCase(skill.scope)}</span>}
+                                        {(skill.tags || []).slice(0, 2).map((tag) => (
+                                          <span key={`${skill.skillId}-tag-${tag}`} className="badge">
+                                            #{tag}
+                                          </span>
+                                        ))}
+                                        {isInstalled && <span className="badge">installed</span>}
+                                      </div>
+                                    </div>
+                                    <p className="skill-description">{skill.description}</p>
+                                    {skill.resources.length > 0 && (
+                                      <details className="skill-resources">
+                                        <summary>Resources ({skill.resources.length})</summary>
+                                        <ul>
+                                          {skill.resources.map((resource) => (
+                                            <li key={`${skill.skillId}-${resource.path}`}>
+                                              <span className="resource-type">{resource.type}</span>
+                                              <code>{resource.path}</code>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </details>
+                                    )}
+                                    <div className="skill-foot">
+                                      {skill.version && <span className="subtle">v{skill.version}</span>}
+                                      {skill.updatedAt && <span className="subtle">Updated {new Date(skill.updatedAt).toLocaleDateString()}</span>}
+                                    </div>
+                                  </article>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        );
+                      })}
+                    </section>
+                  </main>
+                </div>
+              </>
+            )}
+
+            {activeRoute === "sources" && (
+              <section className="desktop-route-section source-route-grid">
+                <article className="panel panel-spacious">
+                  <h2>Connected repositories</h2>
+                  <p className="subtle">This route summarizes repository context while deeper management remains in the dedicated Settings window.</p>
+                  <dl className="action-meta">
+                    <div>
+                      <dt>Configured</dt>
+                      <dd>{sources.length}</dd>
+                    </div>
+                    <div>
+                      <dt>Enabled</dt>
+                      <dd>{sources.filter((source) => source.enabled).length}</dd>
+                    </div>
+                    <div>
+                      <dt>Targets</dt>
+                      <dd>{selectedTargetList.join(", ")}</dd>
+                    </div>
+                    <div>
+                      <dt>Mode</dt>
+                      <dd>{scope === "project" ? `${mode} / project` : `${mode} / user`}</dd>
+                    </div>
+                  </dl>
+                  {scope === "project" && <p className="operation-hint">Project path: {trimmedProjectPath || "not set"}</p>}
+                  <div className="action-row">
+                    <button className="btn btn-secondary" type="button" disabled={busy} onClick={() => refreshSource()}>
+                      Refresh all repositories
+                    </button>
+                    <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => void handleOpenSettingsWindow()}>
+                      Open Settings
+                    </button>
+                  </div>
+                </article>
+
+                <article className="panel panel-spacious">
+                  <div className="catalog-head">
+                    <div>
+                      <h2>Repository summary</h2>
+                      <p className="subtle">
+                        {sources.length === 0 ? "No repositories are configured yet." : `${sources.length} repositories connected to this desktop workspace.`}
+                      </p>
+                    </div>
+                  </div>
+
+                  {sources.length === 0 ? (
+                    <div className="empty-state">Open Settings to add your first repository source.</div>
+                  ) : (
+                    <div className="source-list">
+                      {sources.map((source) => (
+                        <article key={source.id} className="source-item">
+                          <strong>{source.name || source.id}</strong>
+                          <span>{source.repoUrl}</span>
+                          <span>
+                            roots: {source.skillsRoot || "(no /skills)"} / {source.hooksRoot || "(no /hooks)"}
+                          </span>
+                          <span>
+                            publish: {source.publishDefaultMode || "branch-pr"} / base {source.defaultBaseBranch || "main"} / provider {source.providerHint || "unknown"}
+                          </span>
+                          <span>{source.lastSyncAt ? `synced ${new Date(source.lastSyncAt).toLocaleString()}` : "never synced"}</span>
+                          {source.lastError && <span className="source-error">{source.lastError}</span>}
+                          <div className="source-actions">
+                            <button className="btn btn-inline" type="button" disabled={busy} onClick={() => refreshSource(source.id)}>
+                              Refresh
+                            </button>
+                            <button className="btn btn-inline" type="button" disabled={busy} onClick={() => void handleOpenSettingsWindow()}>
+                              Manage in Settings
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </article>
+              </section>
+            )}
+
+            {activeRoute === "hooks" && (
+              <div className="workspace desktop-route-section tab-section">
+                <aside className="control-rail skills-rail">
+                  <section className="panel action-panel panel-spacious">
+                    <h2>Hook Actions</h2>
+                    <p className="subtle">Apply source-pinned hook selections across supported targets.</p>
+                    <p className="operation-hint hook-support-warning">Hooks are currently supported only for Claude Code and Gemini CLI.</p>
+                    <dl className="action-meta">
+                      <div>
+                        <dt>Targets</dt>
+                        <dd>{selectedHookTargetList.length}</dd>
+                      </div>
+                      <div>
+                        <dt>Selection</dt>
+                        <dd>{selectedKnownHookCount}</dd>
+                      </div>
+                      <div>
+                        <dt>Scope</dt>
+                        <dd>{scope === "project" ? "Project" : "User"}</dd>
+                      </div>
+                      <div>
+                        <dt>Mode</dt>
+                        <dd>{mode}</dd>
+                      </div>
+                    </dl>
+                    {scope === "project" && <p className="operation-hint">Project path: {trimmedProjectPath || "not set"}</p>}
+                    <div className="action-row">
+                      <button className="btn btn-primary" disabled={busy} onClick={() => runHookOperation("install")} type="button">
+                        Install selected hooks
+                      </button>
+                      <button className="btn btn-secondary" disabled={busy} onClick={() => runHookOperation("uninstall")} type="button">
+                        Uninstall selected hooks
+                      </button>
+                      <button className="btn btn-tertiary" disabled={busy} onClick={() => runHookOperation("sync")} type="button">
+                        Sync hooks to selection
+                      </button>
+                    </div>
+                  </section>
+                </aside>
+
+                <main className="catalog-column">
+                  <section className="panel panel-catalog panel-spacious">
+                    <div className="catalog-head">
+                      <div>
+                        <h2>Hook Catalog</h2>
+                        <p className="subtle">
+                          {totalHooks > 0 ? `${selectedKnownHookCount}/${totalHooks} selected` : `${selectedKnownHookCount} selected`}
+                          {selectedUnknownHookCount > 0 ? ` • ${selectedUnknownHookCount} unavailable` : ""}
+                          {normalizedHookQuery ? ` • ${filteredHooksCount} shown` : ""}
+                        </p>
+                      </div>
+                      <div className="bulk-actions">
+                        <button className="btn btn-ghost" onClick={() => setHooksSelection(hooks.map((hook) => hook.hookId), true)} type="button">
+                          Select all
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => setHooksSelection(hooks.map((hook) => hook.hookId), false)} type="button">
+                          Clear all
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="catalog-controls">
+                      <input
+                        className="input input-search"
+                        placeholder="Search source/hook, descriptions…"
+                        value={hookSearchQuery}
+                        onChange={(event) => setHookSearchQuery(event.target.value)}
+                      />
+                      <div className="catalog-filters">
+                        <div className="source-filter">
+                          <span className="filter-label">Source</span>
+                          <div className="source-chip-row">
+                            <button className={`chip chip-filter ${hookSourceFilter === "all" ? "is-active" : ""}`} type="button" onClick={() => setHookSourceFilter("all")}>
+                              all
+                            </button>
+                            {hookSourceFilterOptions.map((sourceId) => (
+                              <button
+                                key={sourceId}
+                                className={`chip chip-filter ${hookSourceFilter === sourceId ? "is-active" : ""}`}
+                                type="button"
+                                onClick={() => setHookSourceFilter(sourceId)}
+                              >
+                                {sourceNameById.get(sourceId) || sourceId}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <label className="toggle">
+                          <input type="checkbox" checked={hooksInstalledOnly} onChange={(event) => setHooksInstalledOnly(event.target.checked)} />
+                          Installed only
+                        </label>
+                      </div>
+                    </div>
+
+                    {visibleHooks.length === 0 && <div className="empty-state">No hooks match this search. Try a broader term.</div>}
 
                     <div className="skill-grid">
-                      {categorySkills.map((skill) => {
-                        const isSelected = selectedSkills.has(skill.skillId);
-                        const isInstalled = installedSkillIds.has(skill.skillId);
+                      {visibleHooks.map((hook) => {
+                        const isSelected = selectedHooks.has(hook.hookId);
+                        const isInstalled = installedHookIds.has(hook.hookId);
                         return (
-                          <article key={skill.skillId} className={`skill ${isSelected ? "selected" : ""}`}>
+                          <article key={hook.hookId} className={`skill ${isSelected ? "selected" : ""}`}>
                             <div className="skill-top">
                               <label className="skill-title">
-                                <input type="checkbox" checked={isSelected} onChange={() => toggleSkill(skill.skillId)} />
+                                <input type="checkbox" checked={isSelected} onChange={() => toggleHook(hook.hookId)} />
                                 <span className="skill-title-copy">
-                                  <strong>{skill.skillName}</strong>
-                                  <code className="skill-id">{skill.skillId}</code>
+                                  <strong>{hook.hookName}</strong>
+                                  <code className="skill-id">{hook.hookId}</code>
                                 </span>
                               </label>
                               <div className="skill-badges">
-                                <span className="badge badge-source">{sourceNameById.get(skill.sourceId) || skill.sourceId}</span>
-                                {skill.scope && <span className="badge">{titleCase(skill.scope)}</span>}
-                                {(skill.tags || []).slice(0, 2).map((tag) => (
-                                  <span key={`${skill.skillId}-tag-${tag}`} className="badge">
-                                    #{tag}
-                                  </span>
-                                ))}
+                                <span className="badge badge-source">{sourceNameById.get(hook.sourceId) || hook.sourceId}</span>
                                 {isInstalled && <span className="badge">installed</span>}
                               </div>
                             </div>
-                            <p className="skill-description">{skill.description}</p>
-                            {skill.resources.length > 0 && (
-                              <details className="skill-resources">
-                                <summary>Resources ({skill.resources.length})</summary>
-                                <ul>
-                                  {skill.resources.map((resource) => (
-                                    <li key={`${skill.skillId}-${resource.path}`}>
-                                      <span className="resource-type">{resource.type}</span>
-                                      <code>{resource.path}</code>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </details>
-                            )}
+                            <p className="skill-description">{hook.description || "No description provided."}</p>
                             <div className="skill-foot">
-                              {skill.version && <span className="subtle">v{skill.version}</span>}
-                              {skill.updatedAt && <span className="subtle">Updated {new Date(skill.updatedAt).toLocaleDateString()}</span>}
+                              {hook.version && <span className="subtle">v{hook.version}</span>}
+                              {hook.updatedAt && <span className="subtle">Updated {new Date(hook.updatedAt).toLocaleDateString()}</span>}
                             </div>
                           </article>
                         );
                       })}
                     </div>
                   </section>
-                );
-              })}
-            </section>
+                </main>
+              </div>
+            )}
+
+            {activeRoute === "reports" && (
+              <section className="state-grid desktop-route-section tab-section">
+                <article className="panel state-intro panel-spacious">
+                  <h2>Reports</h2>
+                  <p className="subtle">Inspect installed skill and hook state per target and review the latest operation payloads.</p>
+                </article>
+
+                <details className="panel collapsible panel-state panel-spacious" open>
+                  <summary>
+                    <span>Installed State</span>
+                    <span className="subtle">{installations.length} target entries</span>
+                  </summary>
+                  <pre>{JSON.stringify(installations, null, 2)}</pre>
+                </details>
+
+                <details className="panel collapsible panel-state panel-spacious" open>
+                  <summary>
+                    <span>Operation Report</span>
+                    <span className="subtle">{report ? "latest run available" : "no operation yet"}</span>
+                  </summary>
+                  <pre>{report ? JSON.stringify(report, null, 2) : "No operation run yet."}</pre>
+                </details>
+
+                <details className="panel collapsible panel-state panel-spacious" open>
+                  <summary>
+                    <span>Installed Hooks State</span>
+                    <span className="subtle">{hookInstallations.length} target entries</span>
+                  </summary>
+                  <pre>{JSON.stringify(hookInstallations, null, 2)}</pre>
+                </details>
+
+                <details className="panel collapsible panel-state panel-spacious" open>
+                  <summary>
+                    <span>Hook Operation Report</span>
+                    <span className="subtle">{hookReport ? "latest run available" : "no operation yet"}</span>
+                  </summary>
+                  <pre>{hookReport ? JSON.stringify(hookReport, null, 2) : "No hook operation run yet."}</pre>
+                </details>
+              </section>
+            )}
           </main>
         </div>
-        )}
-
-        {activeTab === "hooks" && (
-        <div className="workspace tab-section">
-          <aside className="control-rail skills-rail">
-            <section className="panel action-panel panel-spacious">
-              <h2>Hook Actions</h2>
-              <p className="subtle">Apply source-pinned hook selections across supported targets.</p>
-              <p className="operation-hint hook-support-warning">Hooks are currently supported only for Claude Code and Gemini CLI.</p>
-              <dl className="action-meta">
-                <div>
-                  <dt>Targets</dt>
-                  <dd>{selectedHookTargetList.length}</dd>
-                </div>
-                <div>
-                  <dt>Selection</dt>
-                  <dd>{selectedKnownHookCount}</dd>
-                </div>
-                <div>
-                  <dt>Scope</dt>
-                  <dd>{scope === "project" ? "Project" : "User"}</dd>
-                </div>
-                <div>
-                  <dt>Mode</dt>
-                  <dd>{mode}</dd>
-                </div>
-              </dl>
-              {scope === "project" && <p className="operation-hint">Project path: {trimmedProjectPath || "not set"}</p>}
-              <div className="action-row">
-                <button className="btn btn-primary" disabled={busy} onClick={() => runHookOperation("install")} type="button">
-                  Install selected hooks
-                </button>
-                <button className="btn btn-secondary" disabled={busy} onClick={() => runHookOperation("uninstall")} type="button">
-                  Uninstall selected hooks
-                </button>
-                <button className="btn btn-tertiary" disabled={busy} onClick={() => runHookOperation("sync")} type="button">
-                  Sync hooks to selection
-                </button>
-              </div>
-            </section>
-          </aside>
-
-          <main className="catalog-column">
-            <section className="panel panel-catalog panel-spacious">
-              <div className="catalog-head">
-                <div>
-                  <h2>Hook Catalog</h2>
-                  <p className="subtle">
-                    {totalHooks > 0 ? `${selectedKnownHookCount}/${totalHooks} selected` : `${selectedKnownHookCount} selected`}
-                    {selectedUnknownHookCount > 0 ? ` • ${selectedUnknownHookCount} unavailable` : ""}
-                    {normalizedHookQuery ? ` • ${filteredHooksCount} shown` : ""}
-                  </p>
-                </div>
-                <div className="bulk-actions">
-                  <button className="btn btn-ghost" onClick={() => setHooksSelection(hooks.map((hook) => hook.hookId), true)} type="button">
-                    Select all
-                  </button>
-                  <button className="btn btn-ghost" onClick={() => setHooksSelection(hooks.map((hook) => hook.hookId), false)} type="button">
-                    Clear all
-                  </button>
-                </div>
-              </div>
-
-              <div className="catalog-controls">
-                <input
-                  className="input input-search"
-                  placeholder="Search source/hook, descriptions…"
-                  value={hookSearchQuery}
-                  onChange={(event) => setHookSearchQuery(event.target.value)}
-                />
-                <div className="catalog-filters">
-                  <div className="source-filter">
-                    <span className="filter-label">Source</span>
-                    <div className="source-chip-row">
-                      <button
-                        className={`chip chip-filter ${hookSourceFilter === "all" ? "is-active" : ""}`}
-                        type="button"
-                        onClick={() => setHookSourceFilter("all")}
-                      >
-                        all
-                      </button>
-                      {hookSourceFilterOptions.map((sourceId) => (
-                        <button
-                          key={sourceId}
-                          className={`chip chip-filter ${hookSourceFilter === sourceId ? "is-active" : ""}`}
-                          type="button"
-                          onClick={() => setHookSourceFilter(sourceId)}
-                        >
-                          {sourceNameById.get(sourceId) || sourceId}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <label className="toggle">
-                    <input type="checkbox" checked={hooksInstalledOnly} onChange={(event) => setHooksInstalledOnly(event.target.checked)} />
-                    Installed only
-                  </label>
-                </div>
-              </div>
-
-              {visibleHooks.length === 0 && <div className="empty-state">No hooks match this search. Try a broader term.</div>}
-
-              <div className="skill-grid">
-                {visibleHooks.map((hook) => {
-                  const isSelected = selectedHooks.has(hook.hookId);
-                  const isInstalled = installedHookIds.has(hook.hookId);
-                  return (
-                    <article key={hook.hookId} className={`skill ${isSelected ? "selected" : ""}`}>
-                      <div className="skill-top">
-                        <label className="skill-title">
-                          <input type="checkbox" checked={isSelected} onChange={() => toggleHook(hook.hookId)} />
-                          <span className="skill-title-copy">
-                            <strong>{hook.hookName}</strong>
-                            <code className="skill-id">{hook.hookId}</code>
-                          </span>
-                        </label>
-                        <div className="skill-badges">
-                          <span className="badge badge-source">{sourceNameById.get(hook.sourceId) || hook.sourceId}</span>
-                          {isInstalled && <span className="badge">installed</span>}
-                        </div>
-                      </div>
-                      <p className="skill-description">{hook.description || "No description provided."}</p>
-                      <div className="skill-foot">
-                        {hook.version && <span className="subtle">v{hook.version}</span>}
-                        {hook.updatedAt && <span className="subtle">Updated {new Date(hook.updatedAt).toLocaleDateString()}</span>}
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          </main>
-        </div>
-        )}
-
-        {activeTab === "state" && (
-        <section className="state-grid tab-section">
-          <article className="panel state-intro panel-spacious">
-            <h2>States & Reports</h2>
-            <p className="subtle">Inspect installed skill/hook state per target and review the latest operation payloads.</p>
-          </article>
-
-          <details className="panel collapsible panel-state panel-spacious" open>
-            <summary>
-              <span>Installed State</span>
-              <span className="subtle">{installations.length} target entries</span>
-            </summary>
-            <pre>{JSON.stringify(installations, null, 2)}</pre>
-          </details>
-
-          <details className="panel collapsible panel-state panel-spacious" open>
-            <summary>
-              <span>Operation Report</span>
-              <span className="subtle">{report ? "latest run available" : "no operation yet"}</span>
-            </summary>
-            <pre>{report ? JSON.stringify(report, null, 2) : "No operation run yet."}</pre>
-          </details>
-
-          <details className="panel collapsible panel-state panel-spacious" open>
-            <summary>
-              <span>Installed Hooks State</span>
-              <span className="subtle">{hookInstallations.length} target entries</span>
-            </summary>
-            <pre>{JSON.stringify(hookInstallations, null, 2)}</pre>
-          </details>
-
-          <details className="panel collapsible panel-state panel-spacious" open>
-            <summary>
-              <span>Hook Operation Report</span>
-              <span className="subtle">{hookReport ? "latest run available" : "no operation yet"}</span>
-            </summary>
-            <pre>{hookReport ? JSON.stringify(hookReport, null, 2) : "No hook operation run yet."}</pre>
-          </details>
-        </section>
-      )}
 
       {publishComposerOpen && (
         <div className="publish-config-overlay" role="presentation" onClick={() => setPublishComposerOpen(false)}>
