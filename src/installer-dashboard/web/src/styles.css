@@ -770,6 +770,87 @@ input[type="radio"]:focus-visible {
   gap: var(--space-5);
 }
 
+.desktop-master-detail-shell {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.desktop-master-detail-list {
+  position: sticky;
+  top: var(--space-4);
+  display: grid;
+  gap: var(--space-5);
+  align-self: start;
+}
+
+.desktop-master-detail-detail {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-5);
+}
+
+.desktop-record-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.desktop-record-button {
+  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-soft) 88%, transparent);
+  border-radius: 14px;
+  color: inherit;
+  text-align: left;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+}
+
+.desktop-record-button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 62%, var(--surface-soft));
+}
+
+.desktop-record-button.is-active {
+  border-color: color-mix(in srgb, var(--accent) 62%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 82%, transparent), color-mix(in srgb, var(--surface) 92%, transparent));
+  box-shadow: var(--active-glow);
+}
+
+.desktop-record-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.desktop-record-title {
+  font-size: 0.94rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.desktop-record-subtitle {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.desktop-record-meta {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.desktop-report-pre {
+  margin-top: var(--space-4);
+  max-height: min(62vh, 48rem);
+  overflow: auto;
+}
+
 .source-route-grid {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
@@ -1931,12 +2012,14 @@ pre {
   }
 
   .desktop-route-shell,
-  .source-route-grid {
+  .source-route-grid,
+  .desktop-master-detail-shell {
     grid-template-columns: 1fr;
     gap: var(--space-5);
   }
 
-  .desktop-route-sidebar {
+  .desktop-route-sidebar,
+  .desktop-master-detail-list {
     position: static;
   }
 

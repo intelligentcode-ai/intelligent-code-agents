@@ -11,12 +11,14 @@ function readWorkspaceFile(relativePath: string): string {
 
 test("desktop shell renders dedicated operation, connection, native, and activity panels", () => {
   const ui = readWorkspaceFile("src/installer-dashboard/web/src/InstallerDashboard.tsx");
+  const helper = readWorkspaceFile("src/installer-dashboard/web/src/desktop-master-detail.tsx");
 
   assert.match(ui, />\s*Operation Center\s*</);
   assert.match(ui, />\s*Connection Status\s*</);
   assert.match(ui, />\s*Native Operations\s*</);
   assert.match(ui, />\s*Activity Feed\s*</);
-  assert.match(ui, /className="desktop-shell-grid"/);
+  assert.match(ui, /<DesktopMasterDetailShell/);
+  assert.match(helper, /className="desktop-master-detail-shell"/);
 });
 
 test("desktop shell subscribes to realtime updates for connection state and activity feed", () => {
