@@ -40,6 +40,7 @@ declare module "electron" {
     loadURL(url: string): Promise<void>;
     show(): void;
     focus(): void;
+    isDestroyed(): boolean;
     webContents: WebContents;
   }
 

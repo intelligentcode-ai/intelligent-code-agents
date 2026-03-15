@@ -6,6 +6,7 @@ import {
   DESKTOP_UPDATE_QUIT_AND_INSTALL_IPC_CHANNEL,
   DESKTOP_PICK_PROJECT_IPC_CHANNEL,
   DESKTOP_PICK_PUBLISH_IPC_CHANNEL,
+  DESKTOP_OPEN_SETTINGS_IPC_CHANNEL,
   DESKTOP_REPORT_FAILURE_IPC_CHANNEL,
   DESKTOP_RUNTIME_INFO_IPC_CHANNEL,
   REALTIME_EVENT_CHANNEL,
@@ -58,6 +59,10 @@ const desktopBridge: DesktopBridgeApi = {
 
   pickPublishDirectory(initialPath) {
     return ipcRenderer.invoke(DESKTOP_PICK_PUBLISH_IPC_CHANNEL, initialPath) as Promise<{ path: string }>;
+  },
+
+  openSettingsWindow() {
+    return ipcRenderer.invoke(DESKTOP_OPEN_SETTINGS_IPC_CHANNEL) as Promise<void>;
   },
 
   getRuntimeInfo() {

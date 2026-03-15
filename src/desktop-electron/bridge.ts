@@ -8,6 +8,7 @@ export const REALTIME_UNSUBSCRIBE_CHANNEL = "ica:realtime:unsubscribe" as const;
 export const CONTROL_PLANE_IPC_CHANNEL = "ica:control-plane:request" as const;
 export const DESKTOP_PICK_PROJECT_IPC_CHANNEL = "ica:desktop:pick-project" as const;
 export const DESKTOP_PICK_PUBLISH_IPC_CHANNEL = "ica:desktop:pick-publish" as const;
+export const DESKTOP_OPEN_SETTINGS_IPC_CHANNEL = "ica:desktop:open-settings" as const;
 export const DESKTOP_RUNTIME_INFO_IPC_CHANNEL = "ica:desktop:runtime-info" as const;
 export const DESKTOP_REPORT_FAILURE_IPC_CHANNEL = "ica:desktop:report-failure" as const;
 export const DESKTOP_UPDATE_CHECK_IPC_CHANNEL = "ica:desktop:update-check" as const;
@@ -53,6 +54,7 @@ export interface DesktopBridgeApi {
   quitAndInstallAppUpdate(): Promise<{ accepted: boolean }>;
   pickProjectDirectory(initialPath?: string): Promise<{ path: string }>;
   pickPublishDirectory(initialPath?: string): Promise<{ path: string }>;
+  openSettingsWindow(): Promise<void>;
   getRuntimeInfo(): Promise<DesktopRuntimeInfo>;
   reportRendererFailure(payload: DesktopHostFailureReport): Promise<void>;
 }

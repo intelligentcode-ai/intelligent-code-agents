@@ -197,6 +197,14 @@ export async function pickPublishDirectory(initialPath?: string): Promise<{ path
   return { path: payload.path };
 }
 
+export async function openSettingsWindow(): Promise<void> {
+  const desktopBridge = getDesktopBridge();
+  if (!desktopBridge) {
+    throw createHostBridgeUnavailableError();
+  }
+  await desktopBridge.openSettingsWindow();
+}
+
 export async function reportRendererFailure(payload: DesktopHostFailureReport): Promise<void> {
   const desktopBridge = getDesktopBridge();
   if (!desktopBridge) {
