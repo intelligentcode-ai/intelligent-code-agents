@@ -17,6 +17,7 @@ function createDeps(existingPaths: string[]): TrackingConfigDependencies {
   return {
     cwd: path.resolve("/workspace/project"),
     icaHome: path.resolve("/workspace/home/.ica"),
+    activeAgentHome: path.resolve("/workspace/home/.codex"),
     homeDir: path.resolve("/workspace/home"),
     pathExists: async (targetPath: string) => normalized.has(path.resolve(targetPath)),
     readText: async () => "",
@@ -32,6 +33,7 @@ function createDepsWithContents(contents: Record<string, string>): TrackingConfi
   return {
     cwd: path.resolve("/workspace/project"),
     icaHome: path.resolve("/workspace/home/.ica"),
+    activeAgentHome: path.resolve("/workspace/home/.codex"),
     homeDir: path.resolve("/workspace/home"),
     pathExists: async (targetPath: string) => normalizedContents.has(path.resolve(targetPath)),
     readText: async (targetPath: string) => normalizedContents.get(path.resolve(targetPath)) || "",
@@ -53,6 +55,7 @@ function createEnsureDeps(
   const deps: EnsureTrackingConfigDependencies = {
     cwd: path.resolve("/workspace/project"),
     icaHome: path.resolve("/workspace/home/.ica"),
+    activeAgentHome: path.resolve("/workspace/home/.codex"),
     homeDir: path.resolve("/workspace/home"),
     pathExists: async (targetPath: string) => normalizedContents.has(path.resolve(targetPath)),
     readText: async (targetPath: string) => normalizedContents.get(path.resolve(targetPath)) || "",
@@ -105,10 +108,10 @@ test("resolveTrackingConfig defaults fallback provider to file-based when github
   assert.equal(result.fallbackProvider as TrackingProvider, "file-based");
 });
 
-test("resolveTrackingConfig checks codex then claude agent-home fallbacks", async () => {
+test("resolveTrackingConfig uses the active agent-home override before shared global config", async () => {
   const codexConfig = path.join("/workspace/home", ".codex", "tracking.config.json");
-  const claudeConfig = path.join("/workspace/home", ".claude", "tracking.config.json");
-  const deps = createDeps([codexConfig, claudeConfig]);
+  const systemConfig = path.join("/workspace/home", ".ica", "tracking.config.json");
+  const deps = createDeps([codexConfig, systemConfig]);
   const result = await resolveTrackingConfig(deps);
 
   assert.equal(result.source, "agent-home");
@@ -150,16 +153,19 @@ test("resolveTrackingConfig emits diagnostics when selected config JSON is inval
   assert.ok(result.diagnostics.some((line: string) => line.includes("Invalid JSON")));
 });
 
-test("resolveTrackingConfig tolerates unset ICA_HOME and still checks agent-home candidates", async () => {
+test("resolveTrackingConfig ignores inactive agent homes when no active agent context is available", async () => {
   const claudeConfig = path.join(os.homedir(), ".claude", "tracking.config.json");
   const deps = createDeps([claudeConfig]);
-  deps.icaHome = undefined;
+  deps.icaHome = path.join(os.homedir(), ".ica");
+  deps.activeAgentHome = undefined;
   deps.homeDir = os.homedir();
-  deps.pathExists = async (targetPath: string) => path.resolve(targetPath) === path.resolve(claudeConfig);
+  deps.pathExists = async (targetPath: string) =>
+    path.resolve(targetPath) === path.resolve(claudeConfig) ||
+    path.resolve(targetPath) === path.resolve(path.join(os.homedir(), ".ica", "tracking.config.json"));
 
   const result = await resolveTrackingConfig(deps);
-  assert.equal(result.path, claudeConfig);
-  assert.equal(result.source, "agent-home");
+  assert.equal(result.path, path.join(os.homedir(), ".ica", "tracking.config.json"));
+  assert.equal(result.source, "system");
 });
 
 test("ensureTrackingConfig asks scope and creates project config when user opts out of existing system config", async () => {

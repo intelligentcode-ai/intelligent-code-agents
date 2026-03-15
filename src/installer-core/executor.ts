@@ -1,3 +1,4 @@
+import os from "node:os";
 import path from "node:path";
 import { BASELINE_DIRECTORIES, BASELINE_FILES, TARGET_HOME_DIR } from "./constants";
 import { antigravityWorkflowPath, workflowNameFromSkillName } from "./antigravity";
@@ -7,6 +8,7 @@ import { findSkillById, resolveInstallSelections } from "./catalogMultiSource";
 import { copyPath, ensureDir, pathExists, removePath, trySymlinkDirectory, writeText } from "./fs";
 import { mergeMcpConfig } from "./mcp";
 import { computePlannerDelta } from "./planner";
+import { getIcaGlobalRoot } from "./runtimePaths";
 import { assertPathWithin, redactSensitive } from "./security";
 import { appendHistory, createEmptyState, getStatePath, loadInstallState, reconcileLegacyManagedSkills, saveInstallState } from "./state";
 import { computeDirectoryDigest } from "./contentDigest";
@@ -82,14 +84,101 @@ async function writeAntigravityWorkflow(
 function buildBaselinePaths(resolved: ResolvedTargetPath): string[] {
   const dirs = BASELINE_DIRECTORIES.map((dirName) => path.join(resolved.installPath, dirName));
   const files = BASELINE_FILES.map((fileName) => path.join(resolved.installPath, fileName));
-  const paths = [...dirs, ...files, resolved.skillsPath, path.join(resolved.installPath, "logs"), path.join(resolved.installPath, "ica.config.json")];
+  const paths = [...dirs, ...files, resolved.skillsPath, path.join(resolved.installPath, "logs")];
   if (isAntigravityTarget(resolved)) {
     paths.push(resolved.workflowsPath);
   }
   return paths;
 }
 
-async function installBaseline(repoRoot: string, resolved: ResolvedTargetPath, configFile?: string): Promise<void> {
+async function seedSharedGlobalConfig(
+  repoRoot: string,
+  resolved: ResolvedTargetPath,
+  report: TargetOperationReport,
+  configFile?: string,
+): Promise<void> {
+  if (resolved.scope !== "user") {
+    return;
+  }
+
+  const globalRoot = getIcaGlobalRoot();
+  await ensureDir(globalRoot);
+
+  const legacyConfigCandidates = resolved.installPath !== globalRoot
+    ? [path.join(resolved.installPath, "ica.config.json")]
+    : [];
+  const legacyWorkflowCandidates = resolved.installPath !== globalRoot
+    ? [path.join(resolved.installPath, "ica.workflow.json")]
+    : [];
+
+  for (const targetHomeDir of Object.values(TARGET_HOME_DIR)) {
+    const candidateRoot = path.join(os.homedir(), targetHomeDir);
+    if (candidateRoot === resolved.installPath || candidateRoot === globalRoot) continue;
+    legacyConfigCandidates.push(path.join(candidateRoot, "ica.config.json"));
+    legacyWorkflowCandidates.push(path.join(candidateRoot, "ica.workflow.json"));
+  }
+
+  const globalConfigPath = path.join(globalRoot, "ica.config.json");
+  if (!(await pathExists(globalConfigPath))) {
+    const existingLegacyConfigs = [];
+    for (const candidate of legacyConfigCandidates) {
+      if (await pathExists(candidate)) {
+        existingLegacyConfigs.push(candidate);
+      }
+    }
+
+    if (configFile) {
+      await copyPath(path.resolve(configFile), globalConfigPath);
+    } else if (existingLegacyConfigs.length === 1) {
+      await copyPath(existingLegacyConfigs[0], globalConfigPath);
+      pushWarning(
+        report,
+        "GLOBAL_CONFIG_MIGRATED",
+        `Seeded shared ICA config from legacy agent-home override at '${existingLegacyConfigs[0]}'.`,
+      );
+    } else {
+      if (existingLegacyConfigs.length > 1) {
+        pushWarning(
+          report,
+          "AMBIGUOUS_LEGACY_GLOBAL_CONFIG",
+          `Found multiple legacy agent-home configs; seeded '${globalConfigPath}' from defaults instead of guessing.`,
+        );
+      }
+      await copyPath(path.join(repoRoot, "ica.config.default.json"), globalConfigPath);
+    }
+  }
+
+  const globalWorkflowPath = path.join(globalRoot, "ica.workflow.json");
+  if (!(await pathExists(globalWorkflowPath))) {
+    const existingLegacyWorkflows = [];
+    for (const candidate of legacyWorkflowCandidates) {
+      if (await pathExists(candidate)) {
+        existingLegacyWorkflows.push(candidate);
+      }
+    }
+
+    if (existingLegacyWorkflows.length === 1) {
+      await copyPath(existingLegacyWorkflows[0], globalWorkflowPath);
+      pushWarning(
+        report,
+        "GLOBAL_WORKFLOW_MIGRATED",
+        `Seeded shared ICA workflow from legacy agent-home override at '${existingLegacyWorkflows[0]}'.`,
+      );
+    } else {
+      if (existingLegacyWorkflows.length > 1) {
+        pushWarning(
+          report,
+          "AMBIGUOUS_LEGACY_GLOBAL_WORKFLOW",
+          `Found multiple legacy agent-home workflows; seeded '${globalWorkflowPath}' from defaults instead of guessing.`,
+        );
+      }
+      await copyPath(path.join(repoRoot, "ica.workflow.default.json"), globalWorkflowPath);
+    }
+  }
+}
+
+async function installBaseline(repoRoot: string, resolved: ResolvedTargetPath, report: TargetOperationReport, configFile?: string): Promise<void> {
+  await seedSharedGlobalConfig(repoRoot, resolved, report, configFile);
   await ensureDir(resolved.installPath);
   await ensureDir(resolved.skillsPath);
   await ensureDir(path.join(resolved.installPath, "logs"));
@@ -112,13 +201,6 @@ async function installBaseline(repoRoot: string, resolved: ResolvedTargetPath, c
 
   const defaultWorkflowSource = path.join(repoRoot, "ica.workflow.default.json");
   await copyPath(defaultWorkflowSource, path.join(resolved.installPath, "ica.workflow.default.json"));
-
-  const targetConfig = path.join(resolved.installPath, "ica.config.json");
-  if (configFile) {
-    await copyPath(path.resolve(configFile), targetConfig);
-  } else if (!(await pathExists(targetConfig))) {
-    await copyPath(defaultConfigSource, targetConfig);
-  }
 }
 
 function pushWarning(report: TargetOperationReport, code: string, message: string): void {
@@ -498,7 +580,7 @@ async function installOrSyncTarget(
   report: TargetOperationReport,
   catalog: SkillCatalog,
 ): Promise<void> {
-  await installBaseline(repoRoot, resolved, request.configFile);
+  await installBaseline(repoRoot, resolved, report, request.configFile);
 
   const rawState = (await loadInstallState(resolved.installPath)) ||
     createEmptyState({

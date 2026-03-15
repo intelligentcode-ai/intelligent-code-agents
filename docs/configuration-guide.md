@@ -8,11 +8,13 @@ ICA loads `ica.config.json` in this priority order:
 1. AgentTask overrides: `workflow:*` / `config:*` fields inside the AgentTask YAML
 2. Project config (preferred): `./.ica/config.json`
 3. Project config (compat): `./ica.config.json` or `./.<agent-home>/ica.config.json`
-4. User config: `~/.<agent-home>/ica.config.json` (for example `~/.claude/ica.config.json`, `~/.codex/ica.config.json`)
-5. Defaults: `ica.config.default.json`
+4. Active agent-home override: `~/.<agent-home>/ica.config.json` for the current runtime only
+5. Shared ICA global config: `~/.ica/ica.config.json` (or `$ICA_STATE_HOME/ica.config.json`)
+6. Defaults: `ica.config.default.json`
 
 Notes:
 - `<agent-home>` is the tool-specific directory ICA installs into (`.claude`, `.codex`, `.cursor`, etc.).
+- Agent-home files are overrides, not the canonical cross-agent default.
 - Claude Code also has tool config files that are separate from ICA config:
   - Hooks: `~/.claude/settings.json`
   - MCP servers: `~/.claude.json`
@@ -26,8 +28,9 @@ Workflow settings (version bump rules, PR requirements, release automation, auto
 1. AgentTask overrides (`workflow.*` inside the AgentTask YAML)
 2. Project workflow (preferred): `./.ica/workflow.json`
 3. Project workflow (compat): `./ica.workflow.json` or `./.<agent-home>/ica.workflow.json`
-4. User workflow: `~/.<agent-home>/ica.workflow.json`
-5. Defaults: `ica.workflow.default.json`
+4. Active agent-home override: `~/.<agent-home>/ica.workflow.json` for the current runtime only
+5. Shared ICA global workflow: `~/.ica/ica.workflow.json` (or `$ICA_STATE_HOME/ica.workflow.json`)
+6. Defaults: `ica.workflow.default.json`
 
 ### Enable Agent Auto-Merge (Standing Approval)
 

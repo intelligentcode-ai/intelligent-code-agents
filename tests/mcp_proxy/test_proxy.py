@@ -141,6 +141,115 @@ class TestMcpProxy(unittest.TestCase):
                 else:
                     os.environ["ICA_HOME"] = old_ica_home
 
+    def test_global_mcp_config_is_used_without_active_agent_context(self):
+        ica_mcp_core = _load_core()
+
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            proj = td / "project"
+            proj.mkdir()
+            global_root = td / "ica-global"
+            global_root.mkdir()
+            codex_home = td / "codex-home"
+            codex_home.mkdir()
+
+            (global_root / "mcp-servers.json").write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "shared": {"command": "python", "args": ["-c", "print('global')"]},
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (codex_home / "mcp-servers.json").write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "shared": {"command": "python", "args": ["-c", "print('codex')"]},
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            old_state_home = os.environ.get("ICA_STATE_HOME")
+            old_ica_home = os.environ.get("ICA_HOME")
+            old_active_target = os.environ.get("ICA_ACTIVE_TARGET")
+            os.environ["ICA_STATE_HOME"] = str(global_root)
+            os.environ.pop("ICA_HOME", None)
+            os.environ.pop("ICA_ACTIVE_TARGET", None)
+            try:
+                loaded = ica_mcp_core.load_servers_merged(script_file=None, cwd=proj)  # type: ignore[arg-type]
+            finally:
+                if old_state_home is None:
+                    del os.environ["ICA_STATE_HOME"]
+                else:
+                    os.environ["ICA_STATE_HOME"] = old_state_home
+                if old_ica_home is None:
+                    os.environ.pop("ICA_HOME", None)
+                else:
+                    os.environ["ICA_HOME"] = old_ica_home
+                if old_active_target is None:
+                    os.environ.pop("ICA_ACTIVE_TARGET", None)
+                else:
+                    os.environ["ICA_ACTIVE_TARGET"] = old_active_target
+
+            self.assertEqual(loaded.servers["shared"]["args"][-1], "print('global')")
+
+    def test_active_agent_home_overrides_shared_global_mcp_config(self):
+        ica_mcp_core = _load_core()
+
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            proj = td / "project"
+            proj.mkdir()
+            global_root = td / "ica-global"
+            global_root.mkdir()
+            ica_home = td / "ica-home"
+            ica_home.mkdir()
+            (ica_home / "VERSION").write_text("test", encoding="utf-8")
+
+            (global_root / "mcp-servers.json").write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "shared": {"command": "python", "args": ["-c", "print('global')"]},
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (ica_home / "mcp-servers.json").write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "shared": {"command": "python", "args": ["-c", "print('home')"]},
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            old_state_home = os.environ.get("ICA_STATE_HOME")
+            old_ica_home = os.environ.get("ICA_HOME")
+            os.environ["ICA_STATE_HOME"] = str(global_root)
+            os.environ["ICA_HOME"] = str(ica_home)
+            try:
+                loaded = ica_mcp_core.load_servers_merged(script_file=None, cwd=proj)  # type: ignore[arg-type]
+            finally:
+                if old_state_home is None:
+                    del os.environ["ICA_STATE_HOME"]
+                else:
+                    os.environ["ICA_STATE_HOME"] = old_state_home
+                if old_ica_home is None:
+                    del os.environ["ICA_HOME"]
+                else:
+                    os.environ["ICA_HOME"] = old_ica_home
+
+            self.assertEqual(loaded.servers["shared"]["args"][-1], "print('home')")
+
     def test_proxy_mirrors_and_calls(self):
         import anyio
         from mcp import StdioServerParameters

@@ -5,12 +5,53 @@
  */
 
 const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { runTestSuite } = require('../fixtures/test-helpers');
 const {
   loadConfig,
   getSetting,
-  clearCache
+  clearCache,
+  getActiveAgentHomeDir,
+  getIcaGlobalRoot
 } = require('../../../src/targets/claude/hooks/lib/config-loader.js');
+
+function withTempEnv(callback) {
+  const previous = {
+    HOME: process.env.HOME,
+    USERPROFILE: process.env.USERPROFILE,
+    ICA_HOME: process.env.ICA_HOME,
+    ICA_STATE_HOME: process.env.ICA_STATE_HOME,
+    ICA_GLOBAL_HOME: process.env.ICA_GLOBAL_HOME,
+    ICA_ACTIVE_TARGET: process.env.ICA_ACTIVE_TARGET
+  };
+  const previousCwd = process.cwd();
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ica-config-loader-'));
+  const tempProject = fs.mkdtempSync(path.join(os.tmpdir(), 'ica-config-loader-project-'));
+
+  process.env.HOME = tempHome;
+  process.env.USERPROFILE = tempHome;
+  process.env.ICA_STATE_HOME = path.join(tempHome, '.ica');
+  delete process.env.ICA_HOME;
+  delete process.env.ICA_GLOBAL_HOME;
+  delete process.env.ICA_ACTIVE_TARGET;
+  process.chdir(tempProject);
+
+  try {
+    return callback({ tempHome, tempProject });
+  } finally {
+    process.chdir(previousCwd);
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    clearCache();
+  }
+}
 
 const tests = {
   'loadConfig: returns configuration object': () => {
@@ -106,6 +147,42 @@ const tests = {
 
     assert.ok(typeof result === 'string', 'Should be string');
     assert.ok(result.length > 0, 'Should not be empty');
+  },
+
+  'loadConfig: active agent-home override wins over shared ICA global config': () => {
+    withTempEnv(({ tempHome }) => {
+      const globalRoot = path.join(tempHome, '.ica');
+      const agentHome = path.join(tempHome, '.codex');
+      fs.mkdirSync(globalRoot, { recursive: true });
+      fs.mkdirSync(agentHome, { recursive: true });
+      fs.writeFileSync(path.join(globalRoot, 'ica.config.json'), JSON.stringify({ git: { privacy: false } }), 'utf8');
+      fs.writeFileSync(path.join(agentHome, 'ica.config.json'), JSON.stringify({ git: { privacy: true } }), 'utf8');
+      process.env.ICA_HOME = agentHome;
+
+      clearCache();
+      const config = loadConfig();
+
+      assert.strictEqual(config.git.privacy, true);
+      assert.strictEqual(getActiveAgentHomeDir(), path.resolve(agentHome));
+      assert.strictEqual(getIcaGlobalRoot(), path.resolve(globalRoot));
+    });
+  },
+
+  'loadConfig: shared ICA global config is used when no active agent-home context exists': () => {
+    withTempEnv(({ tempHome }) => {
+      const globalRoot = path.join(tempHome, '.ica');
+      const codexHome = path.join(tempHome, '.codex');
+      fs.mkdirSync(globalRoot, { recursive: true });
+      fs.mkdirSync(codexHome, { recursive: true });
+      fs.writeFileSync(path.join(globalRoot, 'ica.config.json'), JSON.stringify({ git: { privacy: false } }), 'utf8');
+      fs.writeFileSync(path.join(codexHome, 'ica.config.json'), JSON.stringify({ git: { privacy: true } }), 'utf8');
+
+      clearCache();
+      const config = loadConfig();
+
+      assert.strictEqual(config.git.privacy, false);
+      assert.strictEqual(getActiveAgentHomeDir(), null);
+    });
   }
 };
 

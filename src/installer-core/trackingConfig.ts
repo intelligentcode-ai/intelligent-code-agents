@@ -1,4 +1,5 @@
 import path from "node:path";
+import { resolveActiveAgentHome } from "./runtimePaths";
 
 export type TrackingProvider = "github" | "file-based" | "linear" | "jira";
 
@@ -16,6 +17,7 @@ export interface TrackingConfig {
 export interface TrackingConfigDependencies {
   cwd: string;
   icaHome?: string;
+  activeAgentHome?: string;
   homeDir: string;
   pathExists: (targetPath: string) => Promise<boolean>;
   readText: (targetPath: string) => Promise<string>;
@@ -81,21 +83,22 @@ function candidatePaths(deps: TrackingConfigDependencies): Array<{ path: string;
     source: "project",
   });
 
+  const activeAgentHome = deps.activeAgentHome && deps.activeAgentHome.trim().length > 0
+    ? deps.activeAgentHome
+    : resolveActiveAgentHome({ homeDir: deps.homeDir });
+  if (activeAgentHome) {
+    candidates.push({
+      path: path.resolve(activeAgentHome, "tracking.config.json"),
+      source: "agent-home",
+    });
+  }
+
   if (deps.icaHome && deps.icaHome.trim().length > 0) {
     candidates.push({
       path: path.resolve(deps.icaHome, "tracking.config.json"),
       source: "system",
     });
   }
-
-  candidates.push({
-    path: path.resolve(deps.homeDir, ".codex", "tracking.config.json"),
-    source: "agent-home",
-  });
-  candidates.push({
-    path: path.resolve(deps.homeDir, ".claude", "tracking.config.json"),
-    source: "agent-home",
-  });
   return candidates;
 }
 
