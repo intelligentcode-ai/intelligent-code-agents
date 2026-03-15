@@ -22,9 +22,9 @@ export const desktopMainRoutes = Object.freeze<DesktopRouteDefinition[]>([
   {
     id: "sources",
     label: "Sources",
-    eyebrow: "Repository context",
-    title: "Source summary",
-    description: "Review connected repositories here and open Settings for deeper management.",
+    eyebrow: "Repository control",
+    title: "Repository and source management",
+    description: "Manage repository connections, publish defaults, and new source setup from the main desktop route.",
   },
   {
     id: "hooks",

@@ -12,6 +12,15 @@ import { DesktopAppearanceSettings } from "./DesktopAppearanceSettings";
 import { desktopMainRoutes, getDesktopRouteDefinition, type DesktopRouteId, describeRealtimeStatus, summarizeRealtimeEvent } from "./desktop-shell";
 import { useDashboardAppearance } from "./appearance";
 import { startRealtimeClient, type RealtimeEvent, type RealtimeStatus } from "./realtime-client";
+import {
+  createNewSourceDraft,
+  createSourcePublishDraft,
+  type NewSourceDraft,
+  type SourceProviderHint,
+  type SourcePublishDraft,
+  type SourcePublishMode,
+  type SourceTransport,
+} from "./source-management-state";
 import type { DashboardWindowRole } from "./window-role";
 import type { AppUpdateStatus } from "../../../installer-core/updateCheck";
 
@@ -21,14 +30,14 @@ type Source = {
   id: string;
   name: string;
   repoUrl: string;
-  transport: "https" | "ssh";
+  transport: SourceTransport;
   official: boolean;
   enabled: boolean;
   skillsRoot: string;
   hooksRoot?: string;
-  publishDefaultMode?: "direct-push" | "branch-only" | "branch-pr";
+  publishDefaultMode?: SourcePublishMode;
   defaultBaseBranch?: string;
-  providerHint?: "github" | "gitlab" | "bitbucket" | "unknown";
+  providerHint?: SourceProviderHint;
   officialContributionEnabled?: boolean;
   credentialRef?: string;
   removable: boolean;
@@ -269,14 +278,8 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
   const [catalogLoadingMessage, setCatalogLoadingMessage] = useState("");
   const [catalogLoadingProgress, setCatalogLoadingProgress] = useState(0);
   const [selectionCustomized, setSelectionCustomized] = useState(false);
-  const [sourceRepoUrl, setSourceRepoUrl] = useState("");
-  const [sourceName, setSourceName] = useState("");
-  const [sourceTransport, setSourceTransport] = useState<"https" | "ssh">("https");
-  const [sourceToken, setSourceToken] = useState("");
-  const [sourcePublishDefaultMode, setSourcePublishDefaultMode] = useState<"direct-push" | "branch-only" | "branch-pr">("branch-pr");
-  const [sourceDefaultBaseBranch, setSourceDefaultBaseBranch] = useState("main");
-  const [sourceProviderHint, setSourceProviderHint] = useState<"github" | "gitlab" | "bitbucket" | "unknown">("unknown");
-  const [sourceOfficialContributionEnabled, setSourceOfficialContributionEnabled] = useState(false);
+  const [sourcePublishDraft, setSourcePublishDraft] = useState<SourcePublishDraft>(() => createSourcePublishDraft());
+  const [newSourceDraft, setNewSourceDraft] = useState<NewSourceDraft>(() => createNewSourceDraft());
   const [editingSourceId, setEditingSourceId] = useState("");
   const [skillPublishPath, setSkillPublishPath] = useState("");
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
@@ -325,6 +328,14 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
     () => sources.find((source) => source.id === editingSourceId) || null,
     [sources, editingSourceId],
   );
+
+  function updateSourcePublishDraft(patch: Partial<SourcePublishDraft>): void {
+    setSourcePublishDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function updateNewSourceDraft(patch: Partial<NewSourceDraft>): void {
+    setNewSourceDraft((current) => ({ ...current, ...patch }));
+  }
 
   const installedSkillIds = useMemo(() => {
     const names = new Set<string>();
@@ -795,27 +806,21 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: sourceName.trim() || undefined,
-          repoUrl: sourceRepoUrl.trim(),
-          transport: sourceTransport,
-          publishDefaultMode: sourcePublishDefaultMode,
-          defaultBaseBranch: sourceDefaultBaseBranch.trim() || undefined,
-          providerHint: sourceProviderHint,
-          officialContributionEnabled: sourceOfficialContributionEnabled,
-          token: sourceToken.trim() || undefined,
+          name: newSourceDraft.name.trim() || undefined,
+          repoUrl: newSourceDraft.repoUrl.trim(),
+          transport: newSourceDraft.transport,
+          publishDefaultMode: newSourceDraft.publishDefaultMode,
+          defaultBaseBranch: newSourceDraft.defaultBaseBranch.trim() || undefined,
+          providerHint: newSourceDraft.providerHint,
+          officialContributionEnabled: newSourceDraft.officialContributionEnabled,
+          token: newSourceDraft.token.trim() || undefined,
         }),
       });
       const payload = await res.json();
       if (!res.ok) {
         throw new Error(asErrorMessage(payload, "Failed to add source."));
       }
-      setSourceRepoUrl("");
-      setSourceName("");
-      setSourceToken("");
-      setSourcePublishDefaultMode("branch-pr");
-      setSourceDefaultBaseBranch("main");
-      setSourceProviderHint("unknown");
-      setSourceOfficialContributionEnabled(false);
+      setNewSourceDraft(createNewSourceDraft());
       await fetchSources();
       await fetchSkills(true);
       await fetchHooks();
@@ -881,10 +886,10 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          publishDefaultMode: sourcePublishDefaultMode,
-          defaultBaseBranch: sourceDefaultBaseBranch.trim() || undefined,
-          providerHint: sourceProviderHint,
-          officialContributionEnabled: sourceOfficialContributionEnabled,
+          publishDefaultMode: sourcePublishDraft.publishDefaultMode,
+          defaultBaseBranch: sourcePublishDraft.defaultBaseBranch.trim() || undefined,
+          providerHint: sourcePublishDraft.providerHint,
+          officialContributionEnabled: sourcePublishDraft.officialContributionEnabled,
         }),
       });
       const payload = await res.json();
@@ -1298,10 +1303,7 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
     if (!editingSourceId) return;
     const selected = sources.find((source) => source.id === editingSourceId);
     if (!selected) return;
-    setSourcePublishDefaultMode(selected.publishDefaultMode || "branch-pr");
-    setSourceDefaultBaseBranch(selected.defaultBaseBranch || "main");
-    setSourceProviderHint(selected.providerHint || "unknown");
-    setSourceOfficialContributionEnabled(Boolean(selected.officialContributionEnabled));
+    setSourcePublishDraft(createSourcePublishDraft(selected));
   }, [editingSourceId, sources]);
 
   useEffect(() => {
@@ -1546,7 +1548,7 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
               <p className="eyebrow">ICA DESKTOP SETTINGS</p>
               <h1>Settings</h1>
               <p className="desktop-shell-header-copy">
-                Keep appearance, repository preferences, and installer defaults in a dedicated Settings window instead of the main workspace shell.
+                Keep appearance and installer defaults in a dedicated Settings window while repository workflows live in the Sources route.
               </p>
             </div>
             <div className="desktop-shell-header-meta" aria-label="Desktop settings summary">
@@ -1584,151 +1586,6 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
             onAccentChange={setAppearanceAccent}
             onBackgroundChange={setAppearanceBackground}
           />
-
-          <article className="panel panel-settings panel-spacious">
-            <h2>Repository Management</h2>
-            <p className="subtle">Attach repositories once; ICA syncs skills and hooks mirrors automatically.</p>
-            <div className="subtle">{sources.length} configured</div>
-            <div className="source-list">
-              {sources.map((source) => (
-                <article key={source.id} className="source-item">
-                  <strong>{source.id}</strong>
-                  <span>{source.repoUrl}</span>
-                  <span>
-                    roots: {source.skillsRoot || "(no /skills)"} / {source.hooksRoot || "(no /hooks)"}
-                  </span>
-                  <span>
-                    publish: {source.publishDefaultMode} / base {source.defaultBaseBranch || "main"} / provider {source.providerHint}
-                  </span>
-                  <span>{source.lastSyncAt ? `synced ${new Date(source.lastSyncAt).toLocaleString()}` : "never synced"}</span>
-                  {source.lastError && <span className="source-error">{source.lastError}</span>}
-                  <div className="source-actions">
-                    <button className="btn btn-inline" type="button" disabled={busy} onClick={() => setEditingSourceId(source.id)}>
-                      Select
-                    </button>
-                    <button className="btn btn-inline" type="button" disabled={busy} onClick={() => refreshSource(source.id)}>
-                      Refresh
-                    </button>
-                    {source.removable && (
-                      <button className="btn btn-inline" type="button" disabled={busy} onClick={() => deleteSource(source)}>
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            <h2>Source Publish Settings</h2>
-            <span className="field-label">Selected Source</span>
-            <select className="input" value={editingSourceId} onChange={(event) => setEditingSourceId(event.target.value)}>
-              {sources.map((source) => (
-                <option key={source.id} value={source.id}>
-                  {source.name || source.id}
-                </option>
-              ))}
-            </select>
-            <span className="field-label">Default Publish Mode</span>
-            <select className="input" value={sourcePublishDefaultMode} onChange={(event) => setSourcePublishDefaultMode(event.target.value as "direct-push" | "branch-only" | "branch-pr")}>
-              <option value="branch-pr">branch-pr</option>
-              <option value="branch-only">branch-only</option>
-              <option value="direct-push">direct-push</option>
-            </select>
-            <span className="field-label">Default Base Branch</span>
-            <input
-              className="input"
-              placeholder="main"
-              value={sourceDefaultBaseBranch}
-              onChange={(event) => setSourceDefaultBaseBranch(event.target.value)}
-            />
-            <span className="field-label">Provider Hint</span>
-            <select className="input" value={sourceProviderHint} onChange={(event) => setSourceProviderHint(event.target.value as "github" | "gitlab" | "bitbucket" | "unknown")}>
-              <option value="unknown">unknown</option>
-              <option value="github">github</option>
-              <option value="gitlab">gitlab</option>
-              <option value="bitbucket">bitbucket</option>
-            </select>
-            <label className="toggle">
-              <input
-                type="checkbox"
-                checked={sourceOfficialContributionEnabled}
-                onChange={(event) => setSourceOfficialContributionEnabled(event.target.checked)}
-              />
-              Official contribution enabled
-            </label>
-            <button className="btn btn-secondary" type="button" disabled={busy || !editingSourceId} onClick={saveSourcePublishSettings}>
-              Save source publish settings
-            </button>
-
-            <h2>Add Repository</h2>
-            <span className="field-label">Source Name</span>
-            <input
-              className="input"
-              placeholder="Source name (optional)"
-              value={sourceName}
-              onChange={(event) => setSourceName(event.target.value)}
-            />
-            <span className="field-label">Repository URL</span>
-            <input
-              className="input"
-              placeholder="https://github.com/org/repo.git"
-              value={sourceRepoUrl}
-              onChange={(event) => setSourceRepoUrl(event.target.value)}
-            />
-            <div className="source-transport-group" role="radiogroup" aria-label="Source transport">
-              <label className="source-transport-option">
-                <input type="radio" checked={sourceTransport === "https"} onChange={() => setSourceTransport("https")} /> HTTPS
-              </label>
-              <label className="source-transport-option">
-                <input type="radio" checked={sourceTransport === "ssh"} onChange={() => setSourceTransport("ssh")} /> SSH
-              </label>
-            </div>
-            {sourceTransport === "https" && (
-              <>
-                <span className="field-label">PAT / API key</span>
-                <input
-                  className="input"
-                  placeholder="PAT / API key (optional for public repos)"
-                  value={sourceToken}
-                  onChange={(event) => setSourceToken(event.target.value)}
-                />
-              </>
-            )}
-            <span className="field-label">Default Publish Mode (new source)</span>
-            <select className="input" value={sourcePublishDefaultMode} onChange={(event) => setSourcePublishDefaultMode(event.target.value as "direct-push" | "branch-only" | "branch-pr")}>
-              <option value="branch-pr">branch-pr</option>
-              <option value="branch-only">branch-only</option>
-              <option value="direct-push">direct-push</option>
-            </select>
-            <span className="field-label">Default Base Branch (new source)</span>
-            <input
-              className="input"
-              placeholder="main"
-              value={sourceDefaultBaseBranch}
-              onChange={(event) => setSourceDefaultBaseBranch(event.target.value)}
-            />
-            <span className="field-label">Provider Hint (new source)</span>
-            <select className="input" value={sourceProviderHint} onChange={(event) => setSourceProviderHint(event.target.value as "github" | "gitlab" | "bitbucket" | "unknown")}>
-              <option value="unknown">unknown</option>
-              <option value="github">github</option>
-              <option value="gitlab">gitlab</option>
-              <option value="bitbucket">bitbucket</option>
-            </select>
-            <label className="toggle">
-              <input
-                type="checkbox"
-                checked={sourceOfficialContributionEnabled}
-                onChange={(event) => setSourceOfficialContributionEnabled(event.target.checked)}
-              />
-              Official contribution enabled (new source)
-            </label>
-            <button className="btn btn-secondary" type="button" disabled={busy || !sourceRepoUrl.trim()} onClick={addSourceFromForm}>
-              Add repository
-            </button>
-            <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => refreshSource()}>
-              Refresh all repositories
-            </button>
-          </article>
 
           <article className="panel panel-settings panel-spacious">
             <h2>Installer Settings</h2>
@@ -1855,7 +1712,7 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
             <section className="panel desktop-route-sidebar-panel panel-spacious">
               <h2>Settings boundary</h2>
               <p className="subtle">
-                Preferences, theme controls, and repository defaults stay in the dedicated Settings window for this slice.
+                Preferences, theme controls, and installer defaults stay in the dedicated Settings window for this slice.
               </p>
               <div className="action-row">
                 <button className="btn btn-secondary" type="button" disabled={busy} onClick={() => void handleOpenSettingsWindow()}>
@@ -2281,7 +2138,7 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
               <section className="desktop-route-section source-route-grid">
                 <article className="panel panel-spacious">
                   <h2>Connected repositories</h2>
-                  <p className="subtle">This route summarizes repository context while deeper management remains in the dedicated Settings window.</p>
+                  <p className="subtle">Manage repository connections, refresh cadence, and source defaults directly from this route.</p>
                   <dl className="action-meta">
                     <div>
                       <dt>Configured</dt>
@@ -2305,8 +2162,8 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
                     <button className="btn btn-secondary" type="button" disabled={busy} onClick={() => refreshSource()}>
                       Refresh all repositories
                     </button>
-                    <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => void handleOpenSettingsWindow()}>
-                      Open Settings
+                    <button className="btn btn-ghost" type="button" disabled={busy || sources.length === 0} onClick={() => setEditingSourceId(sources[0]?.id || "")}>
+                      Focus first source
                     </button>
                   </div>
                 </article>
@@ -2314,7 +2171,7 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
                 <article className="panel panel-spacious">
                   <div className="catalog-head">
                     <div>
-                      <h2>Repository summary</h2>
+                      <h2>Repository Management</h2>
                       <p className="subtle">
                         {sources.length === 0 ? "No repositories are configured yet." : `${sources.length} repositories connected to this desktop workspace.`}
                       </p>
@@ -2322,7 +2179,7 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
                   </div>
 
                   {sources.length === 0 ? (
-                    <div className="empty-state">Open Settings to add your first repository source.</div>
+                    <div className="empty-state">Add your first repository below to start syncing skills and hooks into this desktop workspace.</div>
                   ) : (
                     <div className="source-list">
                       {sources.map((source) => (
@@ -2338,17 +2195,162 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
                           <span>{source.lastSyncAt ? `synced ${new Date(source.lastSyncAt).toLocaleString()}` : "never synced"}</span>
                           {source.lastError && <span className="source-error">{source.lastError}</span>}
                           <div className="source-actions">
+                            <button className="btn btn-inline" type="button" disabled={busy} onClick={() => setEditingSourceId(source.id)}>
+                              Select
+                            </button>
                             <button className="btn btn-inline" type="button" disabled={busy} onClick={() => refreshSource(source.id)}>
                               Refresh
                             </button>
-                            <button className="btn btn-inline" type="button" disabled={busy} onClick={() => void handleOpenSettingsWindow()}>
-                              Manage in Settings
-                            </button>
+                            {source.removable && (
+                              <button className="btn btn-inline" type="button" disabled={busy} onClick={() => deleteSource(source)}>
+                                Remove
+                              </button>
+                            )}
                           </div>
                         </article>
                       ))}
                     </div>
                   )}
+                </article>
+
+                <article className="panel panel-spacious">
+                  <h2>Source Publish Settings</h2>
+                  <p className="subtle">Choose the repository-specific publish defaults that drive quick publish and contribution flows.</p>
+                  {sources.length === 0 ? (
+                    <div className="empty-state">Create a repository source first to unlock publish defaults.</div>
+                  ) : (
+                    <>
+                      <span className="field-label">Selected Source</span>
+                      <select className="input" value={editingSourceId} onChange={(event) => setEditingSourceId(event.target.value)}>
+                        {sources.map((source) => (
+                          <option key={source.id} value={source.id}>
+                            {source.name || source.id}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="field-label">Default Publish Mode</span>
+                      <select
+                        className="input"
+                        value={sourcePublishDraft.publishDefaultMode}
+                        onChange={(event) => updateSourcePublishDraft({ publishDefaultMode: event.target.value as SourcePublishMode })}
+                      >
+                        <option value="branch-pr">branch-pr</option>
+                        <option value="branch-only">branch-only</option>
+                        <option value="direct-push">direct-push</option>
+                      </select>
+                      <span className="field-label">Default Base Branch</span>
+                      <input
+                        className="input"
+                        placeholder="main"
+                        value={sourcePublishDraft.defaultBaseBranch}
+                        onChange={(event) => updateSourcePublishDraft({ defaultBaseBranch: event.target.value })}
+                      />
+                      <span className="field-label">Provider Hint</span>
+                      <select
+                        className="input"
+                        value={sourcePublishDraft.providerHint}
+                        onChange={(event) => updateSourcePublishDraft({ providerHint: event.target.value as SourceProviderHint })}
+                      >
+                        <option value="unknown">unknown</option>
+                        <option value="github">github</option>
+                        <option value="gitlab">gitlab</option>
+                        <option value="bitbucket">bitbucket</option>
+                      </select>
+                      <label className="toggle">
+                        <input
+                          type="checkbox"
+                          checked={sourcePublishDraft.officialContributionEnabled}
+                          onChange={(event) => updateSourcePublishDraft({ officialContributionEnabled: event.target.checked })}
+                        />
+                        Official contribution enabled
+                      </label>
+                      <button className="btn btn-secondary" type="button" disabled={busy || !editingSourceId} onClick={saveSourcePublishSettings}>
+                        Save source publish settings
+                      </button>
+                    </>
+                  )}
+                </article>
+
+                <article className="panel panel-spacious">
+                  <h2>Add Repository</h2>
+                  <p className="subtle">Attach a new repository once and ICA will use it for source-backed skills, hooks, and publish flows.</p>
+                  <span className="field-label">Source Name</span>
+                  <input
+                    className="input"
+                    placeholder="Source name (optional)"
+                    value={newSourceDraft.name}
+                    onChange={(event) => updateNewSourceDraft({ name: event.target.value })}
+                  />
+                  <span className="field-label">Repository URL</span>
+                  <input
+                    className="input"
+                    placeholder="https://github.com/org/repo.git"
+                    value={newSourceDraft.repoUrl}
+                    onChange={(event) => updateNewSourceDraft({ repoUrl: event.target.value })}
+                  />
+                  <div className="source-transport-group" role="radiogroup" aria-label="Source transport">
+                    <label className="source-transport-option">
+                      <input type="radio" checked={newSourceDraft.transport === "https"} onChange={() => updateNewSourceDraft({ transport: "https" })} /> HTTPS
+                    </label>
+                    <label className="source-transport-option">
+                      <input type="radio" checked={newSourceDraft.transport === "ssh"} onChange={() => updateNewSourceDraft({ transport: "ssh" })} /> SSH
+                    </label>
+                  </div>
+                  {newSourceDraft.transport === "https" && (
+                    <>
+                      <span className="field-label">PAT / API key</span>
+                      <input
+                        className="input"
+                        placeholder="PAT / API key (optional for public repos)"
+                        value={newSourceDraft.token}
+                        onChange={(event) => updateNewSourceDraft({ token: event.target.value })}
+                      />
+                    </>
+                  )}
+                  <span className="field-label">Default Publish Mode (new source)</span>
+                  <select
+                    className="input"
+                    value={newSourceDraft.publishDefaultMode}
+                    onChange={(event) => updateNewSourceDraft({ publishDefaultMode: event.target.value as SourcePublishMode })}
+                  >
+                    <option value="branch-pr">branch-pr</option>
+                    <option value="branch-only">branch-only</option>
+                    <option value="direct-push">direct-push</option>
+                  </select>
+                  <span className="field-label">Default Base Branch (new source)</span>
+                  <input
+                    className="input"
+                    placeholder="main"
+                    value={newSourceDraft.defaultBaseBranch}
+                    onChange={(event) => updateNewSourceDraft({ defaultBaseBranch: event.target.value })}
+                  />
+                  <span className="field-label">Provider Hint (new source)</span>
+                  <select
+                    className="input"
+                    value={newSourceDraft.providerHint}
+                    onChange={(event) => updateNewSourceDraft({ providerHint: event.target.value as SourceProviderHint })}
+                  >
+                    <option value="unknown">unknown</option>
+                    <option value="github">github</option>
+                    <option value="gitlab">gitlab</option>
+                    <option value="bitbucket">bitbucket</option>
+                  </select>
+                  <label className="toggle">
+                    <input
+                      type="checkbox"
+                      checked={newSourceDraft.officialContributionEnabled}
+                      onChange={(event) => updateNewSourceDraft({ officialContributionEnabled: event.target.checked })}
+                    />
+                    Official contribution enabled (new source)
+                  </label>
+                  <div className="action-row">
+                    <button className="btn btn-secondary" type="button" disabled={busy || !newSourceDraft.repoUrl.trim()} onClick={addSourceFromForm}>
+                      Add repository
+                    </button>
+                    <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setNewSourceDraft(createNewSourceDraft())}>
+                      Reset form
+                    </button>
+                  </div>
                 </article>
               </section>
             )}
