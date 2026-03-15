@@ -1,6 +1,53 @@
 import type { RealtimeEvent } from "../../../desktop-electron/bridge";
 import type { RealtimeStatus } from "./realtime-client";
 
+export type DesktopRouteId = "workspace" | "sources" | "hooks" | "reports";
+
+export interface DesktopRouteDefinition {
+  id: DesktopRouteId;
+  label: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+}
+
+export const desktopMainRoutes = Object.freeze<DesktopRouteDefinition[]>([
+  {
+    id: "workspace",
+    label: "Workspace",
+    eyebrow: "Primary flow",
+    title: "Workspace operations",
+    description: "Run install and publish flows from the main desktop workspace.",
+  },
+  {
+    id: "sources",
+    label: "Sources",
+    eyebrow: "Repository context",
+    title: "Source summary",
+    description: "Review connected repositories here and open Settings for deeper management.",
+  },
+  {
+    id: "hooks",
+    label: "Hooks",
+    eyebrow: "Targeted automation",
+    title: "Hook catalog",
+    description: "Manage Claude and Gemini hook selections with the same desktop route model.",
+  },
+  {
+    id: "reports",
+    label: "Reports",
+    eyebrow: "Installed state",
+    title: "Reports and state",
+    description: "Inspect installed state and the latest operation payloads without switching tabs.",
+  },
+]);
+
+const desktopRouteDefinitionById = new Map(desktopMainRoutes.map((route) => [route.id, route] as const));
+
+export function getDesktopRouteDefinition(routeId: DesktopRouteId): DesktopRouteDefinition {
+  return desktopRouteDefinitionById.get(routeId) ?? desktopMainRoutes[0];
+}
+
 export interface RealtimeStatusDescriptor {
   tone: "positive" | "warning" | "danger" | "busy";
   badge: string;
