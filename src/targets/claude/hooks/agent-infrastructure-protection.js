@@ -891,7 +891,7 @@ WORKFLOW:
 To allow imperative commands: Set enforcement.blocking_enabled=false in ica.config.json
 Emergency override: EMERGENCY_OVERRIDE:<token> <command>
 
-Configuration: ./ica.config.json or ./.claude/ica.config.json`
+Configuration: ./.ica/config.json, ~/.ica/ica.config.json, or the active agent-home override`
           }));
           process.exit(0);
         } else {
@@ -957,7 +957,7 @@ To allow this operation:
 2. Add to whitelist: enforcement.infrastructure_protection.whitelist
 3. Or disable protection: enforcement.infrastructure_protection.enabled: false
 
-Configuration: ./ica.config.json or ./.claude/ica.config.json`
+Configuration: ./.ica/config.json, ~/.ica/ica.config.json, or the active agent-home override`
         }));
         process.exit(0);
       }
@@ -991,7 +991,7 @@ To allow read operations:
 1. Enable in configuration: enforcement.infrastructure_protection.read_operations_allowed: true
 2. Or add to whitelist: enforcement.infrastructure_protection.whitelist
 
-Configuration: ./ica.config.json or ./.claude/ica.config.json`
+Configuration: ./.ica/config.json, ~/.ica/ica.config.json, or the active agent-home override`
           }));
           process.exit(0);
         }

@@ -10,10 +10,11 @@ Responsibilities:
 - Load/merge MCP server definitions from:
   - MCP_CONFIG (inline JSON) / MCP_CONFIG_PATH (single file override)
   - project .mcp.json
-  - $ICA_HOME/mcp-servers.json / $ICA_HOME/mcp.json
+  - active agent-home override: $ICA_HOME/mcp-servers.json / $ICA_HOME/mcp.json
+  - shared ICA global config: $ICA_STATE_HOME/mcp-servers.json / $ICA_STATE_HOME/mcp.json
   - ~/.claude.json fallback (compat only)
 - Expand ${ENV_VAR} placeholders
-- Token store under $ICA_HOME/mcp-tokens.json
+- Token store under active agent home when available, otherwise shared ICA global root
 - OAuth flows:
   - PKCE (explicit endpoints or OIDC discovery)
   - Device code (explicit endpoints or OIDC discovery)
@@ -56,19 +57,31 @@ def missing_dep(dep: str, extra: str = "") -> None:
 
 
 # =============================================================================
-# ICA_HOME Resolution
+# ICA Runtime Resolution
 # =============================================================================
 
 def get_ica_home(script_file: Optional[str] = None) -> Optional[Path]:
     """
-    Resolve ICA_HOME (agent home directory).
+    Resolve the active agent install home.
 
     Priority:
     - ICA_HOME env var
+    - ICA_ACTIVE_TARGET -> platform-specific install home
     - infer from installed skill layout: <ICA_HOME>/skills/<skill>/scripts/<file>.py
     """
     if os.environ.get("ICA_HOME"):
         return Path(os.environ["ICA_HOME"]).expanduser()
+
+    active_target = (os.environ.get("ICA_ACTIVE_TARGET") or "").strip().lower()
+    target_dirs = {
+        "claude": Path.home() / ".claude",
+        "codex": Path.home() / ".codex",
+        "cursor": Path.home() / ".cursor",
+        "gemini": Path.home() / ".gemini",
+        "antigravity": Path.home() / ".gemini" / "antigravity",
+    }
+    if active_target in target_dirs:
+        return target_dirs[active_target]
 
     if script_file:
         p = Path(script_file).resolve()
@@ -77,13 +90,29 @@ def get_ica_home(script_file: Optional[str] = None) -> Optional[Path]:
             if p.parents[2].name == "skills":
                 candidate = p.parents[3]
                 # Guard: avoid treating repo layout (src/skills/...) as ICA_HOME.
-                # Installed ICA homes include VERSION at the root.
-                if (candidate / "VERSION").exists():
+                # Installed ICA homes include VERSION at the root, but repo checkouts
+                # place VERSION under src/, so exclude that layout explicitly.
+                if (candidate / "VERSION").exists() and candidate.name != "src":
                     return candidate
         except Exception:
             return None
 
     return None
+
+
+def get_ica_global_root() -> Path:
+    """
+    Resolve the shared ICA global root.
+
+    Priority:
+    - ICA_STATE_HOME env var
+    - ICA_GLOBAL_HOME env var (compat alias)
+    - ~/.ica
+    """
+    env_override = os.environ.get("ICA_STATE_HOME") or os.environ.get("ICA_GLOBAL_HOME")
+    if env_override:
+        return Path(env_override).expanduser()
+    return Path.home() / ".ica"
 
 
 # =============================================================================
@@ -138,10 +167,17 @@ def _project_mcp_path(cwd: Optional[Path] = None) -> Path:
     return (cwd or Path.cwd()) / ".mcp.json"
 
 
-def _ica_mcp_paths(ica_home: Optional[Path]) -> list[Path]:
-    if not ica_home:
-        return []
-    return [ica_home / "mcp-servers.json", ica_home / "mcp.json"]
+def _ica_mcp_paths(global_root: Path, active_agent_home: Optional[Path]) -> list[tuple[str, Path]]:
+    paths: list[tuple[str, Path]] = [
+        ("global", global_root / "mcp-servers.json"),
+        ("global", global_root / "mcp.json"),
+    ]
+    if active_agent_home and active_agent_home.resolve() != global_root.resolve():
+        paths.extend([
+            ("home", active_agent_home / "mcp-servers.json"),
+            ("home", active_agent_home / "mcp.json"),
+        ])
+    return paths
 
 
 @dataclass(frozen=True)
@@ -162,9 +198,9 @@ def trust_path(*, script_file: Optional[str] = None) -> Optional[Path]:
     if os.environ.get("ICA_MCP_TRUST_PATH"):
         return Path(os.environ["ICA_MCP_TRUST_PATH"]).expanduser()
     ica_home = get_ica_home(script_file=script_file)
-    if not ica_home:
-        return None
-    return ica_home / "mcp-trust.json"
+    if ica_home:
+        return ica_home / "mcp-trust.json"
+    return get_ica_global_root() / "mcp-trust.json"
 
 
 def load_trust_store(*, script_file: Optional[str] = None) -> dict:
@@ -186,7 +222,7 @@ def load_trust_store(*, script_file: Optional[str] = None) -> dict:
 def save_trust_store(data: dict, *, script_file: Optional[str] = None) -> None:
     path = trust_path(script_file=script_file)
     if not path:
-        raise ValueError("ICA_HOME is required to store trust state (set ICA_HOME or install into an agent home).")
+        raise ValueError("Unable to resolve an ICA trust path.")
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -300,11 +336,12 @@ def load_servers_merged(
     - MCP_CONFIG_PATH (path)   => only this, no merge
 
     Default merge:
+    - shared ICA global mcp-servers.json/mcp.json
+    - active agent-home override mcp-servers.json/mcp.json
     - project .mcp.json
-    - ICA_HOME mcp-servers.json/mcp.json
     - (fallback) ~/.claude.json if neither exists
 
-    Precedence default: project overrides ICA_HOME.
+    Precedence default: project overrides user config; active agent home overrides shared global config.
     Set ICA_MCP_CONFIG_PREFER_HOME=1 to flip.
     """
     sources: list[str] = []
@@ -342,36 +379,42 @@ def load_servers_merged(
     merged: dict[str, dict[str, Any]] = {}
 
     ica_home = get_ica_home(script_file=script_file)
+    global_root = get_ica_global_root()
     project_path = _project_mcp_path(cwd=cwd)
-    home_paths = _ica_mcp_paths(ica_home)
+    user_paths = _ica_mcp_paths(global_root, ica_home)
 
     prefer_home = os.environ.get("ICA_MCP_CONFIG_PREFER_HOME") in ("1", "true", "TRUE", "yes", "YES")
 
     # Load layers (if present)
     project_servers: dict[str, dict[str, Any]] = {}
+    global_servers: dict[str, dict[str, Any]] = {}
     home_servers: dict[str, dict[str, Any]] = {}
 
     if project_path.exists():
         project_servers = _normalize_servers(_read_json_file(project_path))
         sources.append(f"file:{str(project_path)}")
 
-    for hp in home_paths:
-        if hp.exists():
-            home_servers = _normalize_servers(_read_json_file(hp))
-            sources.append(f"file:{str(hp)}")
-            break
+    for scope, user_path in user_paths:
+        if not user_path.exists():
+            continue
+        layer = _normalize_servers(_read_json_file(user_path))
+        sources.append(f"file:{str(user_path)}")
+        if scope == "global" and not global_servers:
+            global_servers = layer
+        elif scope == "home" and not home_servers:
+            home_servers = layer
 
     # Fallback (compat only) if nothing else exists
-    if not project_servers and not home_servers:
+    if not project_servers and not global_servers and not home_servers:
         claude = Path.home() / ".claude.json"
         if claude.exists():
             home_servers = _normalize_servers(_read_json_file(claude))
             sources.append(f"file:{str(claude)}")
 
     if prefer_home:
-        merge_layers = [("project", project_servers), ("home", home_servers)]
+        merge_layers = [("project", project_servers), ("global", global_servers), ("home", home_servers)]
     else:
-        merge_layers = [("home", home_servers), ("project", project_servers)]
+        merge_layers = [("global", global_servers), ("home", home_servers), ("project", project_servers)]
 
     for src_name, layer in merge_layers:
         for name, cfg in layer.items():
@@ -412,9 +455,9 @@ def load_servers_merged(
 
 def tokens_path(*, script_file: Optional[str] = None) -> Optional[Path]:
     ica_home = get_ica_home(script_file=script_file)
-    if not ica_home:
-        return None
-    return ica_home / "mcp-tokens.json"
+    if ica_home:
+        return ica_home / "mcp-tokens.json"
+    return get_ica_global_root() / "mcp-tokens.json"
 
 
 def load_tokens(*, script_file: Optional[str] = None) -> dict:
@@ -436,7 +479,7 @@ def load_tokens(*, script_file: Optional[str] = None) -> dict:
 def save_tokens(data: dict, *, script_file: Optional[str] = None) -> None:
     path = tokens_path(script_file=script_file)
     if not path:
-        raise ValueError("ICA_HOME is required to store tokens (set ICA_HOME or install into an agent home).")
+        raise ValueError("Unable to resolve an ICA token path.")
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

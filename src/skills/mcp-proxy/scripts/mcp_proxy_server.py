@@ -3,10 +3,10 @@
 ICA MCP Proxy Server (stdio)
 
 Implements a local MCP server that:
-- loads upstream MCP servers from .mcp.json and/or $ICA_HOME/mcp-servers.json
+- loads upstream MCP servers from .mcp.json, shared ICA global config, and the active agent-home override
 - mirrors upstream tools as proxy tools: "<server>.<tool>"
 - provides stable broker tools under "proxy.*"
-- manages OAuth + token caching in $ICA_HOME/mcp-tokens.json
+- manages OAuth + token caching in the active agent home when available, otherwise shared ICA global state
 """
 
 from __future__ import annotations
@@ -565,7 +565,7 @@ def _broker_tool_defs():
     return [
         types.Tool(
             name="proxy.list_servers",
-            description="List configured upstream MCP servers (merged from .mcp.json and $ICA_HOME/mcp-servers.json).",
+            description="List configured upstream MCP servers (merged from project, shared ICA global, and active agent-home MCP config).",
             inputSchema=obj,
         ),
         types.Tool(

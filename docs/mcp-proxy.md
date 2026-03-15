@@ -1,6 +1,6 @@
 # MCP Proxy (ICA-Owned)
 
-This doc describes the **ICA MCP Proxy**: a local stdio MCP server you register once in your agent runtime, which then mirrors and brokers access to upstream MCP servers defined in `.mcp.json` and/or `$ICA_HOME/mcp-servers.json`.
+This doc describes the **ICA MCP Proxy**: a local stdio MCP server you register once in your agent runtime, which then mirrors and brokers access to upstream MCP servers defined in `.mcp.json`, shared ICA config under `$ICA_STATE_HOME`, and the active agent-home override under `$ICA_HOME`.
 
 ## Why A Proxy?
 
@@ -15,7 +15,8 @@ So the user only registers one MCP server: `ica-mcp-proxy`.
 
 Create one or both of:
 - project: `./.mcp.json`
-- user: `$ICA_HOME/mcp-servers.json` (or `$ICA_HOME/mcp.json`)
+- shared global: `${ICA_STATE_HOME:-$HOME/.ica}/mcp-servers.json` (or `mcp.json`)
+- active agent-home override: `$ICA_HOME/mcp-servers.json` (or `$ICA_HOME/mcp.json`)
 
 Format:
 
@@ -35,7 +36,7 @@ Format:
 ```
 
 Precedence:
-- default: `.mcp.json` overrides `$ICA_HOME/mcp-servers.json`
+- default: `.mcp.json` overrides user config; active agent-home overrides shared global config
 - set `ICA_MCP_CONFIG_PREFER_HOME=1` to flip
 
 ## Register In Your Agent Runtime
@@ -61,7 +62,7 @@ Use one of the snippets below based on your runtime. In all cases, the target co
 
 `python3 <ICA_HOME>/skills/mcp-proxy/scripts/mcp_proxy_server.py`
 
-Replace `<ICA_HOME>` with your real agent home (for example, `~/.codex`, `~/.ica`, or a project-local install path).
+Replace `<ICA_HOME>` with your real active agent home (for example, `~/.codex` or a project-local install path). Shared ICA config lives under `${ICA_STATE_HOME:-~/.ica}`.
 
 ### Codex (`~/.codex/config.toml`)
 
@@ -184,7 +185,8 @@ Example:
 ## Authentication
 
 Tokens are stored locally in:
-- `$ICA_HOME/mcp-tokens.json`
+- active agent-home override: `$ICA_HOME/mcp-tokens.json`
+- fallback shared global: `${ICA_STATE_HOME:-$HOME/.ica}/mcp-tokens.json`
 
 Auth entry points:
 - `proxy.auth_start(server, flow?)`

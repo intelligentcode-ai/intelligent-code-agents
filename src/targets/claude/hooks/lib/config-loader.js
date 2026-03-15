@@ -3,7 +3,7 @@
 /**
  * Unified Configuration Loader for Intelligent Code Agents
  *
- * Hierarchy: ./ica.config.json → $ICA_HOME/ica.config.json → ica.config.default.json
+ * Hierarchy: ./.ica/config.json → <active-agent-home>/ica.config.json → ~/.ica/ica.config.json → ica.config.default.json
  * Backward compatibility: Falls back to CLAUDE.md/config.md if ica.config.json missing (Claude Code integration)
  * 5-minute TTL cache for performance
  */
@@ -12,10 +12,48 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-function getAgentHomeDir() {
-  // Allow non-Claude tools to reuse these hooks/libs by setting ICA_HOME.
-  // Default remains Claude Code's directory for backward compatibility.
-  return process.env.ICA_HOME || path.join(os.homedir(), '.claude');
+const ACTIVE_TARGET_HOME_DIRS = {
+  claude: '.claude',
+  codex: '.codex',
+  cursor: '.cursor',
+  gemini: '.gemini',
+  antigravity: path.join('.gemini', 'antigravity')
+};
+
+function getIcaGlobalRoot() {
+  return path.resolve(process.env.ICA_STATE_HOME || process.env.ICA_GLOBAL_HOME || path.join(os.homedir(), '.ica'));
+}
+
+function inferInstalledAgentHome() {
+  const candidates = [
+    path.resolve(__dirname, '../..'),
+    path.resolve(__dirname, '../../..'),
+    path.resolve(__dirname, '../../../..')
+  ];
+
+  for (const candidate of candidates) {
+    if (path.basename(candidate) === 'src') {
+      continue;
+    }
+    if (fs.existsSync(path.join(candidate, 'VERSION')) && !fs.existsSync(path.join(candidate, 'targets'))) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function getActiveAgentHomeDir() {
+  if (process.env.ICA_HOME) {
+    return path.resolve(process.env.ICA_HOME);
+  }
+
+  const activeTarget = (process.env.ICA_ACTIVE_TARGET || '').trim().toLowerCase();
+  if (activeTarget && ACTIVE_TARGET_HOME_DIRS[activeTarget]) {
+    return path.resolve(os.homedir(), ACTIVE_TARGET_HOME_DIRS[activeTarget]);
+  }
+
+  return inferInstalledAgentHome();
 }
 
 const PROJECT_AGENT_DIRS = [
@@ -201,7 +239,7 @@ function parseValue(value) {
 /**
  * Find configuration file in priority order
  */
-function findConfigFile(projectRoot, filename) {
+function findProjectConfigFile(projectRoot, filename) {
   const baseFilename = filename.replace('ica.', '');
   const searchPaths = [
     path.join(projectRoot, '.ica', baseFilename),      // .ica/config.json
@@ -216,6 +254,11 @@ function findConfigFile(projectRoot, filename) {
   }
 
   return null;
+}
+
+function loadUserLayer(rootPath, filename) {
+  if (!rootPath) return null;
+  return loadJsonConfig(path.join(rootPath, filename));
 }
 
 /**
@@ -247,17 +290,22 @@ function loadWorkflowConfig() {
     workflowConfig = {};
   }
 
-  // 2. Try to load user global workflow configuration
-  const userWorkflowPath = findConfigFile(getAgentHomeDir(), 'ica.workflow.json');
-  if (userWorkflowPath) {
-    const userWorkflow = loadJsonConfig(userWorkflowPath);
-    if (userWorkflow) {
-      workflowConfig = deepMerge(workflowConfig, userWorkflow);
+  // 2. Load shared ICA workflow, then active agent-home override.
+  const globalWorkflow = loadUserLayer(getIcaGlobalRoot(), 'ica.workflow.json');
+  if (globalWorkflow) {
+    workflowConfig = deepMerge(workflowConfig, globalWorkflow);
+  }
+
+  const activeAgentHome = getActiveAgentHomeDir();
+  if (activeAgentHome && path.resolve(activeAgentHome) !== path.resolve(getIcaGlobalRoot())) {
+    const activeWorkflow = loadUserLayer(activeAgentHome, 'ica.workflow.json');
+    if (activeWorkflow) {
+      workflowConfig = deepMerge(workflowConfig, activeWorkflow);
     }
   }
 
   // 3. Try to load project workflow configuration
-  const projectWorkflowPath = findConfigFile(process.cwd(), 'ica.workflow.json');
+  const projectWorkflowPath = findProjectConfigFile(process.cwd(), 'ica.workflow.json');
   if (projectWorkflowPath) {
     const projectWorkflow = loadJsonConfig(projectWorkflowPath);
     if (projectWorkflow) {
@@ -304,18 +352,25 @@ function loadConfig() {
     config = getHardcodedDefaults();
   }
 
-  // 2. Try to load user global configuration
-  const userConfigPath = findConfigFile(getAgentHomeDir(), 'ica.config.json');
+  // 2. Load shared ICA config, then active agent-home override.
   let userConfig = null;
-  if (userConfigPath) {
-    userConfig = loadJsonConfig(userConfigPath);
-    if (userConfig) {
-      config = deepMerge(config, userConfig);
+  const globalUserConfig = loadUserLayer(getIcaGlobalRoot(), 'ica.config.json');
+  if (globalUserConfig) {
+    userConfig = globalUserConfig;
+    config = deepMerge(config, globalUserConfig);
+  }
+
+  const activeAgentHome = getActiveAgentHomeDir();
+  if (activeAgentHome && path.resolve(activeAgentHome) !== path.resolve(getIcaGlobalRoot())) {
+    const agentUserConfig = loadUserLayer(activeAgentHome, 'ica.config.json');
+    if (agentUserConfig) {
+      userConfig = deepMerge(userConfig || {}, agentUserConfig);
+      config = deepMerge(config, agentUserConfig);
     }
   }
 
   // 3. Try to load project configuration
-  const projectConfigPath = findConfigFile(process.cwd(), 'ica.config.json');
+  const projectConfigPath = findProjectConfigFile(process.cwd(), 'ica.config.json');
   let projectConfig = null;
   if (projectConfigPath) {
     projectConfig = loadJsonConfig(projectConfigPath);
@@ -426,5 +481,7 @@ function clearCache() {
 module.exports = {
   loadConfig,
   getSetting,
-  clearCache
+  clearCache,
+  getActiveAgentHomeDir,
+  getIcaGlobalRoot
 };

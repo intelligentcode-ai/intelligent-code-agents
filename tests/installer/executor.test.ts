@@ -163,6 +163,108 @@ test("symlink mode records effective mode", async () => {
   }
 });
 
+test("user scope install seeds shared ~/.ica config and workflow without creating target-home config", async () => {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "ica-installer-user-home-"));
+  const restoreHome = (() => {
+    const previousHome = process.env.HOME;
+    const previousUserProfile = process.env.USERPROFILE;
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+    return () => {
+      if (previousHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = previousHome;
+      }
+      if (previousUserProfile === undefined) {
+        delete process.env.USERPROFILE;
+      } else {
+        process.env.USERPROFILE = previousUserProfile;
+      }
+    };
+  })();
+  const previous = process.env.ICA_STATE_HOME;
+  process.env.ICA_STATE_HOME = path.join(tempHome, ".ica");
+
+  try {
+    const report = await executeOperation(repoRoot, {
+      operation: "install",
+      targets: ["codex"],
+      scope: "user",
+      mode: "copy",
+      skills: [],
+      removeUnselected: false,
+      installClaudeIntegration: false,
+    });
+
+    assert.equal(report.targets[0].errors.length, 0);
+    assert.ok(fs.existsSync(path.join(tempHome, ".ica", "ica.config.json")));
+    assert.ok(fs.existsSync(path.join(tempHome, ".ica", "ica.workflow.json")));
+    assert.equal(fs.existsSync(path.join(tempHome, ".codex", "ica.config.json")), false);
+  } finally {
+    restoreHome();
+    if (previous === undefined) {
+      delete process.env.ICA_STATE_HOME;
+    } else {
+      process.env.ICA_STATE_HOME = previous;
+    }
+  }
+});
+
+test("user scope install migrates a single legacy agent-home config into shared ~/.ica", async () => {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "ica-installer-user-migrate-"));
+  const restoreHome = (() => {
+    const previousHome = process.env.HOME;
+    const previousUserProfile = process.env.USERPROFILE;
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+    return () => {
+      if (previousHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = previousHome;
+      }
+      if (previousUserProfile === undefined) {
+        delete process.env.USERPROFILE;
+      } else {
+        process.env.USERPROFILE = previousUserProfile;
+      }
+    };
+  })();
+  const previous = process.env.ICA_STATE_HOME;
+  process.env.ICA_STATE_HOME = path.join(tempHome, ".ica");
+
+  try {
+    fs.mkdirSync(path.join(tempHome, ".codex"), { recursive: true });
+    fs.writeFileSync(path.join(tempHome, ".codex", "ica.config.json"), JSON.stringify({ git: { privacy: false } }), "utf8");
+
+    const report = await executeOperation(repoRoot, {
+      operation: "install",
+      targets: ["codex"],
+      scope: "user",
+      mode: "copy",
+      skills: [],
+      removeUnselected: false,
+      installClaudeIntegration: false,
+    });
+
+    assert.equal(report.targets[0].errors.length, 0);
+    assert.ok(report.targets[0].warnings.some((warning) => warning.code === "GLOBAL_CONFIG_MIGRATED"));
+    const migrated = JSON.parse(fs.readFileSync(path.join(tempHome, ".ica", "ica.config.json"), "utf8")) as {
+      git?: { privacy?: boolean };
+    };
+    assert.equal(migrated.git?.privacy, false);
+    assert.ok(fs.existsSync(path.join(tempHome, ".codex", "ica.config.json")));
+  } finally {
+    restoreHome();
+    if (previous === undefined) {
+      delete process.env.ICA_STATE_HOME;
+    } else {
+      process.env.ICA_STATE_HOME = previous;
+    }
+  }
+});
+
 test("install fails when skill content digest changes after catalog load", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ica-installer-test-"));
   const { sourceId, tempStateRoot } = await setupExternalSkillsSource("digest-mismatch");

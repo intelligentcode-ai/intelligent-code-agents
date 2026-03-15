@@ -75,11 +75,22 @@ node dist/src/installer-cli/index.js install --yes \
 
 Installed files (inside agent home):
 - `skills/`
-- `ica.config.json`
 - `ica.config.default.json`
 - `ica.workflow.default.json`
 - `VERSION`
 - `.ica/install-state.json`
+
+Shared ICA config/state (global, cross-agent by default):
+- `~/.ica/ica.config.json`
+- `~/.ica/ica.workflow.json`
+- `~/.ica/tracking.config.json`
+- `~/.ica/sources.json`
+
+Agent-home overrides (optional, active runtime only):
+- `~/.codex/ica.config.json`
+- `~/.claude/ica.config.json`
+- `~/.codex/ica.workflow.json`
+- `~/.claude/ica.workflow.json`
 
 Project conventions used by skills:
 - `.agent/queue/`

@@ -15,7 +15,7 @@ Commands:
 
 Notes:
   - Trust commands are used with ICA_MCP_STRICT_TRUST=1.
-  - `trust` stores trust in $ICA_HOME/mcp-trust.json (or ICA_MCP_TRUST_PATH).
+  - `trust` stores trust in the active agent home when available, otherwise $ICA_STATE_HOME/mcp-trust.json (or ICA_MCP_TRUST_PATH).
 """
 
 from __future__ import annotations
