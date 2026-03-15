@@ -2,6 +2,7 @@ import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import {
   CONTROL_PLANE_IPC_CHANNEL,
+  DESKTOP_OPEN_SETTINGS_IPC_CHANNEL,
   DESKTOP_PICK_PROJECT_IPC_CHANNEL,
   DESKTOP_PICK_PUBLISH_IPC_CHANNEL,
   DESKTOP_REPORT_FAILURE_IPC_CHANNEL,
@@ -36,6 +37,31 @@ export interface RegisterElectronDesktopBridgeOptions {
   logger?: DesktopStartupLogger;
 }
 
+function buildDesktopWindowUrl(startUrl: string, windowRole: "main" | "settings"): string {
+  const url = new URL(startUrl);
+  url.searchParams.set("windowRole", windowRole);
+  return url.toString();
+}
+
+async function loadDesktopWindow(window: BrowserWindow, targetUrl: string, logger: DesktopStartupLogger): Promise<void> {
+  installDesktopLoadDiagnostics(window, targetUrl, logger);
+  try {
+    await window.loadURL(targetUrl);
+  } catch (error) {
+    const reason = normalizeStartupErrorMessage(error);
+    logger.error(`[desktop] Initial renderer load rejected for '${targetUrl}': ${reason}`);
+    await showDesktopLoadFailure(
+      window,
+      {
+        attemptedUrl: targetUrl,
+        failingUrl: targetUrl,
+        reason,
+      },
+      logger,
+    );
+  }
+}
+
 export async function registerElectronDesktopBridge(
   options: RegisterElectronDesktopBridgeOptions = {},
 ): Promise<{ createWindow: () => Promise<BrowserWindow>; dispose: () => Promise<void> }> {
@@ -54,6 +80,60 @@ export async function registerElectronDesktopBridge(
     applicationService: options.applicationService,
   });
   const subscriptions = new Map<number, () => void>();
+  let mainWindow: BrowserWindow | null = null;
+  let settingsWindow: BrowserWindow | null = null;
+
+  async function createMainWindow(): Promise<BrowserWindow> {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      return mainWindow;
+    }
+
+    const window = new BrowserWindow({
+      width: 1440,
+      height: 940,
+      show: true,
+      webPreferences: {
+        preload: path.join(__dirname, "preload.js"),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+      },
+    });
+    window.webContents.on("destroyed", () => {
+      if (mainWindow === window) {
+        mainWindow = null;
+      }
+    });
+    mainWindow = window;
+    await loadDesktopWindow(window, buildDesktopWindowUrl(startUrl, "main"), logger);
+    return window;
+  }
+
+  async function createSettingsWindow(): Promise<BrowserWindow> {
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      return settingsWindow;
+    }
+
+    const window = new BrowserWindow({
+      width: 1120,
+      height: 860,
+      show: true,
+      webPreferences: {
+        preload: path.join(__dirname, "preload.js"),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+      },
+    });
+    window.webContents.on("destroyed", () => {
+      if (settingsWindow === window) {
+        settingsWindow = null;
+      }
+    });
+    settingsWindow = window;
+    await loadDesktopWindow(window, buildDesktopWindowUrl(startUrl, "settings"), logger);
+    return window;
+  }
 
   ipcMain.handle(CONTROL_PLANE_IPC_CHANNEL, async (_event, channel: keyof DesktopBridgeRequestMap, payload: DesktopBridgeRequestMap[keyof DesktopBridgeRequestMap]) => {
     if (channel !== "control-plane.request") {
@@ -63,6 +143,11 @@ export async function registerElectronDesktopBridge(
   });
   ipcMain.handle(DESKTOP_PICK_PROJECT_IPC_CHANNEL, async (_event, initialPath?: string) => controlPlane.pickProjectDirectory(initialPath));
   ipcMain.handle(DESKTOP_PICK_PUBLISH_IPC_CHANNEL, async (_event, initialPath?: string) => controlPlane.pickPublishDirectory(initialPath));
+  ipcMain.handle(DESKTOP_OPEN_SETTINGS_IPC_CHANNEL, async () => {
+    const window = await createSettingsWindow();
+    window.show();
+    window.focus();
+  });
   ipcMain.handle(DESKTOP_RUNTIME_INFO_IPC_CHANNEL, async () => controlPlane.getRuntimeInfo());
   ipcMain.handle(DESKTOP_REPORT_FAILURE_IPC_CHANNEL, async (_event, payload: DesktopHostFailureReport) => {
     await controlPlane.reportRendererFailure(payload);
@@ -95,34 +180,7 @@ export async function registerElectronDesktopBridge(
   return {
     async createWindow() {
       await app.whenReady();
-      const window = new BrowserWindow({
-        width: 1440,
-        height: 940,
-        show: true,
-        webPreferences: {
-          preload: path.join(__dirname, "preload.js"),
-          contextIsolation: true,
-          nodeIntegration: false,
-          sandbox: false,
-        },
-      });
-      installDesktopLoadDiagnostics(window, startUrl, logger);
-      try {
-        await window.loadURL(startUrl);
-      } catch (error) {
-        const reason = normalizeStartupErrorMessage(error);
-        logger.error(`[desktop] Initial renderer load rejected for '${startUrl}': ${reason}`);
-        await showDesktopLoadFailure(
-          window,
-          {
-            attemptedUrl: startUrl,
-            failingUrl: startUrl,
-            reason,
-          },
-          logger,
-        );
-      }
-      return window;
+      return createMainWindow();
     },
     async dispose() {
       for (const unsubscribe of subscriptions.values()) {
@@ -132,6 +190,7 @@ export async function registerElectronDesktopBridge(
       ipcMain.removeHandler(CONTROL_PLANE_IPC_CHANNEL);
       ipcMain.removeHandler(DESKTOP_PICK_PROJECT_IPC_CHANNEL);
       ipcMain.removeHandler(DESKTOP_PICK_PUBLISH_IPC_CHANNEL);
+      ipcMain.removeHandler(DESKTOP_OPEN_SETTINGS_IPC_CHANNEL);
       ipcMain.removeHandler(DESKTOP_RUNTIME_INFO_IPC_CHANNEL);
       ipcMain.removeHandler(DESKTOP_REPORT_FAILURE_IPC_CHANNEL);
       ipcMain.removeHandler(DESKTOP_UPDATE_CHECK_IPC_CHANNEL);
@@ -139,6 +198,8 @@ export async function registerElectronDesktopBridge(
       ipcMain.removeHandler(DESKTOP_UPDATE_QUIT_AND_INSTALL_IPC_CHANNEL);
       ipcMain.removeAllListeners(REALTIME_SUBSCRIBE_CHANNEL);
       ipcMain.removeAllListeners(REALTIME_UNSUBSCRIBE_CHANNEL);
+      mainWindow = null;
+      settingsWindow = null;
       await controlPlane.close();
     },
   };

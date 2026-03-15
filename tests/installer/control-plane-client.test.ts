@@ -1,13 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { controlPlaneFetch, startControlPlaneRealtimeClient } from "../../src/installer-dashboard/web/src/control-plane-client";
+import { controlPlaneFetch, openSettingsWindow, startControlPlaneRealtimeClient } from "../../src/installer-dashboard/web/src/control-plane-client";
 import type { RealtimeEvent } from "../../src/desktop-electron/bridge";
 
 type DesktopWindow = Window & {
   icaDesktop?: {
     request: (channel: "control-plane.request", payload: unknown) => Promise<{ status: number; body: unknown }>;
     subscribeRealtime: (listener: (event: RealtimeEvent) => void) => () => void;
+    openSettingsWindow?: () => Promise<void>;
   };
 };
 
@@ -105,6 +106,35 @@ test("desktop-mode renderer must fail explicitly instead of silently falling bac
   assert.match(clientSource, /getRuntimeInfo/);
   assert.match(clientSource, /host bridge unavailable/i);
   assert.doesNotMatch(clientSource, /if \(!desktopBridge\) {\s*return fetch\(pathname, init\);\s*}/m);
+});
+
+test("openSettingsWindow routes through the desktop bridge when available", async (t) => {
+  let openCalls = 0;
+
+  setDesktopWindow({
+    icaDesktop: {
+      async request() {
+        return {
+          status: 200,
+          body: {},
+        };
+      },
+      subscribeRealtime() {
+        return () => undefined;
+      },
+      async openSettingsWindow() {
+        openCalls += 1;
+      },
+    },
+  } as unknown as DesktopWindow);
+
+  t.after(() => {
+    setDesktopWindow(undefined);
+  });
+
+  await openSettingsWindow();
+
+  assert.equal(openCalls, 1);
 });
 
 test("startControlPlaneRealtimeClient consumes realtime events from the desktop bridge", async (t) => {

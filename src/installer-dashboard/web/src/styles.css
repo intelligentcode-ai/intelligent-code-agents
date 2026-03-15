@@ -689,7 +689,6 @@ input[type="radio"]:focus-visible {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  position: relative;
 }
 
 .tab-btn {
@@ -703,28 +702,6 @@ input[type="radio"]:focus-visible {
   font-weight: 400;
   cursor: pointer;
   min-height: 0;
-}
-
-.appearance-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0.34rem 0.64rem;
-  border-radius: 8px;
-  min-height: 2rem;
-}
-
-.appearance-toggle-icon {
-  width: 0.92rem;
-  height: 0.92rem;
-  opacity: 0.84;
-}
-
-.appearance-toggle.is-active {
-  border-color: var(--chip-active-border);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  box-shadow: var(--active-glow);
 }
 
 .tab-btn:hover {
@@ -873,20 +850,6 @@ input[type="radio"]:focus-visible {
 
 .theme-btn-background[data-background="wine"]::before {
   color: #b67186;
-}
-
-.appearance-popover {
-  position: absolute;
-  top: calc(100% + var(--space-2));
-  right: 0;
-  z-index: 30;
-  width: min(30rem, calc(100vw - 2rem));
-  border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--surface) 97%, transparent);
-  box-shadow: 0 10px 22px rgba(8, 17, 32, 0.12);
-  padding: var(--space-3);
-  backdrop-filter: blur(12px);
 }
 
 .theme-btn.is-active {
@@ -1727,6 +1690,14 @@ input[type="radio"]:focus-visible {
   align-items: start;
 }
 
+.settings-window-shell {
+  gap: var(--space-6);
+}
+
+.settings-window-header {
+  margin-bottom: var(--space-2);
+}
+
 .settings-grid .panel-settings {
   display: block;
 }
@@ -1967,9 +1938,6 @@ pre {
     gap: var(--space-1);
   }
 
-  .appearance-popover {
-    width: min(32rem, calc(100vw - 2rem));
-  }
 }
 
 @media (max-width: 760px) {
@@ -2010,11 +1978,6 @@ pre {
 
   .toolbar-actions {
     justify-content: flex-start;
-    position: static;
-  }
-
-  .appearance-toggle {
-    width: fit-content;
   }
 
   .theme-group {
@@ -2041,12 +2004,6 @@ pre {
 
   .theme-group-wide .theme-buttons {
     justify-content: flex-start;
-  }
-
-  .appearance-popover {
-    position: static;
-    width: 100%;
-    margin-top: var(--space-3);
   }
 
   .panel-spacious {
