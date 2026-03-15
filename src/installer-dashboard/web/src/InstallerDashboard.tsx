@@ -9,7 +9,7 @@ import {
   quitAndInstallAppUpdate,
 } from "./control-plane-client";
 import { DesktopAppearanceSettings } from "./DesktopAppearanceSettings";
-import { desktopMainRoutes, type DesktopRouteId, describeRealtimeStatus, summarizeRealtimeEvent } from "./desktop-shell";
+import { desktopMainRoutes, getDesktopRouteDefinition, type DesktopRouteId, describeRealtimeStatus, summarizeRealtimeEvent } from "./desktop-shell";
 import { useDashboardAppearance } from "./appearance";
 import { startRealtimeClient, type RealtimeEvent, type RealtimeStatus } from "./realtime-client";
 import type { DashboardWindowRole } from "./window-role";
@@ -1535,10 +1535,7 @@ export function InstallerDashboard({ windowRole = "main" }: InstallerDashboardPr
       tone: "neutral",
     };
   }, [appUpdate, appUpdateBusy]);
-  const activeRouteDefinition = useMemo(
-    () => desktopMainRoutes.find((route) => route.id === activeRoute) ?? desktopMainRoutes[0],
-    [activeRoute],
-  );
+  const activeRouteDefinition = getDesktopRouteDefinition(activeRoute);
 
   if (windowRole === "settings") {
     return (

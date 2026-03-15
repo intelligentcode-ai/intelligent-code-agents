@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { describeRealtimeStatus, summarizeRealtimeEvent } from "../../src/installer-dashboard/web/src/desktop-shell";
+import { desktopMainRoutes, describeRealtimeStatus, getDesktopRouteDefinition, summarizeRealtimeEvent } from "../../src/installer-dashboard/web/src/desktop-shell";
 import type { RealtimeEvent } from "../../src/desktop-electron/bridge";
 
 function readWorkspaceFile(relativePath: string): string {
@@ -25,6 +25,15 @@ test("desktop shell subscribes to realtime updates for connection state and acti
   assert.match(ui, /startRealtimeClient\(/);
   assert.match(ui, /const \[realtimeStatus, setRealtimeStatus\] = useState<RealtimeStatus>\("disconnected"\)/);
   assert.match(ui, /const \[activityFeed, setActivityFeed\] = useState<RealtimeEvent\[]>\(\[\]\)/);
+});
+
+test("desktop shell exposes a shared four-route definition for persistent sidebar navigation", () => {
+  assert.equal(desktopMainRoutes.length, 4);
+  assert.deepEqual(
+    desktopMainRoutes.map((route) => route.id),
+    ["workspace", "sources", "hooks", "reports"],
+  );
+  assert.equal(getDesktopRouteDefinition("reports").label, "Reports");
 });
 
 test("describeRealtimeStatus prioritizes busy work over fallback transport messaging", () => {
